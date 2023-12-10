@@ -152,7 +152,7 @@ mod menu {
 
     fn create_view_menu<'a>() -> MenuTree<'a, TMessage, Renderer> {
         let labels = vec![
-            ("Dark mode", TMessage::ToggleTheme),
+            ("Toggle Theme", TMessage::ToggleTheme),
             ("Theme", TMessage::None),
         ];
         let children = create_children(labels);
