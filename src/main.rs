@@ -1,9 +1,9 @@
 use iced::{
     executor, theme,
-    widget::{column, container, horizontal_space, row, text, vertical_space, Column, Text},
+    widget::{column, container, horizontal_space, row, text, vertical_space, Column, Row, Text},
     Application, Command, Length, Renderer, Settings, Theme,
 };
-use std::path::PathBuf;
+use std::{fmt, path::PathBuf};
 
 use menu::{create_menu, pick_file};
 use styles::BorderedContainer;
@@ -15,6 +15,14 @@ fn main() -> Result<(), iced::Error> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum TError {
     DialogClosed,
+}
+
+impl fmt::Display for TError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DialogClosed => write!(f, "Dialog closed prematurely"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -72,12 +80,20 @@ impl Application for TApp {
                 } else {
                     Theme::Light
                 };
+                self.recent_error = None;
                 Command::none()
             }
-            TMessage::None => Command::none(),
-            TMessage::Open => Command::perform(pick_file(), TMessage::FileOpened),
+            TMessage::None => {
+                self.recent_error = None;
+                Command::none()
+            }
+            TMessage::Open => {
+                self.recent_error = None;
+                Command::perform(pick_file(), TMessage::FileOpened)
+            }
             TMessage::FileOpened(Ok(p)) => {
                 self.current_file_path = p;
+                self.recent_error = None;
                 Command::none()
             }
             TMessage::FileOpened(Err(err)) => {
@@ -106,11 +122,27 @@ impl Application for TApp {
             }
         };
 
+        let status = {
+            let err_text = match self.recent_error.clone() {
+                Some(err) => text(format!("{}", err)),
+                None => text(""),
+            };
+            let path = match self.current_file_path.to_str() {
+                Some(p) => text(p),
+                None => text(""),
+            };
+            let row: Row<'_, TMessage> =
+                row!(err_text, horizontal_space(Length::Fill), path).padding([0, 10]);
+
+            container(row).style(theme::Container::Custom(Box::new(BorderedContainer {})))
+        };
+
         let col: Column<'_, TMessage, Renderer> = column!(
             subject,
             vertical_space(Length::Fill),
             path,
             vertical_space(Length::Fill),
+            status
         );
 
         container(col).into()
