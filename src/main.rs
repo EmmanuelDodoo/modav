@@ -96,8 +96,7 @@ impl Application for TApp {
             create_menu(),
             horizontal_space(Length::Fill)
         );
-        //         let subject = container(rw).style(theme::Container::Custom(Box::new(BorderedContainer {})));
-        let subject = row!();
+        let subject = container(rw).style(theme::Container::Custom(Box::new(BorderedContainer {})));
 
         let path: Text<'_, Renderer> = {
             if let Some(s) = self.current_file_path.clone().to_str() {
