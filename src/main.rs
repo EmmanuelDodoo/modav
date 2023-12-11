@@ -58,9 +58,17 @@ impl TApp {
         let menu = container(rw).style(theme::Container::Custom(Box::new(BorderedContainer {})));
 
         let status = {
-            let err_text = match self.recent_error.clone() {
-                Some(err) => text(format!("{}", err)),
-                None => text(""),
+            let err_text = {
+                let color = iced::Color {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.2,
+                    a: 1.0,
+                };
+                match self.recent_error.clone() {
+                    Some(err) => text(format!("{}", err)).style(theme::Text::Color(color)),
+                    None => text(""),
+                }
             };
             let path = match self.current_file_path.to_str() {
                 Some(p) => text(p),
