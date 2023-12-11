@@ -75,7 +75,7 @@ impl TApp {
                 None => text(""),
             };
             let row: Row<'_, TMessage> =
-                row!(err_text, horizontal_space(Length::Fill), path).padding([0, 10]);
+                row!(err_text, horizontal_space(Length::Fill), path).padding([5, 10]);
 
             container(row).style(theme::Container::Custom(Box::new(BorderedContainer {})))
         };
