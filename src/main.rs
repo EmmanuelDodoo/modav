@@ -3,7 +3,7 @@ use iced::{
     widget::{
         column, container, horizontal_space, row, text, vertical_rule, Column, Container, Row,
     },
-    Application, Command, Length, Renderer, Settings, Theme,
+    Application, Command, Font, Length, Renderer, Settings, Theme,
 };
 use iced_aw::{
     menu_bar, menu_tree,
@@ -95,7 +95,15 @@ impl Modav {
     }
 
     fn dashboard(&self) -> Container<'_, Message> {
-        let logo = text("Modav");
+        let font = Font {
+            family: font::Family::Cursive,
+            weight: font::Weight::Bold,
+            ..Default::default()
+        };
+        let logo = container(text("modav").font(font).size(24))
+            .center_x()
+            .width(Length::Fixed(125.0));
+
         let menus = column!(
             menus::file_menu(),
             menus::models_menu(),
@@ -109,6 +117,7 @@ impl Modav {
         let bstyle = default_bordered_container(&self.theme);
         container(content)
             .center_x()
+            .padding([15, 0])
             .width(Length::FillPortion(1))
             .height(Length::Fill)
             .style(theme::Container::Custom(Box::new(bstyle)))
