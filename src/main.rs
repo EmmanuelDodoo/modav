@@ -376,7 +376,7 @@ pub mod styles {
     impl Default for BorderedContainer {
         fn default() -> Self {
             Self {
-                width: 0.5,
+                width: 0.75,
                 bcolor: color!(0, 0, 0, 1.),
             }
         }
