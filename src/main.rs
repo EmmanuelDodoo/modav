@@ -33,7 +33,7 @@ pub struct Modav {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
-    FontLoaded(Result<(), font::Error>),
+    IconLoaded(Result<(), font::Error>),
     ToggleTheme,
     OpenFile,
     FileOpened(Result<PathBuf, AppError>),
@@ -101,12 +101,13 @@ impl Modav {
             ..Default::default()
         };
         let logo = container(text("modav").font(font).size(24))
-            .center_x()
+            .padding([0, 8])
             .width(Length::Fixed(125.0));
 
         let menus = column!(
             menus::file_menu(),
             menus::models_menu(),
+            // menus::views_menu(),
             menus::about_menu(),
             menus::settings_menu()
         )
@@ -139,6 +140,12 @@ impl Application for Modav {
     }
 
     fn new(_flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
+        let commands = [
+            font::load(include_bytes!("../fonts/status-icons.ttf").as_slice())
+                .map(Message::IconLoaded),
+            font::load(include_bytes!("../fonts/dash-icons.ttf").as_slice())
+                .map(Message::IconLoaded),
+        ];
         (
             Modav {
                 file_path: PathBuf::new(),
@@ -147,16 +154,15 @@ impl Application for Modav {
                 current_model: String::new(),
                 error: AppError::None,
             },
-            font::load(include_bytes!("../fonts/status-icons.ttf").as_slice())
-                .map(Message::FontLoaded),
+            Command::batch(commands),
         )
     }
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
-            Message::FontLoaded(Ok(_)) => Command::none(),
-            Message::FontLoaded(Err(e)) => {
-                self.error = AppError::FontLoad(e);
+            Message::IconLoaded(Ok(_)) => Command::none(),
+            Message::IconLoaded(Err(e)) => {
+                self.error = AppError::FontLoading(e);
                 Command::none()
             }
             Message::ToggleTheme => {
@@ -212,7 +218,7 @@ mod utils {
 
     #[derive(Debug, Clone, PartialEq, Default)]
     pub enum AppError {
-        FontLoad(font::Error),
+        FontLoading(font::Error),
         FileDialogClosed,
         #[default]
         None,
@@ -221,7 +227,7 @@ mod utils {
     impl AppError {
         pub fn message(&self) -> String {
             match self {
-                Self::FontLoad(_) => String::from("Error while loading a font"),
+                Self::FontLoading(_) => String::from("Error while loading a font"),
                 Self::FileDialogClosed => String::from("File Dialog closed prematurely"),
                 Self::None => String::new(),
             }
@@ -232,7 +238,7 @@ mod utils {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let msg = self.message();
             match self {
-                Self::FontLoad(e) => e.fmt(f),
+                Self::FontLoading(e) => e.fmt(f),
                 Self::FileDialogClosed => write!(f, "{}", msg),
                 Self::None => write!(f, "{}", msg),
             }
@@ -255,14 +261,18 @@ mod utils {
 
         use crate::styles::{ColoredContainer, CustomMenuBarStyle};
 
-        use super::{MenuButtonStyle, Message};
+        use super::{icon, MenuButtonStyle, Message};
 
         use iced::{
             color,
             theme::{self},
-            widget::{button, container, text, Button, Container},
+            widget::{button, container, row, text, Button, Container, Row, Text},
             Element, Length, Renderer,
         };
+
+        fn dash_icon(unicode: char) -> Text<'static> {
+            icon(unicode, "dash-icons")
+        }
 
         /// The last item in a Menu Tree
         fn base_tree<'a>(label: &'a str, msg: Message) -> MenuTree<'a, Message, Renderer> {
@@ -289,12 +299,24 @@ mod utils {
                 .collect()
         }
 
+        fn create_label<'a>(
+            icon: char,
+            label: impl Into<Element<'a, Message, Renderer>>,
+        ) -> Row<'a, Message> {
+            let icon = dash_icon(icon);
+            row!(icon, label.into())
+                .spacing(8)
+                .padding([0, 8])
+                .width(Length::Fill)
+        }
+
         fn create_menu<'a>(
             label: impl Into<Element<'a, Message, Renderer>>,
+            icon: char,
             children: Vec<impl Into<MenuTree<'a, Message, Renderer>>>,
         ) -> MenuBar<'a, Message, Renderer> {
-            let item = container(label).center_x().width(Length::Fill);
-            // .height(Length::Fill);
+            let label = create_label(icon, label.into());
+            let item = container(label).width(Length::Fill);
 
             menu_bar!(menu_tree(item, children))
                 .bounds_expand(30)
@@ -308,7 +330,6 @@ mod utils {
             item: impl Into<Element<'a, Message, Renderer>>,
         ) -> Container<'a, Message> {
             container(item)
-                .center_x()
                 .padding([8, 0])
                 .width(Length::Fixed(125.0))
                 .style(theme::Container::Custom(Box::new(ColoredContainer {
@@ -324,9 +345,7 @@ mod utils {
             ];
             let children: Vec<MenuTree<'a, Message, Renderer>> = create_children(actions_label);
 
-            let btn: Button<'_, Message, Renderer> = button(text("Filing??"));
-
-            let bar = create_menu("File", children);
+            let bar = create_menu("File", '\u{F15C}', children);
 
             container_wrap(bar)
         }
@@ -336,15 +355,25 @@ mod utils {
 
             let children = create_children(actions_labels);
 
-            let bar = create_menu("Models", children);
+            let bar = create_menu("Models", '\u{E802}', children);
+
+            container_wrap(bar)
+        }
+
+        pub fn views_menu<'a>() -> Container<'a, Message> {
+            let action_labels = vec![("View 1", Message::None)];
+
+            let children = create_children(action_labels);
+
+            let bar = create_menu("Views", '\u{E800}', children);
 
             container_wrap(bar)
         }
 
         pub fn about_menu<'a>() -> Container<'a, Message> {
-            let btn: Button<'_, Message, Renderer> = button(text("About"))
-                .style(theme::Button::Text)
-                .padding([0, 0]);
+            let label = create_label('\u{E801}', text("About"));
+            let btn: Button<'_, Message, Renderer> =
+                button(label).style(theme::Button::Text).padding([0, 0]);
 
             container_wrap(btn)
         }
@@ -354,7 +383,7 @@ mod utils {
 
             let children = create_children(actions_labels);
 
-            let bar = create_menu("Settings", children);
+            let bar = create_menu("Settings", '\u{E800}', children);
 
             container_wrap(bar)
         }
