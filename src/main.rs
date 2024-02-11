@@ -1,14 +1,7 @@
 use iced::{
     color, executor, font, theme,
-    widget::{
-        column, container, horizontal_space, row, text, vertical_rule, Column, Container, Row,
-    },
-    Application, Command, Font, Length, Renderer, Settings, Theme,
-};
-use iced_aw::{
-    menu_bar, menu_tree,
-    native::{menu_bar, menu_tree},
-    MenuBar, MenuTree,
+    widget::{column, container, horizontal_space, row, text, vertical_rule, Container, Row},
+    Application, Command, Font, Length, Settings, Theme,
 };
 use std::path::PathBuf;
 
@@ -449,7 +442,7 @@ pub mod styles {
     impl container::StyleSheet for ColoredContainer {
         type Style = Theme;
 
-        fn appearance(&self, style: &Self::Style) -> container::Appearance {
+        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
             container::Appearance {
                 background: Some(self.color.into()),
                 border_radius: self.radius.into(),
