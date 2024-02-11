@@ -1,7 +1,10 @@
 use iced::{
     color, executor, font, theme,
-    widget::{column, container, horizontal_space, row, text, vertical_rule, Container, Row},
-    Application, Command, Font, Length, Settings, Theme,
+    widget::{
+        button, column, container, horizontal_space, row, text, vertical_rule, Button, Container,
+        Row,
+    },
+    Application, Command, Font, Length, Renderer, Settings, Theme,
 };
 use std::path::PathBuf;
 
@@ -9,6 +12,7 @@ mod temp;
 use styles::*;
 // use temp::TApp;
 use utils::*;
+use views::*;
 
 fn main() -> Result<(), iced::Error> {
     Modav::run(Settings::default())
@@ -188,13 +192,56 @@ impl Application for Modav {
     fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
         let status_bar = self.status_bar();
         let dashboard = self.dashboard();
-        let content = text("Some text").width(Length::FillPortion(4));
+
+        let content = home_view();
 
         let cross_axis = row!(dashboard, content).height(Length::Fill);
 
         let main_axis = column!(cross_axis, status_bar);
 
         container(main_axis).height(Length::Fill).into()
+    }
+}
+
+mod views {
+    use iced::{
+        theme,
+        widget::{button, column, container, horizontal_space, row, text, Button, Container, Row},
+        Length, Renderer,
+    };
+
+    use super::Message;
+
+    pub fn home_view<'a>() -> Container<'a, Message, Renderer> {
+        let new_btn: Button<'_, Message, Renderer> = button("New File")
+            .on_press(Message::None)
+            .style(theme::Button::Text);
+        let open_btn: Button<'_, Message, Renderer> = button("Open File")
+            .on_press(Message::OpenFile)
+            .style(theme::Button::Text);
+        let recents_btn: Button<'_, Message, Renderer> = button("Recent Files")
+            .on_press(Message::None)
+            .style(theme::Button::Text);
+        let options: Row<'_, Message, Renderer> = row!(
+            horizontal_space(Length::Fill),
+            column!(new_btn, open_btn, recents_btn).spacing(8),
+            horizontal_space(Length::Fill)
+        )
+        .width(Length::Fill);
+
+        let logo = row!(
+            horizontal_space(Length::FillPortion(1)),
+            text("modav logo").size(40),
+            horizontal_space(Length::FillPortion(1)),
+        )
+        .width(Length::Fill);
+
+        let content = column!(logo, options).spacing(24).width(Length::Fill);
+
+        container(content)
+            .width(Length::FillPortion(5))
+            .height(Length::Fill)
+            .center_y()
     }
 }
 
