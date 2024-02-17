@@ -1,34 +1,31 @@
 use iced::{
     color, executor, font, theme,
-    widget::{
-        button, column, container, horizontal_space, row, text, vertical_rule, Button, Container,
-        Row,
-    },
-    Application, Command, Font, Length, Renderer, Settings, Theme,
+    widget::{column, container, horizontal_space, row, text, vertical_rule, Container, Row},
+    Application, Command, Font, Length, Settings, Theme,
 };
 use std::path::PathBuf;
 
 mod temp;
 use styles::*;
-// use temp::TApp;
 use utils::*;
-use views::*;
+mod views;
+use views::{home_view, Identifier, TabBarMessage, Tabs};
 
 fn main() -> Result<(), iced::Error> {
     Modav::run(Settings::default())
-    // TApp::run(Settings::default())
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone)]
 pub struct Modav {
     theme: Theme,
     title: String,
     current_model: String,
     file_path: PathBuf,
+    tabs: Tabs,
     error: AppError,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Message {
     IconLoaded(Result<(), font::Error>),
     ToggleTheme,
@@ -37,6 +34,8 @@ pub enum Message {
     SaveFile,
     Convert,
     None,
+    OpenTab(Identifier),
+    TabsMessage(TabBarMessage),
 }
 
 impl Modav {
@@ -104,7 +103,7 @@ impl Modav {
         let menus = column!(
             menus::file_menu(),
             menus::models_menu(),
-            // menus::views_menu(),
+            menus::views_menu(),
             menus::about_menu(),
             menus::settings_menu()
         )
@@ -137,6 +136,7 @@ impl Application for Modav {
     }
 
     fn new(_flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
+        let tabs = Tabs::new().width(Length::FillPortion(5));
         let commands = [
             font::load(include_bytes!("../fonts/status-icons.ttf").as_slice())
                 .map(Message::IconLoaded),
@@ -149,6 +149,7 @@ impl Application for Modav {
                 title: String::from("Modav"),
                 theme: Theme::Light,
                 current_model: String::new(),
+                tabs,
                 error: AppError::None,
             },
             Command::batch(commands),
@@ -183,6 +184,19 @@ impl Application for Modav {
                 self.error = e;
                 Command::none()
             }
+            Message::OpenTab(idr) => {
+                if let Some(response) = self.tabs.update(TabBarMessage::AddTab(idr)) {
+                    return Command::perform(async { response }, |response| response);
+                }
+                return Command::none();
+            }
+            Message::TabsMessage(tsg) => {
+                if let Some(response) = self.tabs.update(tsg) {
+                    return Command::perform(async { response }, |response| response);
+                } else {
+                    return Command::none();
+                };
+            }
             Message::Convert => Command::none(),
             Message::SaveFile => Command::none(),
             Message::None => Command::none(),
@@ -193,55 +207,17 @@ impl Application for Modav {
         let status_bar = self.status_bar();
         let dashboard = self.dashboard();
 
-        let content = home_view();
+        let content = if self.tabs.is_empty() {
+            home_view().into()
+        } else {
+            self.tabs.content().map(Message::TabsMessage)
+        };
 
         let cross_axis = row!(dashboard, content).height(Length::Fill);
 
         let main_axis = column!(cross_axis, status_bar);
 
         container(main_axis).height(Length::Fill).into()
-    }
-}
-
-mod views {
-    use iced::{
-        theme,
-        widget::{button, column, container, horizontal_space, row, text, Button, Container, Row},
-        Length, Renderer,
-    };
-
-    use super::Message;
-
-    pub fn home_view<'a>() -> Container<'a, Message, Renderer> {
-        let new_btn: Button<'_, Message, Renderer> = button("New File")
-            .on_press(Message::None)
-            .style(theme::Button::Text);
-        let open_btn: Button<'_, Message, Renderer> = button("Open File")
-            .on_press(Message::OpenFile)
-            .style(theme::Button::Text);
-        let recents_btn: Button<'_, Message, Renderer> = button("Recent Files")
-            .on_press(Message::None)
-            .style(theme::Button::Text);
-        let options: Row<'_, Message, Renderer> = row!(
-            horizontal_space(Length::Fill),
-            column!(new_btn, open_btn, recents_btn).spacing(8),
-            horizontal_space(Length::Fill)
-        )
-        .width(Length::Fill);
-
-        let logo = row!(
-            horizontal_space(Length::FillPortion(1)),
-            text("modav logo").size(40),
-            horizontal_space(Length::FillPortion(1)),
-        )
-        .width(Length::Fill);
-
-        let content = column!(logo, options).spacing(24).width(Length::Fill);
-
-        container(content)
-            .width(Length::FillPortion(5))
-            .height(Length::Fill)
-            .center_y()
     }
 }
 
@@ -299,7 +275,10 @@ mod utils {
     pub mod menus {
         use iced_aw::{menu_bar, menu_tree, native::menu_tree, style, MenuBar, MenuTree};
 
-        use crate::styles::{ColoredContainer, CustomMenuBarStyle};
+        use crate::{
+            styles::{ColoredContainer, CustomMenuBarStyle},
+            views::Identifier,
+        };
 
         use super::{icon, MenuButtonStyle, Message};
 
@@ -401,7 +380,7 @@ mod utils {
         }
 
         pub fn views_menu<'a>() -> Container<'a, Message> {
-            let action_labels = vec![("View 1", Message::None)];
+            let action_labels = vec![("Add Counter", Message::OpenTab(Identifier::Counter))];
 
             let children = create_children(action_labels);
 
