@@ -21,6 +21,22 @@ pub enum Identifier {
     Counter,
 }
 
+pub trait Viewable {
+    type Message;
+
+    fn new(id: usize) -> Self;
+
+    fn id(&self) -> usize;
+
+    fn is_dirty(&self) -> bool;
+
+    fn update(&mut self, message: Self::Message);
+
+    fn tab_label(&self) -> TabLabel;
+
+    fn content(&self) -> iced::Element<'_, TabBarMessage>;
+}
+
 #[derive(Clone, Debug)]
 pub enum TabType {
     Counter(CounterTab),

@@ -1,4 +1,4 @@
-use crate::views::{TabBarMessage, TabMessage};
+use super::{TabBarMessage, TabMessage, Viewable};
 use iced::Element;
 use iced_aw::TabLabel;
 use iced_widget::{button, column, container, row, text};
@@ -15,20 +15,22 @@ pub struct CounterTab {
     id: usize,
 }
 
-impl CounterTab {
-    pub fn new(id: usize) -> Self {
+impl Viewable for CounterTab {
+    type Message = CounterMessage;
+
+    fn new(id: usize) -> Self {
         Self { id, value: 0 }
     }
 
-    pub fn id(&self) -> usize {
+    fn id(&self) -> usize {
         self.id
     }
 
-    pub fn is_dirty(&self) -> bool {
+    fn is_dirty(&self) -> bool {
         false
     }
 
-    pub fn update(&mut self, message: CounterMessage) {
+    fn update(&mut self, message: CounterMessage) {
         match message {
             CounterMessage::Increase => {
                 self.value += 1;
@@ -39,11 +41,11 @@ impl CounterTab {
         }
     }
 
-    pub fn tab_label(&self) -> TabLabel {
+    fn tab_label(&self) -> TabLabel {
         TabLabel::Text(format!("Counter {}", self.id))
     }
 
-    pub fn content(&self) -> iced::Element<'_, TabBarMessage> {
+    fn content(&self) -> iced::Element<'_, TabBarMessage> {
         let header = text(format!("Count {}", self.value)).size(32);
 
         let rw = {
