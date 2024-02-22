@@ -5,7 +5,9 @@ use iced::{
 };
 use iced_aw::{TabBarPosition, TabLabel};
 
-use crate::temp::{CounterMessage, CounterTab};
+mod temp;
+
+use temp::{CounterMessage, CounterTab};
 
 use super::Message;
 

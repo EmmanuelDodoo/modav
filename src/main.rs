@@ -5,7 +5,7 @@ use iced::{
 };
 use std::path::PathBuf;
 
-mod temp;
+// mod temp;
 use styles::*;
 use utils::*;
 mod views;
