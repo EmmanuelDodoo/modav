@@ -188,14 +188,14 @@ impl Application for Modav {
                 if let Some(response) = self.tabs.update(TabBarMessage::AddTab(idr)) {
                     return Command::perform(async { response }, |response| response);
                 }
-                return Command::none();
+                Command::none()
             }
             Message::TabsMessage(tsg) => {
                 if let Some(response) = self.tabs.update(tsg) {
-                    return Command::perform(async { response }, |response| response);
+                    Command::perform(async { response }, |response| response)
                 } else {
-                    return Command::none();
-                };
+                    Command::none()
+                }
             }
             Message::Convert => Command::none(),
             Message::SaveFile => Command::none(),
@@ -294,7 +294,7 @@ mod utils {
         }
 
         /// The last item in a Menu Tree
-        fn base_tree<'a>(label: &'a str, msg: Message) -> MenuTree<'a, Message, Renderer> {
+        fn base_tree(label: &str, msg: Message) -> MenuTree<'_, Message, Renderer> {
             let btn = button(text(label).width(Length::Fill).height(Length::Fill))
                 .on_press(msg)
                 .style(theme::Button::Custom(Box::new(MenuButtonStyle {})))
@@ -305,9 +305,7 @@ mod utils {
             menu_tree!(btn)
         }
 
-        fn create_children<'a>(
-            labels: Vec<(&'a str, Message)>,
-        ) -> Vec<MenuTree<'a, Message, Renderer>> {
+        fn create_children(labels: Vec<(&str, Message)>) -> Vec<MenuTree<'_, Message, Renderer>> {
             labels
                 .into_iter()
                 .map(|curr| {
@@ -518,7 +516,7 @@ pub mod styles {
 
         fn appearance(&self, style: &Self::Style) -> iced_aw::menu::Appearance {
             iced_aw::menu::Appearance {
-                border_radius: [8.0; 4].into(),
+                border_radius: [8.0; 4],
                 background: style.palette().background,
                 path: Color::TRANSPARENT,
                 ..Default::default()

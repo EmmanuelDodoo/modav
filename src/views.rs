@@ -1,5 +1,3 @@
-use std::usize;
-
 use iced::{
     theme,
     widget::{button, column, container, horizontal_space, row, text, Button, Container, Row},
@@ -133,10 +131,8 @@ impl TabState {
                     if let Some(tt) = self.tabs.get(1) {
                         self.active_tab = tt.id();
                     }
-                } else {
-                    if let Some(tt) = self.tabs.get(idx - 1) {
-                        self.active_tab = tt.id();
-                    }
+                } else if let Some(tt) = self.tabs.get(idx - 1) {
+                    self.active_tab = tt.id();
                 }
             }
 
@@ -155,36 +151,36 @@ impl TabState {
             .on_close(TabBarMessage::CloseTab)
             .set_active_tab(&self.active_tab);
 
-        if let Some(height) = &self.height {
-            tabs = tabs.height(height.clone())
+        if let Some(height) = self.height {
+            tabs = tabs.height(height)
         };
 
         if let Some(close_size) = self.close_size {
-            tabs = tabs.close_size(close_size.clone())
+            tabs = tabs.close_size(close_size)
         };
 
-        if let Some(icon_font) = &self.icon_font {
-            tabs = tabs.icon_font(icon_font.clone())
+        if let Some(icon_font) = self.icon_font {
+            tabs = tabs.icon_font(icon_font)
         };
 
-        if let Some(icon_size) = &self.icon_size {
-            tabs = tabs.icon_size(icon_size.clone())
+        if let Some(icon_size) = self.icon_size {
+            tabs = tabs.icon_size(icon_size)
         };
 
-        if let Some(height) = &self.tab_bar_height {
-            tabs = tabs.tab_bar_height(height.clone())
+        if let Some(height) = self.tab_bar_height {
+            tabs = tabs.tab_bar_height(height)
         };
 
         if let Some(max_height) = self.tab_bar_max_height {
-            tabs = tabs.tab_bar_max_height(max_height.clone())
+            tabs = tabs.tab_bar_max_height(max_height)
         };
 
         if let Some(position) = &self.tab_bar_position {
             tabs = tabs.tab_bar_position(position.clone())
         };
 
-        if let Some(width) = &self.tab_bar_width {
-            tabs = tabs.tab_bar_width(width.clone())
+        if let Some(width) = self.tab_bar_width {
+            tabs = tabs.tab_bar_width(width)
         };
 
         if let Some(padding) = self.tab_label_padding {
@@ -195,16 +191,16 @@ impl TabState {
             tabs = tabs.tab_label_spacing(spacing)
         };
 
-        if let Some(font) = &self.text_font {
-            tabs = tabs.text_font(font.clone())
+        if let Some(font) = self.text_font {
+            tabs = tabs.text_font(font)
         };
 
         if let Some(size) = self.text_size {
             tabs = tabs.text_size(size)
         };
 
-        if let Some(width) = &self.width {
-            tabs = tabs.width(width.clone())
+        if let Some(width) = self.width {
+            tabs = tabs.width(width)
         };
 
         tabs
