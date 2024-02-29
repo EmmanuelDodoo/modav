@@ -156,6 +156,7 @@ impl Application for Modav {
                 .map(Message::IconLoaded),
             font::load(include_bytes!("../fonts/dash-icons.ttf").as_slice())
                 .map(Message::IconLoaded),
+            font::load(iced_aw::BOOTSTRAP_FONT_BYTES).map(Message::IconLoaded),
         ];
         (
             Modav {

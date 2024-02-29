@@ -1,14 +1,18 @@
+use std::rc::Rc;
+
 use iced::{
     theme::{self, Theme},
     widget::{button, column, container, horizontal_space, row, text, Button, Container, Row},
     Element, Font, Length, Renderer,
 };
-use iced_aw::{TabBarPosition, TabLabel};
+use iced_aw::{TabBarPosition, TabBarStyles, TabLabel};
 
 // mod editor;
 mod temp;
 
 use temp::{CounterMessage, CounterTab};
+
+use self::styles::CustomTabBarStyle;
 
 use super::Message;
 
@@ -113,7 +117,7 @@ impl TabState {
             tabs: Vec::new(),
             id_counter: 0,
             active_tab: 0,
-            close_size: None,
+            close_size: Some(30.0),
             height: None,
             width: None,
             icon_size: None,
@@ -123,7 +127,7 @@ impl TabState {
             tab_bar_width: None,
             tab_bar_position: None,
             tab_bar_max_height: None,
-            tab_bar_height: None,
+            tab_bar_height: Some(Length::Shrink),
             text_size: None,
             text_font: None,
         }
@@ -169,6 +173,7 @@ impl TabState {
 
         let mut tabs = iced_aw::Tabs::new_with_tabs(tabs, TabBarMessage::TabSelected)
             .on_close(TabBarMessage::CloseTab)
+            .tab_bar_style(TabBarStyles::Custom(Rc::new(CustomTabBarStyle {})))
             .set_active_tab(&self.active_tab);
 
         if let Some(height) = self.height {
@@ -354,6 +359,43 @@ pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
         .width(Length::FillPortion(5))
         .height(Length::Fill)
         .center_y()
+}
+
+mod styles {
+    use iced::{color, Background, Theme};
+    use iced_aw::tab_bar;
+
+    #[derive(Debug, Clone)]
+    pub struct CustomTabBarStyle;
+    impl tab_bar::StyleSheet for CustomTabBarStyle {
+        type Style = Theme;
+
+        fn active(&self, _style: &Self::Style, is_active: bool) -> tab_bar::Appearance {
+            let bg_color = if is_active {
+                Background::Color(color!(0, 150, 50))
+            } else {
+                Background::Color(color!(0, 200, 150))
+            };
+
+            tab_bar::Appearance {
+                tab_label_background: bg_color,
+                ..Default::default()
+            }
+        }
+
+        fn hovered(&self, _style: &Self::Style, is_active: bool) -> tab_bar::Appearance {
+            let bg_color = if is_active {
+                Background::Color(color!(100, 50, 225))
+            } else {
+                Background::Color(color!(155, 25, 225))
+            };
+
+            tab_bar::Appearance {
+                tab_label_background: bg_color,
+                ..Default::default()
+            }
+        }
+    }
 }
 
 pub type Tabs = TabState;
