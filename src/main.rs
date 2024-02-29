@@ -41,7 +41,7 @@ pub struct Modav {
     theme: Theme,
     title: String,
     current_model: String,
-    file_path: PathBuf,
+    file_path: Option<PathBuf>,
     tabs: Tabs,
     error: AppError,
 }
@@ -71,17 +71,16 @@ impl Modav {
             };
 
             let path = {
-                let path = match self.file_path.file_name() {
-                    Some(s) => s.to_str().unwrap_or(""),
-                    None => "",
-                };
-                if path.is_empty() {
-                    None
-                } else {
-                    let t = text(path);
-                    let icon = status_icon('\u{F0F6}');
-                    Some(row!(icon, t).spacing(5))
-                }
+                self.file_path.as_ref().and_then(|path| {
+                    path.file_name()
+                        .and_then(|name| name.to_str())
+                        .filter(|name| !name.is_empty())
+                        .map(|file| {
+                            let text = text(file);
+                            let icon = status_icon('\u{F0F6}');
+                            row!(icon, text).spacing(5)
+                        })
+                })
             };
 
             match (path, model) {
@@ -183,7 +182,7 @@ impl Application for Modav {
         ];
         (
             Modav {
-                file_path: PathBuf::new(),
+                file_path: None,
                 title: String::from("Modav"),
                 theme: Theme::Nightfly,
                 // theme: Theme::Dark,
@@ -211,7 +210,7 @@ impl Application for Modav {
                 Command::perform(pick_file(), Message::FileSelected)
             }
             Message::FileSelected(Ok(p)) => {
-                self.file_path = p;
+                self.file_path = Some(p);
                 self.error = AppError::None;
                 Command::none()
             }
@@ -229,7 +228,7 @@ impl Application for Modav {
                 let idr = match action {
                     FileLoadedAction::New((TabIden::Counter, _)) => Identifier::Counter,
                     FileLoadedAction::New((TabIden::Editor, path)) => {
-                        self.file_path = path.clone();
+                        self.file_path = Some(path.clone());
                         let data = EditorTabData::new(path, res);
                         Identifier::Editor(data)
                     }
@@ -247,22 +246,50 @@ impl Application for Modav {
                 Command::none()
             }
             Message::OpenTab(tidr) => {
-                if self.file_path.exists() && tidr.should_load() {
-                    Command::perform(load_file(self.file_path.clone()), |(res, path)| {
-                        Message::FileLoaded((res, FileLoadedAction::New((tidr, path))))
-                    })
-                } else {
-                    let idr = match tidr {
-                        TabIden::Counter => Identifier::Counter,
-                        TabIden::Editor => {
-                            let data = EditorTabData::new(self.file_path.clone(), String::new());
-                            Identifier::Editor(data)
+                let path = self.file_path.as_ref().filter(|path| path.is_file());
+
+                match (path, tidr.should_load()) {
+                    (Some(path), true) => {
+                        Command::perform(load_file(path.clone()), |(res, path)| {
+                            Message::FileLoaded((res, FileLoadedAction::New((tidr, path))))
+                        })
+                    }
+                    (Some(_path), false) => {
+                        let idr = match tidr {
+                            TabIden::Counter => Identifier::Counter,
+                            TabIden::Editor => Identifier::None,
+                        };
+                        if let Some(response) = self.tabs.update(TabBarMessage::AddTab(idr)) {
+                            return Command::perform(async { response }, |response| response);
+                        } else {
+                            Command::none()
                         }
-                    };
-                    if let Some(response) = self.tabs.update(TabBarMessage::AddTab(idr)) {
-                        return Command::perform(async { response }, |response| response);
-                    } else {
-                        Command::none()
+                    }
+
+                    (None, true) => {
+                        let idr = match tidr {
+                            TabIden::Counter => Identifier::Counter,
+                            TabIden::Editor => {
+                                let data = EditorTabData::new(PathBuf::new(), String::new());
+                                Identifier::Editor(data)
+                            }
+                        };
+                        if let Some(response) = self.tabs.update(TabBarMessage::AddTab(idr)) {
+                            return Command::perform(async { response }, |response| response);
+                        } else {
+                            Command::none()
+                        }
+                    }
+                    (None, false) => {
+                        let idr = match tidr {
+                            TabIden::Counter => Identifier::Counter,
+                            TabIden::Editor => Identifier::None,
+                        };
+                        if let Some(response) = self.tabs.update(TabBarMessage::AddTab(idr)) {
+                            return Command::perform(async { response }, |response| response);
+                        } else {
+                            Command::none()
+                        }
                     }
                 }
             }
