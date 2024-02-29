@@ -7,23 +7,31 @@ use iced::{
 };
 use iced_aw::{TabBarPosition, TabBarStyles, TabLabel};
 
-// mod editor;
+mod editor;
+pub use editor::EditorTabData;
 mod temp;
-
 use temp::{CounterMessage, CounterTab};
 
-use self::styles::CustomTabBarStyle;
+use crate::TabIden;
+
+use self::{
+    editor::{EditorMessage, EditorTab},
+    styles::CustomTabBarStyle,
+};
 
 use super::Message;
 
 #[derive(Debug, Clone)]
 pub enum TabMessage {
     Counter(CounterMessage),
+    Editor(EditorMessage),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Identifier {
     Counter,
+    Editor(EditorTabData),
+    None,
 }
 
 pub trait Viewable {
@@ -43,15 +51,17 @@ pub trait Viewable {
     fn content(&self) -> iced::Element<'_, TabBarMessage, Theme, Renderer>;
 }
 
-#[derive(Clone, Debug)]
-pub enum TabType {
+#[derive(Debug)]
+enum TabType {
     Counter(CounterTab),
+    Editor(EditorTab),
 }
 
 impl TabType {
     fn id(&self) -> usize {
         match self {
             TabType::Counter(tab) => tab.id(),
+            TabType::Editor(tab) => tab.id(),
         }
     }
 
@@ -59,24 +69,29 @@ impl TabType {
         match (self, tsg) {
             (TabType::Counter(tab), TabMessage::Counter(tsg)) => tab.update(tsg),
             (TabType::Counter(_), _) => {}
+            (TabType::Editor(tab), TabMessage::Editor(tsg)) => tab.update(tsg),
+            (TabType::Editor(_), _) => {}
         }
     }
 
     fn is_dirty(&self) -> bool {
         match self {
             TabType::Counter(tab) => tab.is_dirty(),
+            TabType::Editor(tab) => tab.is_dirty(),
         }
     }
 
     fn tab_label(&self) -> TabLabel {
         match self {
             TabType::Counter(tab) => tab.tab_label(),
+            TabType::Editor(tab) => tab.tab_label(),
         }
     }
 
     fn content(&self) -> Element<'_, TabBarMessage> {
         match self {
             TabType::Counter(tab) => tab.content(),
+            TabType::Editor(tab) => tab.content(),
         }
     }
 }
@@ -90,7 +105,6 @@ pub enum TabBarMessage {
     OpenFile,
 }
 
-#[derive(Clone)]
 pub struct TabState {
     tabs: Vec<TabType>,
     id_counter: usize,
@@ -141,6 +155,13 @@ impl TabState {
                 self.active_tab = self.id_counter;
                 self.id_counter += 1;
             }
+            Identifier::Editor(path) => {
+                let tab = EditorTab::new(self.id_counter, path);
+                self.tabs.push(TabType::Editor(tab));
+                self.active_tab = self.id_counter;
+                self.id_counter += 1;
+            }
+            Identifier::None => {}
         };
     }
 
@@ -255,7 +276,7 @@ impl TabState {
                 };
                 None
             }
-            TabBarMessage::OpenFile => Some(Message::OpenFile),
+            TabBarMessage::OpenFile => Some(Message::SelectFile),
         }
     }
 
@@ -331,10 +352,10 @@ impl TabState {
 
 pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
     let new_btn: Button<'_, Message, Theme, Renderer> = button("New File")
-        .on_press(Message::OpenTab(Identifier::Counter))
+        .on_press(Message::OpenTab(TabIden::Counter))
         .style(theme::Button::Text);
     let open_btn: Button<'_, Message, Theme, Renderer> = button("Open File")
-        .on_press(Message::OpenFile)
+        .on_press(Message::SelectFile)
         .style(theme::Button::Text);
     let recents_btn: Button<'_, Message, Theme, Renderer> = button("Recent Files")
         .on_press(Message::None)

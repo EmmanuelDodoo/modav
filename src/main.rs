@@ -9,13 +9,34 @@ use std::path::PathBuf;
 use styles::*;
 use utils::*;
 mod views;
-use views::{home_view, Identifier, TabBarMessage, Tabs};
+use views::{home_view, EditorTabData, Identifier, TabBarMessage, Tabs};
 
 fn main() -> Result<(), iced::Error> {
     Modav::run(Settings::default())
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
+pub enum TabIden {
+    Counter,
+    Editor,
+}
+
+impl TabIden {
+    /// Returns true if this tab requires the contents of a file to be loaded
+    fn should_load(&self) -> bool {
+        match self {
+            Self::Counter => false,
+            Self::Editor => true,
+        }
+    }
+}
+
+/// What should be done once a file is loaded
+#[derive(Debug, Clone)]
+pub enum FileLoadedAction {
+    New((TabIden, PathBuf)),
+}
+
 pub struct Modav {
     theme: Theme,
     title: String,
@@ -29,12 +50,14 @@ pub struct Modav {
 pub enum Message {
     IconLoaded(Result<(), font::Error>),
     ToggleTheme,
-    OpenFile,
-    FileOpened(Result<PathBuf, AppError>),
+    SelectFile,
+    FileSelected(Result<PathBuf, AppError>),
+    LoadFile((PathBuf, FileLoadedAction)),
+    FileLoaded((Result<String, AppError>, FileLoadedAction)),
     SaveFile,
     Convert,
     None,
-    OpenTab(Identifier),
+    OpenTab(TabIden),
     TabsMessage(TabBarMessage),
 }
 
@@ -183,24 +206,65 @@ impl Application for Modav {
                 self.toggle_theme();
                 Command::none()
             }
-            Message::OpenFile => {
+            Message::SelectFile => {
                 self.error = AppError::None;
-                Command::perform(pick_file(), Message::FileOpened)
+                Command::perform(pick_file(), Message::FileSelected)
             }
-            Message::FileOpened(Ok(p)) => {
+            Message::FileSelected(Ok(p)) => {
                 self.file_path = p;
                 self.error = AppError::None;
                 Command::none()
             }
-            Message::FileOpened(Err(e)) => {
+            Message::FileSelected(Err(e)) => {
                 self.error = e;
                 Command::none()
             }
-            Message::OpenTab(idr) => {
+            Message::LoadFile((path, action)) => {
+                self.error = AppError::None;
+                Command::perform(load_file(path), move |(res, _)| {
+                    Message::FileLoaded((res, action))
+                })
+            }
+            Message::FileLoaded((Ok(res), action)) => {
+                let idr = match action {
+                    FileLoadedAction::New((TabIden::Counter, _)) => Identifier::Counter,
+                    FileLoadedAction::New((TabIden::Editor, path)) => {
+                        self.file_path = path.clone();
+                        let data = EditorTabData::new(path, res);
+                        Identifier::Editor(data)
+                    }
+                };
+
                 if let Some(response) = self.tabs.update(TabBarMessage::AddTab(idr)) {
                     return Command::perform(async { response }, |response| response);
+                } else {
+                    Command::none()
                 }
+            }
+            Message::FileLoaded((Err(err), _)) => {
+                println!("{}", err);
+                self.error = err;
                 Command::none()
+            }
+            Message::OpenTab(tidr) => {
+                if self.file_path.exists() && tidr.should_load() {
+                    Command::perform(load_file(self.file_path.clone()), |(res, path)| {
+                        Message::FileLoaded((res, FileLoadedAction::New((tidr, path))))
+                    })
+                } else {
+                    let idr = match tidr {
+                        TabIden::Counter => Identifier::Counter,
+                        TabIden::Editor => {
+                            let data = EditorTabData::new(self.file_path.clone(), String::new());
+                            Identifier::Editor(data)
+                        }
+                    };
+                    if let Some(response) = self.tabs.update(TabBarMessage::AddTab(idr)) {
+                        return Command::perform(async { response }, |response| response);
+                    } else {
+                        Command::none()
+                    }
+                }
             }
             Message::TabsMessage(tsg) => {
                 if let Some(response) = self.tabs.update(tsg) {
@@ -242,12 +306,14 @@ mod utils {
         Font,
     };
     use std::fmt::{Debug, Display};
+    use std::io;
     use std::path::PathBuf;
 
     #[derive(Debug, Clone, PartialEq, Default)]
     pub enum AppError {
         FontLoading(font::Error),
         FileDialogClosed,
+        FileLoading(io::ErrorKind),
         #[default]
         None,
     }
@@ -257,6 +323,7 @@ mod utils {
             match self {
                 Self::FontLoading(_) => String::from("Error while loading a font"),
                 Self::FileDialogClosed => String::from("File Dialog closed prematurely"),
+                Self::FileLoading(_) => String::from("Error while loading file"),
                 Self::None => String::new(),
             }
         }
@@ -267,6 +334,7 @@ mod utils {
             let msg = self.message();
             match self {
                 Self::FontLoading(e) => e.fmt(f),
+                Self::FileLoading(err) => std::fmt::Display::fmt(err, f),
                 Self::FileDialogClosed => write!(f, "{}", msg),
                 Self::None => write!(f, "{}", msg),
             }
@@ -285,6 +353,7 @@ mod utils {
     }
 
     pub mod menus {
+
         use iced_aw::{
             menu::{Item, Menu, MenuBar},
             menu_bar, style,
@@ -292,7 +361,7 @@ mod utils {
 
         use crate::{
             styles::{ColoredContainer, CustomMenuBarStyle},
-            views::Identifier,
+            TabIden,
         };
 
         use super::{icon, MenuButtonStyle, Message};
@@ -370,7 +439,7 @@ mod utils {
 
         pub fn file_menu<'a>() -> Container<'a, Message> {
             let actions_label = vec![
-                ("Open File", Message::OpenFile),
+                ("Open File", Message::SelectFile),
                 ("Save File", Message::SaveFile),
             ];
             let children: Vec<Item<'a, Message, Theme, Renderer>> = create_children(actions_label);
@@ -391,7 +460,10 @@ mod utils {
         }
 
         pub fn views_menu<'a>() -> Container<'a, Message> {
-            let action_labels = vec![("Add Counter", Message::OpenTab(Identifier::Counter))];
+            let action_labels = vec![
+                ("Add Counter", Message::OpenTab(TabIden::Counter)),
+                ("Open Editor", Message::OpenTab(TabIden::Editor)),
+            ];
 
             let children = create_children(action_labels);
 
@@ -428,6 +500,14 @@ mod utils {
             .ok_or(AppError::FileDialogClosed)?;
 
         Ok(handle.path().into())
+    }
+
+    pub async fn load_file(path: PathBuf) -> (Result<String, AppError>, PathBuf) {
+        let res = tokio::fs::read_to_string(path.clone())
+            .await
+            .map_err(|err| AppError::FileLoading(err.kind()));
+
+        (res, path)
     }
 }
 
