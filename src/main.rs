@@ -157,7 +157,8 @@ impl Application for Modav {
             Modav {
                 file_path: PathBuf::new(),
                 title: String::from("Modav"),
-                theme: Theme::Light,
+                theme: Theme::Nightfly,
+                // theme: Theme::Dark,
                 current_model: String::new(),
                 error: AppError::None,
             },
@@ -282,11 +283,11 @@ mod utils {
 
         /// The last item in a Menu Tree
         fn base_tree(label: &str, msg: Message) -> Item<'_, Message, Theme, Renderer> {
-            let btn = button(text(label).width(Length::Fill).height(Length::Fill))
+            let btn = button(text(label).width(Length::Shrink).height(Length::Shrink))
                 .on_press(msg)
                 .style(theme::Button::Custom(Box::new(MenuButtonStyle {})))
-                .padding([4, 8])
-                .width(Length::Fill)
+                .padding([4, 16])
+                .width(Length::Shrink)
                 .height(Length::Shrink);
 
             Item::new(btn)
@@ -310,10 +311,7 @@ mod utils {
             label: impl Into<Element<'a, Message, Theme, Renderer>>,
         ) -> Row<'a, Message> {
             let icon = dash_icon(icon);
-            row!(icon, label.into())
-                .spacing(8)
-                .padding([0, 8])
-                .width(Length::Fill)
+            row!(icon, label.into()).spacing(8).padding([0, 8])
         }
 
         fn create_menu<'a>(
@@ -323,12 +321,11 @@ mod utils {
         ) -> MenuBar<'a, Message, Theme, Renderer> {
             let label = create_label(icon, label.into());
             let item = container(label).width(Length::Fill);
-            let menu = Menu::new(children).offset(5.0);
+            let menu = Menu::new(children).offset(5.0).width(Length::Shrink);
 
             menu_bar!((item, menu))
                 .check_bounds_width(30.0)
                 .width(Length::Fill)
-                .height(Length::Fill)
                 .style(style::MenuBarStyle::Custom(Box::new(CustomMenuBarStyle)))
         }
 
@@ -378,8 +375,10 @@ mod utils {
 
         pub fn about_menu<'a>() -> Container<'a, Message> {
             let label = create_label('\u{E801}', text("About"));
-            let btn: Button<'_, Message, Theme, Renderer> =
-                button(label).style(theme::Button::Text).padding([0, 0]);
+            let btn: Button<'_, Message, Theme, Renderer> = button(label)
+                .style(theme::Button::Text)
+                .padding([0, 0])
+                .on_press(Message::None);
 
             container_wrap(btn)
         }
@@ -487,13 +486,12 @@ pub mod styles {
     impl button::StyleSheet for MenuButtonStyle {
         type Style = iced::Theme;
 
-        fn active(&self, style: &Self::Style) -> button::Appearance {
+        fn active(&self, _style: &Self::Style) -> button::Appearance {
             let border = Border {
                 radius: [4.0; 4].into(),
                 ..Default::default()
             };
             button::Appearance {
-                text_color: style.extended_palette().background.base.text,
                 border,
                 background: Some(Color::TRANSPARENT.into()),
                 ..Default::default()
@@ -515,14 +513,14 @@ pub mod styles {
     impl iced_aw::menu::StyleSheet for CustomMenuBarStyle {
         type Style = Theme;
 
-        fn appearance(&self, style: &Self::Style) -> iced_aw::menu::Appearance {
+        fn appearance(&self, _style: &Self::Style) -> iced_aw::menu::Appearance {
             let border = Border {
                 radius: [8.0; 4].into(),
                 ..Default::default()
             };
             iced_aw::menu::Appearance {
                 bar_border: border,
-                bar_background: Background::Color(style.palette().background),
+                bar_background: Background::Color(Color::TRANSPARENT),
                 path: Background::Color(Color::TRANSPARENT),
                 ..Default::default()
             }
