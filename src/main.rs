@@ -81,7 +81,7 @@ impl Modav {
             }
         };
 
-        let row: Row<'_, Message> = row!(error, horizontal_space(Length::Fill), current).height(20);
+        let row: Row<'_, Message> = row!(error, horizontal_space(), current).height(20);
 
         let bstyle = default_bordered_container(&self.theme);
 
@@ -119,6 +119,20 @@ impl Modav {
             .height(Length::Fill)
             .style(theme::Container::Custom(Box::new(bstyle)))
     }
+
+    fn toggle_theme(&mut self) {
+        match self.theme {
+            Theme::Dark => self.theme = Theme::Light,
+            Theme::Light => self.theme = Theme::Dark,
+            Theme::SolarizedLight => self.theme = Theme::SolarizedDark,
+            Theme::SolarizedDark => self.theme = Theme::SolarizedLight,
+            Theme::GruvboxLight => self.theme = Theme::GruvboxDark,
+            Theme::GruvboxDark => self.theme = Theme::GruvboxLight,
+            Theme::TokyoNight => self.theme = Theme::TokyoNightLight,
+            Theme::TokyoNightLight => self.theme = Theme::TokyoNight,
+            _ => {}
+        }
+    }
 }
 
 impl Application for Modav {
@@ -147,7 +161,8 @@ impl Application for Modav {
             Modav {
                 file_path: PathBuf::new(),
                 title: String::from("Modav"),
-                theme: Theme::Light,
+                theme: Theme::Nightfly,
+                // theme: Theme::Dark,
                 current_model: String::new(),
                 tabs,
                 error: AppError::None,
@@ -164,11 +179,7 @@ impl Application for Modav {
                 Command::none()
             }
             Message::ToggleTheme => {
-                match self.theme {
-                    Theme::Dark => self.theme = Theme::Light,
-                    Theme::Light => self.theme = Theme::Dark,
-                    Theme::Custom(_) => {}
-                }
+                self.toggle_theme();
                 Command::none()
             }
             Message::OpenFile => {
@@ -203,7 +214,7 @@ impl Application for Modav {
         }
     }
 
-    fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
+    fn view(&self) -> iced::Element<'_, Self::Message, Self::Theme, iced::Renderer> {
         let status_bar = self.status_bar();
         let dashboard = self.dashboard();
 
@@ -273,7 +284,10 @@ mod utils {
     }
 
     pub mod menus {
-        use iced_aw::{menu_bar, menu_tree, native::menu_tree, style, MenuBar, MenuTree};
+        use iced_aw::{
+            menu::{Item, Menu, MenuBar},
+            menu_bar, style,
+        };
 
         use crate::{
             styles::{ColoredContainer, CustomMenuBarStyle},
@@ -284,7 +298,7 @@ mod utils {
 
         use iced::{
             color,
-            theme::{self},
+            theme::{self, Theme},
             widget::{button, container, row, text, Button, Container, Row, Text},
             Element, Length, Renderer,
         };
@@ -294,18 +308,20 @@ mod utils {
         }
 
         /// The last item in a Menu Tree
-        fn base_tree(label: &str, msg: Message) -> MenuTree<'_, Message, Renderer> {
-            let btn = button(text(label).width(Length::Fill).height(Length::Fill))
+        fn base_tree(label: &str, msg: Message) -> Item<'_, Message, Theme, Renderer> {
+            let btn = button(text(label).width(Length::Shrink).height(Length::Shrink))
                 .on_press(msg)
                 .style(theme::Button::Custom(Box::new(MenuButtonStyle {})))
-                .padding([4, 8])
-                .width(Length::Fill)
+                .padding([4, 16])
+                .width(Length::Shrink)
                 .height(Length::Shrink);
 
-            menu_tree!(btn)
+            Item::new(btn)
         }
 
-        fn create_children(labels: Vec<(&str, Message)>) -> Vec<MenuTree<'_, Message, Renderer>> {
+        fn create_children(
+            labels: Vec<(&str, Message)>,
+        ) -> Vec<Item<'_, Message, Theme, Renderer>> {
             labels
                 .into_iter()
                 .map(|curr| {
@@ -318,33 +334,29 @@ mod utils {
 
         fn create_label<'a>(
             icon: char,
-            label: impl Into<Element<'a, Message, Renderer>>,
+            label: impl Into<Element<'a, Message, Theme, Renderer>>,
         ) -> Row<'a, Message> {
             let icon = dash_icon(icon);
-            row!(icon, label.into())
-                .spacing(8)
-                .padding([0, 8])
-                .width(Length::Fill)
+            row!(icon, label.into()).spacing(8).padding([0, 8])
         }
 
         fn create_menu<'a>(
-            label: impl Into<Element<'a, Message, Renderer>>,
+            label: impl Into<Element<'a, Message, Theme, Renderer>>,
             icon: char,
-            children: Vec<impl Into<MenuTree<'a, Message, Renderer>>>,
-        ) -> MenuBar<'a, Message, Renderer> {
+            children: Vec<Item<'a, Message, Theme, Renderer>>,
+        ) -> MenuBar<'a, Message, Theme, Renderer> {
             let label = create_label(icon, label.into());
             let item = container(label).width(Length::Fill);
+            let menu = Menu::new(children).offset(5.0).width(Length::Shrink);
 
-            menu_bar!(menu_tree(item, children))
-                .bounds_expand(30)
-                .main_offset(5)
+            menu_bar!((item, menu))
+                .check_bounds_width(30.0)
                 .width(Length::Fill)
-                .height(Length::Fill)
                 .style(style::MenuBarStyle::Custom(Box::new(CustomMenuBarStyle)))
         }
 
         fn container_wrap<'a>(
-            item: impl Into<Element<'a, Message, Renderer>>,
+            item: impl Into<Element<'a, Message, Theme, Renderer>>,
         ) -> Container<'a, Message> {
             container(item)
                 .padding([8, 0])
@@ -360,7 +372,7 @@ mod utils {
                 ("Open File", Message::OpenFile),
                 ("Save File", Message::SaveFile),
             ];
-            let children: Vec<MenuTree<'a, Message, Renderer>> = create_children(actions_label);
+            let children: Vec<Item<'a, Message, Theme, Renderer>> = create_children(actions_label);
 
             let bar = create_menu("File", '\u{F15C}', children);
 
@@ -389,10 +401,10 @@ mod utils {
 
         pub fn about_menu<'a>() -> Container<'a, Message> {
             let label = create_label('\u{E801}', text("About"));
-            let btn: Button<'_, Message, Renderer> = button(label)
+            let btn: Button<'_, Message, Theme, Renderer> = button(label)
                 .style(theme::Button::Text)
-                .on_press(Message::None)
-                .padding([0, 0]);
+                .padding([0, 0])
+                .on_press(Message::None);
 
             container_wrap(btn)
         }
@@ -422,7 +434,7 @@ pub mod styles {
     use iced::{
         color,
         widget::{button, container},
-        Color, Theme,
+        Background, Border, Color, Theme,
     };
 
     pub struct BorderedContainer {
@@ -443,9 +455,13 @@ pub mod styles {
         type Style = Theme;
 
         fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+            let border = Border {
+                color: self.bcolor,
+                width: self.width,
+                ..Default::default()
+            };
             container::Appearance {
-                border_width: self.width,
-                border_color: self.bcolor,
+                border,
                 ..Default::default()
             }
         }
@@ -469,9 +485,13 @@ pub mod styles {
         type Style = Theme;
 
         fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+            let border = Border {
+                radius: self.radius.into(),
+                ..Default::default()
+            };
             container::Appearance {
                 background: Some(self.color.into()),
-                border_radius: self.radius.into(),
+                border,
                 ..Default::default()
             }
         }
@@ -484,7 +504,7 @@ pub mod styles {
                 bcolor: color!(255, 255, 255),
                 ..Default::default()
             },
-            Theme::Custom(_) => BorderedContainer::default(),
+            _ => BorderedContainer::default(),
         }
     }
 
@@ -492,10 +512,13 @@ pub mod styles {
     impl button::StyleSheet for MenuButtonStyle {
         type Style = iced::Theme;
 
-        fn active(&self, style: &Self::Style) -> button::Appearance {
+        fn active(&self, _style: &Self::Style) -> button::Appearance {
+            let border = Border {
+                radius: [4.0; 4].into(),
+                ..Default::default()
+            };
             button::Appearance {
-                text_color: style.extended_palette().background.base.text,
-                border_radius: [4.0; 4].into(),
+                border,
                 background: Some(Color::TRANSPARENT.into()),
                 ..Default::default()
             }
@@ -516,11 +539,15 @@ pub mod styles {
     impl iced_aw::menu::StyleSheet for CustomMenuBarStyle {
         type Style = Theme;
 
-        fn appearance(&self, style: &Self::Style) -> iced_aw::menu::Appearance {
+        fn appearance(&self, _style: &Self::Style) -> iced_aw::menu::Appearance {
+            let border = Border {
+                radius: [8.0; 4].into(),
+                ..Default::default()
+            };
             iced_aw::menu::Appearance {
-                border_radius: [8.0; 4],
-                background: style.palette().background,
-                path: Color::TRANSPARENT,
+                bar_border: border,
+                bar_background: Background::Color(Color::TRANSPARENT),
+                path: Background::Color(Color::TRANSPARENT),
                 ..Default::default()
             }
         }
