@@ -1,7 +1,10 @@
 use super::{TabBarMessage, TabMessage, Viewable};
-use iced::Element;
+use iced::{
+    theme::Theme,
+    widget::{button, column, container, row, text},
+    Alignment, Element,
+};
 use iced_aw::TabLabel;
-use iced_widget::{button, column, container, row, text};
 
 #[derive(Clone, Debug)]
 pub enum CounterMessage {
@@ -17,8 +20,9 @@ pub struct CounterTab {
 
 impl Viewable for CounterTab {
     type Message = CounterMessage;
+    type Data = ();
 
-    fn new(id: usize) -> Self {
+    fn new(id: usize, _data: ()) -> Self {
         Self { id, value: 0 }
     }
 
@@ -45,7 +49,7 @@ impl Viewable for CounterTab {
         TabLabel::Text(format!("Counter {}", self.id))
     }
 
-    fn content(&self) -> iced::Element<'_, TabBarMessage> {
+    fn content(&self) -> iced::Element<'_, TabBarMessage, Theme> {
         let header = text(format!("Count {}", self.value)).size(32);
 
         let rw = {
@@ -56,12 +60,12 @@ impl Viewable for CounterTab {
         };
 
         let content = column!(header, rw)
-            .align_items(iced::Alignment::Center)
+            .align_items(Alignment::Center)
             .max_width(600)
             .padding(20)
             .spacing(16);
 
-        let content: Element<'_, CounterMessage> = container(content).into();
+        let content: Element<'_, CounterMessage, Theme> = container(content).into();
 
         content.map(|msg| TabBarMessage::UpdateTab((self.id, TabMessage::Counter(msg))))
     }

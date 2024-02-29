@@ -1,10 +1,11 @@
 use iced::{
-    theme,
+    theme::{self, Theme},
     widget::{button, column, container, horizontal_space, row, text, Button, Container, Row},
     Element, Font, Length, Renderer,
 };
 use iced_aw::{TabBarPosition, TabLabel};
 
+// mod editor;
 mod temp;
 
 use temp::{CounterMessage, CounterTab};
@@ -23,8 +24,9 @@ pub enum Identifier {
 
 pub trait Viewable {
     type Message;
+    type Data;
 
-    fn new(id: usize) -> Self;
+    fn new(id: usize, data: Self::Data) -> Self;
 
     fn id(&self) -> usize;
 
@@ -34,7 +36,7 @@ pub trait Viewable {
 
     fn tab_label(&self) -> TabLabel;
 
-    fn content(&self) -> iced::Element<'_, TabBarMessage>;
+    fn content(&self) -> iced::Element<'_, TabBarMessage, Theme, Renderer>;
 }
 
 #[derive(Clone, Debug)]
@@ -130,7 +132,7 @@ impl TabState {
     fn push(&mut self, identifier: Identifier) {
         match identifier {
             Identifier::Counter => {
-                let tab = CounterTab::new(self.id_counter);
+                let tab = CounterTab::new(self.id_counter, ());
                 self.tabs.push(TabType::Counter(tab));
                 self.active_tab = self.id_counter;
                 self.id_counter += 1;
@@ -165,7 +167,7 @@ impl TabState {
             .map(|tab| (tab.id(), tab.tab_label(), tab.content()))
             .collect();
 
-        let mut tabs = iced_aw::Tabs::with_tabs(tabs, TabBarMessage::TabSelected)
+        let mut tabs = iced_aw::Tabs::new_with_tabs(tabs, TabBarMessage::TabSelected)
             .on_close(TabBarMessage::CloseTab)
             .set_active_tab(&self.active_tab);
 
@@ -224,7 +226,7 @@ impl TabState {
         tabs
     }
 
-    pub fn content(&self) -> Element<'_, TabBarMessage, Renderer> {
+    pub fn content(&self) -> Element<'_, TabBarMessage, Theme, Renderer> {
         self.create_tab().into()
     }
 
@@ -322,27 +324,27 @@ impl TabState {
     }
 }
 
-pub fn home_view<'a>() -> Container<'a, Message, Renderer> {
-    let new_btn: Button<'_, Message, Renderer> = button("New File")
+pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
+    let new_btn: Button<'_, Message, Theme, Renderer> = button("New File")
         .on_press(Message::OpenTab(Identifier::Counter))
         .style(theme::Button::Text);
-    let open_btn: Button<'_, Message, Renderer> = button("Open File")
+    let open_btn: Button<'_, Message, Theme, Renderer> = button("Open File")
         .on_press(Message::OpenFile)
         .style(theme::Button::Text);
-    let recents_btn: Button<'_, Message, Renderer> = button("Recent Files")
+    let recents_btn: Button<'_, Message, Theme, Renderer> = button("Recent Files")
         .on_press(Message::None)
         .style(theme::Button::Text);
-    let options: Row<'_, Message, Renderer> = row!(
-        horizontal_space(Length::Fill),
+    let options: Row<'_, Message, Theme, Renderer> = row!(
+        horizontal_space(),
         column!(new_btn, open_btn, recents_btn).spacing(8),
-        horizontal_space(Length::Fill)
+        horizontal_space()
     )
     .width(Length::Fill);
 
     let logo = row!(
-        horizontal_space(Length::FillPortion(1)),
+        horizontal_space(),
         text("modav logo").size(40),
-        horizontal_space(Length::FillPortion(1)),
+        horizontal_space(),
     )
     .width(Length::Fill);
 
