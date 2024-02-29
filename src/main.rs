@@ -365,8 +365,10 @@ mod utils {
 
         pub fn about_menu<'a>() -> Container<'a, Message> {
             let label = create_label('\u{E801}', text("About"));
-            let btn: Button<'_, Message, Renderer> =
-                button(label).style(theme::Button::Text).padding([0, 0]);
+            let btn: Button<'_, Message, Renderer> = button(label)
+                .style(theme::Button::Text)
+                .on_press(Message::None)
+                .padding([0, 0]);
 
             container_wrap(btn)
         }
