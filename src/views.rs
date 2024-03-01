@@ -152,6 +152,7 @@ pub enum TabBarMessage {
     UpdateTab((usize, TabMessage)),
     OpenFile,
     RefreshTab((usize, Refresh)),
+    Exit,
     None,
 }
 
@@ -336,6 +337,12 @@ impl TabState {
                     None
                 }
             }
+            TabBarMessage::Exit => {
+                if let Some(unclosed) = self.has_dirty_tabs() {
+                    self.active_tab = unclosed;
+                }
+                None
+            }
             TabBarMessage::OpenFile => Some(Message::SelectFile),
             TabBarMessage::None => None,
         }
@@ -362,6 +369,14 @@ impl TabState {
 
     pub fn is_empty(&self) -> bool {
         self.tabs.is_empty()
+    }
+
+    /// Checks if any open tabs are dirty. Returns the id of the first dirty tab
+    pub fn has_dirty_tabs(&self) -> Option<usize> {
+        self.tabs
+            .iter()
+            .find(|tab| tab.is_dirty())
+            .and_then(|tab| Some(tab.id()))
     }
 
     pub fn close_size(mut self, close_size: f32) -> Self {

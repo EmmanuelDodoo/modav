@@ -1,7 +1,9 @@
 use iced::{
-    color, executor, font,
+    color,
+    event::{self, Event},
+    executor, font,
     keyboard::{self, key, Key},
-    theme,
+    theme, widget,
     widget::{column, container, horizontal_space, row, text, vertical_rule, Container, Row},
     Application, Command, Font, Length, Settings, Subscription, Theme,
 };
@@ -76,6 +78,8 @@ pub enum Message {
     FileSaved((Result<(PathBuf, String), AppError>, FileIOAction)),
     Convert,
     None,
+    Event(Event),
+    Exit,
     OpenTab(TabIden),
     TabsMessage(TabBarMessage),
 }
@@ -389,9 +393,33 @@ impl Application for Modav {
                 self.error = e;
                 Command::none()
             }
-
+            Message::Exit => {
+                self.tabs.update(TabBarMessage::Exit);
+                Command::none()
+            }
             Message::Convert => Command::none(),
             Message::None => Command::none(),
+            Message::Event(event) => match event {
+                Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => match key {
+                    Key::Named(key::Named::Save) if modifiers.command() => {
+                        let save_message = self.save_helper(self.file_path.clone());
+                        Command::perform(async { save_message }, |msg| msg)
+                    }
+                    Key::Character(s) if s.as_str() == "s" && modifiers.command() => {
+                        let save_message = self.save_helper(self.file_path.clone());
+                        Command::perform(async { save_message }, |msg| msg)
+                    }
+                    Key::Named(key::Named::Tab) => {
+                        if modifiers.shift() {
+                            widget::focus_previous()
+                        } else {
+                            widget::focus_next()
+                        }
+                    }
+                    _ => Command::none(),
+                },
+                _ => Command::none(),
+            },
         }
     }
 
@@ -413,13 +441,7 @@ impl Application for Modav {
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
-        keyboard::on_key_press(|key, modifier| match key {
-            Key::Named(key::Named::Save) if modifier.command() => Some(Message::SaveKeyPressed),
-            Key::Character(s) if s.as_str() == "s" && modifier.command() => {
-                Some(Message::SaveKeyPressed)
-            }
-            _ => None,
-        })
+        event::listen().map(Message::Event)
     }
 }
 
