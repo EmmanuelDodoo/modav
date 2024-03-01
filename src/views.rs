@@ -432,7 +432,7 @@ impl TabState {
 
 pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
     let new_btn: Button<'_, Message, Theme, Renderer> = button("New File")
-        .on_press(Message::OpenTab(TabIden::Counter))
+        .on_press(Message::OpenTab(TabIden::Editor))
         .style(theme::Button::Text);
     let open_btn: Button<'_, Message, Theme, Renderer> = button("Open File")
         .on_press(Message::SelectFile)
