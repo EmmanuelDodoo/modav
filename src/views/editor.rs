@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use super::{TabMessage, Viewable};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct EditorTabData {
     path: PathBuf,
     data: String,
@@ -27,6 +27,7 @@ pub struct EditorTab {
 #[derive(Debug, Clone)]
 pub enum EditorMessage {
     Action(text_editor::Action),
+    Refresh(EditorTabData),
 }
 
 impl Viewable for EditorTab {
@@ -78,10 +79,18 @@ impl Viewable for EditorTab {
             EditorMessage::Action(act) => {
                 self.content.perform(act);
             }
+            EditorMessage::Refresh(data) => {
+                self.is_dirty = false;
+                self.refresh(data);
+            }
         }
     }
 
-    fn content(&self) -> Element<'_, super::TabBarMessage, iced::Theme, iced::Renderer> {
+    fn content(&self) -> Option<String> {
+        self.content.text().into()
+    }
+
+    fn view(&self) -> Element<'_, super::TabBarMessage, iced::Theme, iced::Renderer> {
         let content: Element<'_, EditorMessage, Theme, Renderer> = text_editor(&self.content)
             .on_action(EditorMessage::Action)
             .height(Length::Fill)
@@ -89,5 +98,12 @@ impl Viewable for EditorTab {
             .into();
 
         content.map(|msg| super::TabBarMessage::UpdateTab((self.id, TabMessage::Editor(msg))))
+    }
+
+    fn refresh(&mut self, data: Self::Data) {
+        let EditorTabData { path, data } = data;
+        self.file_path = path;
+        self.is_dirty = false;
+        self.content = text_editor::Content::with_text(data.as_str());
     }
 }

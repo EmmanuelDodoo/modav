@@ -12,14 +12,12 @@ pub use editor::EditorTabData;
 mod temp;
 use temp::{CounterMessage, CounterTab};
 
-use crate::TabIden;
-
 use self::{
     editor::{EditorMessage, EditorTab},
     styles::CustomTabBarStyle,
 };
 
-use super::Message;
+use super::{Message, TabIden};
 
 #[derive(Debug, Clone)]
 pub enum TabMessage {
@@ -27,10 +25,11 @@ pub enum TabMessage {
     Editor(EditorMessage),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum Identifier {
     Counter,
     Editor(EditorTabData),
+    #[default]
     None,
 }
 
@@ -48,7 +47,14 @@ pub trait Viewable {
 
     fn tab_label(&self) -> TabLabel;
 
-    fn content(&self) -> iced::Element<'_, TabBarMessage, Theme, Renderer>;
+    /// Returns the content of this view if any
+    fn content(&self) -> Option<String> {
+        None
+    }
+
+    fn refresh(&mut self, data: Self::Data);
+
+    fn view(&self) -> iced::Element<'_, TabBarMessage, Theme, Renderer>;
 }
 
 #[derive(Debug)]
@@ -88,12 +94,54 @@ impl TabType {
         }
     }
 
-    fn content(&self) -> Element<'_, TabBarMessage> {
+    fn content(&self) -> Option<String> {
         match self {
-            TabType::Counter(tab) => tab.content(),
             TabType::Editor(tab) => tab.content(),
+            TabType::Counter(tab) => tab.content(),
         }
     }
+
+    fn view(&self) -> Element<'_, TabBarMessage> {
+        match self {
+            TabType::Counter(tab) => tab.view(),
+            TabType::Editor(tab) => tab.view(),
+        }
+    }
+
+    /// Refresh self with a Refresh
+    /// Assumes the self.id matches Refresh's id
+    fn refresh(&mut self, rsh: Refresh) {
+        match (self, rsh) {
+            (TabType::Counter(tab), Refresh::Counter) => tab.refresh(()),
+            (TabType::Counter(_), _) => {}
+            (TabType::Editor(tab), Refresh::Editor(data)) => tab.refresh(data),
+            (TabType::Editor(_), _) => {}
+        }
+    }
+
+    /// Returns true if the identifier matches for self
+    fn compare_idr(&self, idr: Identifier) -> bool {
+        match (self, idr) {
+            (TabType::Counter(_), Identifier::Counter) => true,
+            (TabType::Counter(_), _) => false,
+            (TabType::Editor(_), Identifier::Editor(_)) => true,
+            (TabType::Editor(_), _) => true,
+        }
+    }
+
+    ///Returns the corresponding TabIden of self
+    fn kind(&self) -> TabIden {
+        match self {
+            TabType::Editor(_) => TabIden::Editor,
+            TabType::Counter(_) => TabIden::Counter,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Refresh {
+    Editor(EditorTabData),
+    Counter,
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +151,8 @@ pub enum TabBarMessage {
     CloseTab(usize),
     UpdateTab((usize, TabMessage)),
     OpenFile,
+    RefreshTab((usize, Refresh)),
+    None,
 }
 
 pub struct TabState {
@@ -189,7 +239,7 @@ impl TabState {
         let tabs = self
             .tabs
             .iter()
-            .map(|tab| (tab.id(), tab.tab_label(), tab.content()))
+            .map(|tab| (tab.id(), tab.tab_label(), tab.view()))
             .collect();
 
         let mut tabs = iced_aw::Tabs::new_with_tabs(tabs, TabBarMessage::TabSelected)
@@ -276,8 +326,38 @@ impl TabState {
                 };
                 None
             }
+            TabBarMessage::RefreshTab((id, rsh)) => {
+                if let Some(tab) = self.tabs.iter_mut().find(|tab| {
+                    tab.id() == id && tab.compare_idr(Identifier::Editor(EditorTabData::default()))
+                }) {
+                    tab.refresh(rsh);
+                    None
+                } else {
+                    None
+                }
+            }
             TabBarMessage::OpenFile => Some(Message::SelectFile),
+            TabBarMessage::None => None,
         }
+    }
+
+    /// Returns the content of the active tab as a String
+    pub fn active_content(&self) -> Option<String> {
+        self.tabs
+            .iter()
+            .find(|tt| tt.id() == self.active_tab)
+            .map(|tt| tt.content())?
+    }
+
+    pub fn active_tab(&self) -> usize {
+        self.active_tab
+    }
+
+    pub fn active_tab_type(&self) -> Option<TabIden> {
+        self.tabs
+            .iter()
+            .find(|tt| tt.id() == self.active_tab)
+            .map(|tt| tt.kind())
     }
 
     pub fn is_empty(&self) -> bool {

@@ -49,7 +49,7 @@ impl Viewable for CounterTab {
         TabLabel::Text(format!("Counter {}", self.id))
     }
 
-    fn content(&self) -> iced::Element<'_, TabBarMessage, Theme> {
+    fn view(&self) -> iced::Element<'_, TabBarMessage, Theme> {
         let header = text(format!("Count {}", self.value)).size(32);
 
         let rw = {
@@ -69,4 +69,6 @@ impl Viewable for CounterTab {
 
         content.map(|msg| TabBarMessage::UpdateTab((self.id, TabMessage::Counter(msg))))
     }
+
+    fn refresh(&mut self, _data: Self::Data) {}
 }
