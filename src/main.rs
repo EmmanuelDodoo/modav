@@ -1,7 +1,9 @@
 use iced::{
-    color, executor, font, theme,
+    color, executor, font,
+    keyboard::{self, key, Key},
+    theme,
     widget::{column, container, horizontal_space, row, text, vertical_rule, Container, Row},
-    Application, Command, Font, Length, Settings, Theme,
+    Application, Command, Font, Length, Settings, Subscription, Theme,
 };
 
 use iced_aw::native::menu::Item;
@@ -70,6 +72,7 @@ pub enum Message {
     LoadFile((PathBuf, FileIOAction)),
     FileLoaded((Result<String, AppError>, FileIOAction)),
     SaveFile((Option<PathBuf>, String, FileIOAction)),
+    SaveKeyPressed,
     FileSaved((Result<(PathBuf, String), AppError>, FileIOAction)),
     Convert,
     None,
@@ -128,33 +131,33 @@ impl Modav {
             .style(theme::Container::Custom(Box::new(bstyle)))
     }
 
-    pub fn file_menu(&self) -> Container<'_, Message> {
+    /// Creates a save message for the current tab. Assumes the path is valid
+    /// for current tab. Handles empty tabs situation
+    /// Refreshes the current tab
+    fn save_helper(&self, save_path: Option<PathBuf>) -> Message {
         let iden = self.tabs.active_tab_type();
 
-        let actions_label = if !self.tabs.is_empty() && iden.is_some() {
-            let path = self.file_path.clone();
-            let content = self.tabs.active_content().unwrap_or(String::default());
-            let action = FileIOAction::RefreshTab((
-                iden.unwrap(),
-                self.tabs.active_tab(),
-                path.clone().unwrap_or(PathBuf::new()),
-            ));
+        if self.tabs.is_empty() && iden.is_none() {
+            return Message::None;
+        }
 
-            vec![
-                ("Open File", Message::SelectFile),
-                (
-                    "Save File",
-                    Message::SaveFile((path, content.clone(), action.clone())),
-                ),
-                ("Save As", Message::SaveFile((None, content, action))),
-            ]
-        } else {
-            vec![
-                ("Open File", Message::SelectFile),
-                ("Save File", Message::None),
-                ("Save As", Message::None),
-            ]
-        };
+        let content = self.tabs.active_content().unwrap_or(String::default());
+
+        let action = FileIOAction::RefreshTab((
+            iden.unwrap(),
+            self.tabs.active_tab(),
+            self.file_path.clone().unwrap_or(PathBuf::new()),
+        ));
+
+        Message::SaveFile((save_path, content, action))
+    }
+
+    fn file_menu(&self) -> Container<'_, Message> {
+        let actions_label = vec![
+            ("Open File", Message::SelectFile),
+            ("Save File", self.save_helper(self.file_path.clone())),
+            ("Save As", self.save_helper(None)),
+        ];
 
         let children: Vec<Item<'_, Message, _, _>> = menus::create_children(actions_label);
 
@@ -374,6 +377,10 @@ impl Application for Modav {
                     Message::FileSaved((res, action))
                 })
             }
+            Message::SaveKeyPressed => {
+                let save_message = self.save_helper(self.file_path.clone());
+                Command::perform(async { save_message }, |msg| msg)
+            }
             Message::FileSaved((Ok((path, content)), action)) => {
                 self.file_path = Some(path);
                 self.file_io_action_updater(action, content)
@@ -403,6 +410,16 @@ impl Application for Modav {
         let main_axis = column!(cross_axis, status_bar);
 
         container(main_axis).height(Length::Fill).into()
+    }
+
+    fn subscription(&self) -> Subscription<Self::Message> {
+        keyboard::on_key_press(|key, modifier| match key {
+            Key::Named(key::Named::Save) if modifier.command() => Some(Message::SaveKeyPressed),
+            Key::Character(s) if s.as_str() == "s" && modifier.command() => {
+                Some(Message::SaveKeyPressed)
+            }
+            _ => None,
+        })
     }
 }
 
