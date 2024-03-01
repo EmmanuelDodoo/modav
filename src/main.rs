@@ -130,6 +130,7 @@ impl Modav {
 
     pub fn file_menu(&self) -> Container<'_, Message> {
         let iden = self.tabs.active_tab_type();
+
         let actions_label = if !self.tabs.is_empty() && iden.is_some() {
             let path = self.file_path.clone();
             let content = self.tabs.active_content().unwrap_or(String::default());
@@ -141,14 +142,20 @@ impl Modav {
 
             vec![
                 ("Open File", Message::SelectFile),
-                ("Save File", Message::SaveFile((path, content, action))),
+                (
+                    "Save File",
+                    Message::SaveFile((path, content.clone(), action.clone())),
+                ),
+                ("Save As", Message::SaveFile((None, content, action))),
             ]
         } else {
             vec![
                 ("Open File", Message::SelectFile),
                 ("Save File", Message::None),
+                ("Save As", Message::None),
             ]
         };
+
         let children: Vec<Item<'_, Message, _, _>> = menus::create_children(actions_label);
 
         let bar = menus::create_menu("File", '\u{F15C}', children);
