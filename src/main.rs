@@ -17,6 +17,7 @@ use styles::*;
 use utils::*;
 mod views;
 use views::{home_view, EditorTabData, Identifier, Refresh, TabBarMessage, Tabs};
+mod modal;
 
 fn main() -> Result<(), iced::Error> {
     Modav::run(Settings::default())
