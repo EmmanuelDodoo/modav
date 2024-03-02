@@ -197,6 +197,8 @@ pub struct TabState {
     id_counter: usize,
     active_tab: usize,
     modal_shown: bool,
+    /// Whether the main app is closing
+    exiting: bool,
     close_size: Option<f32>,
     height: Option<Length>,
     icon_font: Option<Font>,
@@ -219,6 +221,7 @@ impl TabState {
             tabs: Vec::new(),
             modal_shown: false,
             id_counter: 0,
+            exiting: false,
             active_tab: 0,
             close_size: Some(30.0),
             height: None,
@@ -428,14 +431,17 @@ impl TabState {
                 }
             }
             TabBarMessage::Exit => {
+                self.exiting = true;
                 if let Some(unclosed) = self.has_dirty_tabs() {
                     self.active_tab = unclosed;
                     self.modal_shown = true;
+                    return None;
                 }
-                None
+                Some(Message::CanExit)
             }
             TabBarMessage::CloseModal => {
                 self.modal_shown = false;
+                self.exiting = false;
                 None
             }
             TabBarMessage::ModalMessage(action) => match action {
@@ -443,19 +449,31 @@ impl TabState {
                     if let Some(tab) = self.tabs.iter().find(|tab| tab.id() == self.active_tab) {
                         let path = tab.path();
                         let contents = tab.content().unwrap_or(String::default());
-                        let action = FileIOAction::CloseTab(self.active_tab);
+                        let action = if self.exiting {
+                            FileIOAction::Exiting(tab.id())
+                        } else {
+                            FileIOAction::CloseTab(self.active_tab)
+                        };
 
                         self.modal_shown = false;
 
                         Some(Message::SaveFile((path, contents, action)))
                     } else {
-                        None
+                        if self.exiting {
+                            Some(Message::CheckExit)
+                        } else {
+                            None
+                        }
                     }
                 }
                 DirtyTabAction::DontSave => {
-                    self.force_close_tab(self.active_tab);
+                    self.close_tab(self.active_tab, true);
                     self.modal_shown = false;
-                    None
+                    if self.exiting {
+                        Some(Message::CheckExit)
+                    } else {
+                        None
+                    }
                 }
             },
             TabBarMessage::OpenFile => Some(Message::SelectFile),

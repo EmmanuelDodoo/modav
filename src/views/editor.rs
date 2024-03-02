@@ -106,7 +106,7 @@ impl Viewable for EditorTab {
 
     fn modal_msg(&self) -> String {
         if self.is_dirty {
-            format!("Do you want to save changes to {}", self.title())
+            format!("Do you want to save changes to {}?", self.title())
         } else {
             "Editor Modal msg".into()
         }

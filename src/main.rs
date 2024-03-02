@@ -5,7 +5,7 @@ use iced::{
     keyboard::{self, key, Key},
     theme, widget,
     widget::{column, container, horizontal_space, row, text, vertical_rule, Container, Row},
-    Application, Command, Font, Length, Settings, Subscription, Theme,
+    window, Application, Command, Font, Length, Settings, Subscription, Theme,
 };
 
 use iced_aw::native::menu::Item;
@@ -20,7 +20,14 @@ use views::{home_view, EditorTabData, Identifier, Refresh, TabBarMessage, Tabs};
 mod modal;
 
 fn main() -> Result<(), iced::Error> {
-    Modav::run(Settings::default())
+    let window = window::settings::Settings {
+        exit_on_close_request: false,
+        ..Default::default()
+    };
+    Modav::run(Settings {
+        window,
+        ..Default::default()
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -42,9 +49,15 @@ impl TabIden {
 /// What should be done after a file IO action
 #[derive(Debug, Clone)]
 pub enum FileIOAction {
+    /// Create a new tab
     NewTab((TabIden, PathBuf)),
+    /// Refresh an existing tab
     RefreshTab((TabIden, usize, PathBuf)),
+    /// Close a specific tab
     CloseTab(usize),
+    /// Exiting main app
+    Exiting(usize),
+    /// Do nothing
     None,
 }
 
@@ -55,6 +68,7 @@ impl FileIOAction {
             Self::NewTab((tidn, _)) => Self::NewTab((tidn, path)),
             Self::RefreshTab((tidn, id, _)) => Self::RefreshTab((tidn, id, path)),
             Self::CloseTab(id) => Self::CloseTab(id),
+            Self::Exiting(id) => Self::Exiting(id),
         }
     }
 }
@@ -82,7 +96,8 @@ pub enum Message {
     Convert,
     None,
     Event(Event),
-    Exit,
+    CheckExit,
+    CanExit,
     OpenTab(TabIden),
     TabsMessage(TabBarMessage),
 }
@@ -256,10 +271,12 @@ impl Modav {
                 let tsg = TabBarMessage::CloseTab((id, true));
                 self.update_tabs(tsg)
             }
-            FileIOAction::None => {
-                let idr = Identifier::None;
-                self.update_tabs(TabBarMessage::AddTab(idr))
+            FileIOAction::Exiting(id) => {
+                self.tabs.update(TabBarMessage::CloseTab((id, true)));
+                let tsg = TabBarMessage::Exit;
+                self.update_tabs(tsg)
             }
+            FileIOAction::None => Command::none(),
         }
     }
 }
@@ -405,13 +422,14 @@ impl Application for Modav {
                 self.error = e;
                 Command::none()
             }
-            Message::Exit => {
-                self.tabs.update(TabBarMessage::Exit);
-                Command::none()
-            }
+            Message::CheckExit => self.update_tabs(TabBarMessage::Exit),
+            Message::CanExit => window::close(window::Id::MAIN),
             Message::Convert => Command::none(),
             Message::None => Command::none(),
             Message::Event(event) => match event {
+                Event::Window(window::Id::MAIN, window::Event::CloseRequested) => {
+                    self.update_tabs(TabBarMessage::Exit)
+                }
                 Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => match key {
                     Key::Named(key::Named::Save) if modifiers.command() => {
                         let save_message = self.save_helper(self.file_path.clone());
