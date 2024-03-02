@@ -44,6 +44,7 @@ impl TabIden {
 pub enum FileIOAction {
     NewTab((TabIden, PathBuf)),
     RefreshTab((TabIden, usize, PathBuf)),
+    CloseTab(usize),
     None,
 }
 
@@ -53,6 +54,7 @@ impl FileIOAction {
             Self::None => Self::None,
             Self::NewTab((tidn, _)) => Self::NewTab((tidn, path)),
             Self::RefreshTab((tidn, id, _)) => Self::RefreshTab((tidn, id, path)),
+            Self::CloseTab(id) => Self::CloseTab(id),
         }
     }
 }
@@ -159,6 +161,7 @@ impl Modav {
 
     fn file_menu(&self) -> Container<'_, Message> {
         let actions_label = vec![
+            ("New File", Message::OpenTab(TabIden::Editor)),
             ("Open File", Message::SelectFile),
             ("Save File", self.save_helper(self.file_path.clone())),
             ("Save As", self.save_helper(None)),
@@ -223,7 +226,7 @@ impl Modav {
         }
     }
 
-    fn file_io_action_updater(
+    fn file_io_action_handler(
         &mut self,
         action: FileIOAction,
         content: String,
@@ -236,7 +239,7 @@ impl Modav {
             }
             FileIOAction::NewTab((TabIden::Editor, path)) => {
                 self.file_path = Some(path.clone());
-                let data = EditorTabData::new(path, content);
+                let data = EditorTabData::new(Some(path), content);
                 let idr = Identifier::Editor(data);
                 self.update_tabs(TabBarMessage::AddTab(idr))
             }
@@ -244,9 +247,14 @@ impl Modav {
                 self.update_tabs(TabBarMessage::RefreshTab((tid, Refresh::Counter)))
             }
             FileIOAction::RefreshTab((TabIden::Editor, tid, path)) => {
-                let data = EditorTabData::new(path, content);
+                let data = EditorTabData::new(Some(path), content);
                 let rsh = Refresh::Editor(data);
                 self.update_tabs(TabBarMessage::RefreshTab((tid, rsh)))
+            }
+            FileIOAction::CloseTab(id) => {
+                self.file_path = None;
+                let tsg = TabBarMessage::CloseTab((id, true));
+                self.update_tabs(tsg)
             }
             FileIOAction::None => {
                 let idr = Identifier::None;
@@ -323,7 +331,7 @@ impl Application for Modav {
                     Message::FileLoaded((res, action))
                 })
             }
-            Message::FileLoaded((Ok(res), action)) => self.file_io_action_updater(action, res),
+            Message::FileLoaded((Ok(res), action)) => self.file_io_action_handler(action, res),
             Message::FileLoaded((Err(err), _)) => {
                 self.error = err;
                 Command::none()
@@ -349,7 +357,7 @@ impl Application for Modav {
                         let idr = match tidr {
                             TabIden::Counter => Identifier::Counter,
                             TabIden::Editor => {
-                                let data = EditorTabData::new(PathBuf::new(), String::new());
+                                let data = EditorTabData::new(None, String::new());
                                 Identifier::Editor(data)
                             }
                         };
@@ -376,7 +384,10 @@ impl Application for Modav {
 
                 Command::perform(save_file(path, content), |res| {
                     let action = match &res {
-                        Err(_) => action,
+                        Err(e) => {
+                            println!("{}??", e);
+                            action
+                        }
                         Ok((path, _)) => action.update_path(path.clone()),
                     };
                     Message::FileSaved((res, action))
@@ -388,7 +399,7 @@ impl Application for Modav {
             }
             Message::FileSaved((Ok((path, content)), action)) => {
                 self.file_path = Some(path);
-                self.file_io_action_updater(action, content)
+                self.file_io_action_handler(action, content)
             }
             Message::FileSaved((Err(e), _)) => {
                 self.error = e;

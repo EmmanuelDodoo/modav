@@ -6,12 +6,12 @@ use super::{TabMessage, Viewable};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct EditorTabData {
-    path: PathBuf,
+    path: Option<PathBuf>,
     data: String,
 }
 
 impl EditorTabData {
-    pub fn new(path: PathBuf, data: String) -> Self {
+    pub fn new(path: Option<PathBuf>, data: String) -> Self {
         Self { path, data }
     }
 }
@@ -20,7 +20,7 @@ impl EditorTabData {
 pub struct EditorTab {
     id: usize,
     is_dirty: bool,
-    file_path: PathBuf,
+    file_path: Option<PathBuf>,
     content: text_editor::Content,
 }
 
@@ -54,20 +54,25 @@ impl Viewable for EditorTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        let path = {
-            let path = match self.file_path.file_name() {
-                Some(s) => s.to_str().unwrap_or(""),
-                None => "",
-            };
-            if path.is_empty() {
-                "Untitled"
-            } else {
-                path
-            }
-        };
+        let path = self.title();
         // let icon = status_icon('\u{F0F6}');
 
-        TabLabel::Text(path.into())
+        TabLabel::Text(path)
+    }
+
+    fn title(&self) -> String {
+        let path = self
+            .file_path
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+
+        if path.is_empty() {
+            "Untitled".into()
+        } else {
+            path.into()
+        }
     }
 
     fn update(&mut self, message: Self::Message) {
@@ -100,10 +105,22 @@ impl Viewable for EditorTab {
         content.map(|msg| super::TabBarMessage::UpdateTab((self.id, TabMessage::Editor(msg))))
     }
 
+    fn modal_msg(&self) -> String {
+        if self.is_dirty {
+            format!("Do you want to save changes to {}", self.title())
+        } else {
+            "Editor Modal msg".into()
+        }
+    }
+
     fn refresh(&mut self, data: Self::Data) {
         let EditorTabData { path, data } = data;
         self.file_path = path;
         self.is_dirty = false;
         self.content = text_editor::Content::with_text(data.as_str());
+    }
+
+    fn path(&self) -> Option<PathBuf> {
+        self.file_path.clone()
     }
 }

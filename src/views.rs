@@ -1,6 +1,7 @@
-use std::rc::Rc;
+use std::{path::PathBuf, rc::Rc};
 
 use iced::{
+    alignment::Horizontal,
     theme::{self, Theme},
     widget::{button, column, container, horizontal_space, row, text, Button, Container, Row},
     Element, Font, Length, Renderer,
@@ -11,6 +12,9 @@ mod editor;
 pub use editor::EditorTabData;
 mod temp;
 use temp::{CounterMessage, CounterTab};
+
+use crate::modal::Modal;
+use crate::FileIOAction;
 
 use self::{
     editor::{EditorMessage, EditorTab},
@@ -54,7 +58,17 @@ pub trait Viewable {
 
     fn refresh(&mut self, data: Self::Data);
 
+    fn modal_msg(&self) -> String;
+
+    fn title(&self) -> String {
+        String::default()
+    }
+
     fn view(&self) -> iced::Element<'_, TabBarMessage, Theme, Renderer>;
+
+    fn path(&self) -> Option<PathBuf> {
+        None
+    }
 }
 
 #[derive(Debug)]
@@ -136,6 +150,20 @@ impl TabType {
             TabType::Counter(_) => TabIden::Counter,
         }
     }
+
+    fn modal_msg(&self) -> String {
+        match self {
+            TabType::Counter(tab) => tab.modal_msg(),
+            TabType::Editor(tab) => tab.modal_msg(),
+        }
+    }
+
+    fn path(&self) -> Option<PathBuf> {
+        match self {
+            TabType::Counter(tab) => tab.path(),
+            TabType::Editor(tab) => tab.path(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -145,10 +173,18 @@ pub enum Refresh {
 }
 
 #[derive(Debug, Clone)]
+pub enum DirtyTabAction {
+    Save,
+    DontSave,
+}
+
+#[derive(Debug, Clone)]
 pub enum TabBarMessage {
     TabSelected(usize),
     AddTab(Identifier),
-    CloseTab(usize),
+    CloseTab((usize, bool)),
+    CloseModal,
+    ModalMessage(DirtyTabAction),
     UpdateTab((usize, TabMessage)),
     OpenFile,
     RefreshTab((usize, Refresh)),
@@ -160,6 +196,7 @@ pub struct TabState {
     tabs: Vec<TabType>,
     id_counter: usize,
     active_tab: usize,
+    modal_shown: bool,
     close_size: Option<f32>,
     height: Option<Length>,
     icon_font: Option<Font>,
@@ -180,6 +217,7 @@ impl TabState {
     pub fn new() -> Self {
         Self {
             tabs: Vec::new(),
+            modal_shown: false,
             id_counter: 0,
             active_tab: 0,
             close_size: Some(30.0),
@@ -206,8 +244,8 @@ impl TabState {
                 self.active_tab = self.id_counter;
                 self.id_counter += 1;
             }
-            Identifier::Editor(path) => {
-                let tab = EditorTab::new(self.id_counter, path);
+            Identifier::Editor(data) => {
+                let tab = EditorTab::new(self.id_counter, data);
                 self.tabs.push(TabType::Editor(tab));
                 self.active_tab = self.id_counter;
                 self.id_counter += 1;
@@ -216,12 +254,8 @@ impl TabState {
         };
     }
 
-    fn close_tab(&mut self, id: usize) {
-        if let Some((idx, tab)) = self.tabs.iter().enumerate().find(|(_, tt)| tt.id() == id) {
-            if tab.is_dirty() {
-                return;
-            }
-
+    fn force_close_tab(&mut self, id: usize) {
+        if let Some((idx, _)) = self.tabs.iter().enumerate().find(|(_, tab)| tab.id() == id) {
             if id == self.active_tab {
                 if idx == 0 {
                     if let Some(tt) = self.tabs.get(1) {
@@ -232,7 +266,23 @@ impl TabState {
                 }
             }
 
-            self.tabs.retain(|tt| tt.id() != id)
+            self.tabs.retain(|tt| tt.id() != id);
+        }
+    }
+
+    fn close_tab(&mut self, id: usize, force: bool) {
+        if force {
+            self.force_close_tab(id);
+            return;
+        }
+        if let Some(tab) = self.tabs.iter().find(|tt| tt.id() == id) {
+            if tab.is_dirty() {
+                self.active_tab = tab.id();
+                self.modal_shown = true;
+                return;
+            }
+
+            self.force_close_tab(id)
         }
     }
 
@@ -244,7 +294,7 @@ impl TabState {
             .collect();
 
         let mut tabs = iced_aw::Tabs::new_with_tabs(tabs, TabBarMessage::TabSelected)
-            .on_close(TabBarMessage::CloseTab)
+            .on_close(|id| TabBarMessage::CloseTab((id, false)))
             .tab_bar_style(TabBarStyles::Custom(Rc::new(CustomTabBarStyle {})))
             .set_active_tab(&self.active_tab);
 
@@ -304,7 +354,47 @@ impl TabState {
     }
 
     pub fn content(&self) -> Element<'_, TabBarMessage, Theme, Renderer> {
-        self.create_tab().into()
+        let tabs = self.create_tab();
+
+        let modal = self.modal_content();
+
+        if self.modal_shown {
+            Modal::new(tabs, modal)
+                .on_blur(TabBarMessage::CloseModal)
+                .into()
+        } else {
+            tabs.into()
+        }
+    }
+
+    fn modal_content(&self) -> Element<'_, TabBarMessage, Theme, Renderer> {
+        let msg = self
+            .tabs
+            .iter()
+            .find(|tab| tab.id() == self.active_tab)
+            .map(|tab| tab.modal_msg())
+            .unwrap_or(String::default());
+
+        let msg = text(msg);
+
+        let header = text("Close Tab?")
+            .width(Length::Fill)
+            .horizontal_alignment(Horizontal::Center);
+
+        let actions = {
+            let btn1 = button("Save").on_press(TabBarMessage::ModalMessage(DirtyTabAction::Save));
+            let btn2 = button("Don't Save")
+                .on_press(TabBarMessage::ModalMessage(DirtyTabAction::DontSave));
+            let btn3 = button("Cancel").on_press(TabBarMessage::CloseModal);
+
+            row!(btn1, btn2, btn3).spacing(16).width(Length::Fill)
+        };
+
+        let col = column!(header, msg, actions)
+            .width(Length::Fill)
+            .spacing(24);
+
+        container(col).padding(16).width(300).into()
     }
 
     pub fn update(&mut self, tsg: TabBarMessage) -> Option<Message> {
@@ -317,8 +407,8 @@ impl TabState {
                 self.push(id);
                 None
             }
-            TabBarMessage::CloseTab(id) => {
-                self.close_tab(id);
+            TabBarMessage::CloseTab((id, force)) => {
+                self.close_tab(id, force);
                 None
             }
             TabBarMessage::UpdateTab((id, tsg)) => {
@@ -340,9 +430,34 @@ impl TabState {
             TabBarMessage::Exit => {
                 if let Some(unclosed) = self.has_dirty_tabs() {
                     self.active_tab = unclosed;
+                    self.modal_shown = true;
                 }
                 None
             }
+            TabBarMessage::CloseModal => {
+                self.modal_shown = false;
+                None
+            }
+            TabBarMessage::ModalMessage(action) => match action {
+                DirtyTabAction::Save => {
+                    if let Some(tab) = self.tabs.iter().find(|tab| tab.id() == self.active_tab) {
+                        let path = tab.path();
+                        let contents = tab.content().unwrap_or(String::default());
+                        let action = FileIOAction::CloseTab(self.active_tab);
+
+                        self.modal_shown = false;
+
+                        Some(Message::SaveFile((path, contents, action)))
+                    } else {
+                        None
+                    }
+                }
+                DirtyTabAction::DontSave => {
+                    self.force_close_tab(self.active_tab);
+                    self.modal_shown = false;
+                    None
+                }
+            },
             TabBarMessage::OpenFile => Some(Message::SelectFile),
             TabBarMessage::None => None,
         }

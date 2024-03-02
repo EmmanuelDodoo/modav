@@ -70,5 +70,9 @@ impl Viewable for CounterTab {
         content.map(|msg| TabBarMessage::UpdateTab((self.id, TabMessage::Counter(msg))))
     }
 
+    fn modal_msg(&self) -> String {
+        String::from("Counter Modal Message here")
+    }
+
     fn refresh(&mut self, _data: Self::Data) {}
 }
