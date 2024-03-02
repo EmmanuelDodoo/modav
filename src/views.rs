@@ -500,6 +500,12 @@ impl TabState {
             .map(|tt| tt.kind())
     }
 
+    /// Returns the tab of the currently active tab
+    pub fn active_path(&self) -> Option<PathBuf> {
+        let tab = self.tabs.iter().find(|tab| tab.id() == self.active_tab)?;
+        tab.path()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.tabs.is_empty()
     }
@@ -580,7 +586,7 @@ impl TabState {
 
 pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
     let new_btn: Button<'_, Message, Theme, Renderer> = button("New File")
-        .on_press(Message::OpenTab(TabIden::Editor))
+        .on_press(Message::OpenTab(None, TabIden::Editor))
         .style(theme::Button::Text);
     let open_btn: Button<'_, Message, Theme, Renderer> = button("Open File")
         .on_press(Message::SelectFile)

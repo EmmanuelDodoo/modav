@@ -98,7 +98,7 @@ pub enum Message {
     Event(Event),
     CheckExit,
     CanExit,
-    OpenTab(TabIden),
+    OpenTab(Option<PathBuf>, TabIden),
     TabsMessage(TabBarMessage),
 }
 
@@ -176,7 +176,7 @@ impl Modav {
 
     fn file_menu(&self) -> Container<'_, Message> {
         let actions_label = vec![
-            ("New File", Message::OpenTab(TabIden::Editor)),
+            ("New File", Message::OpenTab(None, TabIden::Editor)),
             ("Open File", Message::SelectFile),
             ("Save File", self.save_helper(self.file_path.clone())),
             ("Save As", self.save_helper(None)),
@@ -253,7 +253,7 @@ impl Modav {
                 self.update_tabs(TabBarMessage::AddTab(idr))
             }
             FileIOAction::NewTab((TabIden::Editor, path)) => {
-                self.file_path = Some(path.clone());
+                // self.file_path = Some(path.clone());
                 let data = EditorTabData::new(Some(path), content);
                 let idr = Identifier::Editor(data);
                 self.update_tabs(TabBarMessage::AddTab(idr))
@@ -267,7 +267,7 @@ impl Modav {
                 self.update_tabs(TabBarMessage::RefreshTab((tid, rsh)))
             }
             FileIOAction::CloseTab(id) => {
-                self.file_path = None;
+                // self.file_path = None;
                 let tsg = TabBarMessage::CloseTab((id, true));
                 self.update_tabs(tsg)
             }
@@ -306,7 +306,7 @@ impl Application for Modav {
         ];
         (
             Modav {
-                file_path: None,
+                file_path: tabs.active_path(),
                 title: String::from("Modav"),
                 theme: Theme::Nightfly,
                 // theme: Theme::Dark,
@@ -334,9 +334,10 @@ impl Application for Modav {
                 Command::perform(pick_file(), Message::FileSelected)
             }
             Message::FileSelected(Ok(p)) => {
-                self.file_path = Some(p);
                 self.error = AppError::None;
-                Command::none()
+                Command::perform(async { p }, |path| {
+                    Message::OpenTab(Some(path), TabIden::Editor)
+                })
             }
             Message::FileSelected(Err(e)) => {
                 self.error = e;
@@ -353,8 +354,8 @@ impl Application for Modav {
                 self.error = err;
                 Command::none()
             }
-            Message::OpenTab(tidr) => {
-                let path = self.file_path.as_ref().filter(|path| path.is_file());
+            Message::OpenTab(path, tidr) => {
+                let path = path.filter(|path| path.is_file());
 
                 match (path, tidr.should_load()) {
                     (Some(path), true) => {
@@ -415,7 +416,7 @@ impl Application for Modav {
                 Command::perform(async { save_message }, |msg| msg)
             }
             Message::FileSaved((Ok((path, content)), action)) => {
-                self.file_path = Some(path);
+                // self.file_path = Some(path);
                 self.file_io_action_handler(action, content)
             }
             Message::FileSaved((Err(e), _)) => {
@@ -630,8 +631,8 @@ mod utils {
 
         pub fn views_menu<'a>() -> Container<'a, Message> {
             let action_labels = vec![
-                ("Add Counter", Message::OpenTab(TabIden::Counter)),
-                ("Open Editor", Message::OpenTab(TabIden::Editor)),
+                ("Add Counter", Message::OpenTab(None, TabIden::Counter)),
+                ("Open Editor", Message::OpenTab(None, TabIden::Editor)),
             ];
 
             let children = create_children(action_labels);
