@@ -55,9 +55,8 @@ impl Viewable for EditorTab {
 
     fn tab_label(&self) -> TabLabel {
         let path = self.title();
-        // let icon = status_icon('\u{F0F6}');
 
-        TabLabel::Text(path)
+        TabLabel::IconText('\u{F0F6}', path)
     }
 
     fn title(&self) -> String {
