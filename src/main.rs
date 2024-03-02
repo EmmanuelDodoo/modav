@@ -99,6 +99,7 @@ pub enum Message {
     CheckExit,
     CanExit,
     OpenTab(Option<PathBuf>, TabIden),
+    NewActiveTab,
     TabsMessage(TabBarMessage),
 }
 
@@ -144,7 +145,7 @@ impl Modav {
             }
         };
 
-        let row: Row<'_, Message> = row!(error, horizontal_space(), current).height(20);
+        let row: Row<'_, Message> = row!(error, horizontal_space(), current);
 
         let bstyle = default_bordered_container(&self.theme);
 
@@ -253,7 +254,6 @@ impl Modav {
                 self.update_tabs(TabBarMessage::AddTab(idr))
             }
             FileIOAction::NewTab((TabIden::Editor, path)) => {
-                // self.file_path = Some(path.clone());
                 let data = EditorTabData::new(Some(path), content);
                 let idr = Identifier::Editor(data);
                 self.update_tabs(TabBarMessage::AddTab(idr))
@@ -267,7 +267,6 @@ impl Modav {
                 self.update_tabs(TabBarMessage::RefreshTab((tid, rsh)))
             }
             FileIOAction::CloseTab(id) => {
-                // self.file_path = None;
                 let tsg = TabBarMessage::CloseTab((id, true));
                 self.update_tabs(tsg)
             }
@@ -306,7 +305,7 @@ impl Application for Modav {
         ];
         (
             Modav {
-                file_path: tabs.active_path(),
+                file_path: None,
                 title: String::from("Modav"),
                 theme: Theme::Nightfly,
                 // theme: Theme::Dark,
@@ -402,10 +401,7 @@ impl Application for Modav {
 
                 Command::perform(save_file(path, content), |res| {
                     let action = match &res {
-                        Err(e) => {
-                            println!("{}??", e);
-                            action
-                        }
+                        Err(_) => action,
                         Ok((path, _)) => action.update_path(path.clone()),
                     };
                     Message::FileSaved((res, action))
@@ -415,8 +411,7 @@ impl Application for Modav {
                 let save_message = self.save_helper(self.file_path.clone());
                 Command::perform(async { save_message }, |msg| msg)
             }
-            Message::FileSaved((Ok((path, content)), action)) => {
-                // self.file_path = Some(path);
+            Message::FileSaved((Ok((_path, content)), action)) => {
                 self.file_io_action_handler(action, content)
             }
             Message::FileSaved((Err(e), _)) => {
@@ -425,6 +420,10 @@ impl Application for Modav {
             }
             Message::CheckExit => self.update_tabs(TabBarMessage::Exit),
             Message::CanExit => window::close(window::Id::MAIN),
+            Message::NewActiveTab => {
+                self.file_path = self.tabs.active_path();
+                Command::none()
+            }
             Message::Convert => Command::none(),
             Message::None => Command::none(),
             Message::Event(event) => match event {
@@ -455,7 +454,7 @@ impl Application for Modav {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message, Self::Theme, iced::Renderer> {
-        let status_bar = self.status_bar();
+        let status_bar = self.status_bar().height(Length::FillPortion(1));
         let dashboard = self.dashboard();
 
         let content = if self.tabs.is_empty() {
@@ -464,7 +463,7 @@ impl Application for Modav {
             self.tabs.content().map(Message::TabsMessage)
         };
 
-        let cross_axis = row!(dashboard, content).height(Length::Fill);
+        let cross_axis = row!(dashboard, content).height(Length::FillPortion(25));
 
         let main_axis = column!(cross_axis, status_bar);
 

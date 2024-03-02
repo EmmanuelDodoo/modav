@@ -404,15 +404,15 @@ impl TabState {
         match tsg {
             TabBarMessage::TabSelected(id) => {
                 self.active_tab = id;
-                None
+                Some(Message::NewActiveTab)
             }
             TabBarMessage::AddTab(id) => {
                 self.push(id);
-                None
+                Some(Message::NewActiveTab)
             }
             TabBarMessage::CloseTab((id, force)) => {
                 self.close_tab(id, force);
-                None
+                Some(Message::NewActiveTab)
             }
             TabBarMessage::UpdateTab((id, tsg)) => {
                 if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id() == id) {
@@ -422,12 +422,13 @@ impl TabState {
             }
             TabBarMessage::RefreshTab((id, rsh)) => {
                 if let Some(tab) = self.tabs.iter_mut().find(|tab| {
+                    // Only Editor Tabs can be refreshed atm
                     tab.id() == id && tab.compare_idr(Identifier::Editor(EditorTabData::default()))
                 }) {
                     tab.refresh(rsh);
-                    None
+                    Some(Message::NewActiveTab)
                 } else {
-                    None
+                    Some(Message::NewActiveTab)
                 }
             }
             TabBarMessage::Exit => {
