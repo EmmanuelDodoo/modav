@@ -1,10 +1,13 @@
-use super::{TabBarMessage, TabMessage, Viewable};
 use iced::{
     theme::Theme,
     widget::{button, column, container, row, text},
     Alignment, Element,
 };
+
 use iced_aw::TabLabel;
+
+use super::tabs::{TabBarMessage, TabMessage};
+use super::Viewable;
 
 #[derive(Clone, Debug)]
 pub enum CounterMessage {

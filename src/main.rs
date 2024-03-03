@@ -12,11 +12,10 @@ use iced_aw::native::menu::Item;
 
 use std::path::PathBuf;
 
-// mod temp;
 use styles::*;
 use utils::*;
 mod views;
-use views::{home_view, EditorTabData, Identifier, Refresh, TabBarMessage, Tabs};
+use views::{home_view, EditorTabData, Refresh, Tabs, TabsMessage, View, ViewType};
 mod modal;
 
 fn main() -> Result<(), iced::Error> {
@@ -30,29 +29,13 @@ fn main() -> Result<(), iced::Error> {
     })
 }
 
-#[derive(Debug, Clone)]
-pub enum TabIden {
-    Counter,
-    Editor,
-}
-
-impl TabIden {
-    /// Returns true if this tab requires the contents of a file to be loaded
-    fn should_load(&self) -> bool {
-        match self {
-            Self::Counter => false,
-            Self::Editor => true,
-        }
-    }
-}
-
 /// What should be done after a file IO action
 #[derive(Debug, Clone)]
 pub enum FileIOAction {
     /// Create a new tab
-    NewTab((TabIden, PathBuf)),
+    NewTab((ViewType, PathBuf)),
     /// Refresh an existing tab
-    RefreshTab((TabIden, usize, PathBuf)),
+    RefreshTab((ViewType, usize, PathBuf)),
     /// Close a specific tab
     CloseTab(usize),
     /// Exiting main app
@@ -76,7 +59,7 @@ impl FileIOAction {
 pub struct Modav {
     theme: Theme,
     title: String,
-    current_model: String,
+    current_view: String,
     file_path: Option<PathBuf>,
     tabs: Tabs,
     error: AppError,
@@ -98,18 +81,18 @@ pub enum Message {
     Event(Event),
     CheckExit,
     CanExit,
-    OpenTab(Option<PathBuf>, TabIden),
+    OpenTab(Option<PathBuf>, ViewType),
     NewActiveTab,
-    TabsMessage(TabBarMessage),
+    TabsMessage(TabsMessage),
 }
 
 impl Modav {
     fn status_bar(&self) -> Container<'_, Message> {
         let current: Row<'_, Message> = {
-            let model = if self.current_model.is_empty() {
+            let model = if self.current_view.is_empty() {
                 None
             } else {
-                Some(text(self.current_model.clone()))
+                Some(text(self.current_view.clone()))
             };
 
             let path = {
@@ -177,7 +160,7 @@ impl Modav {
 
     fn file_menu(&self) -> Container<'_, Message> {
         let actions_label = vec![
-            ("New File", Message::OpenTab(None, TabIden::Editor)),
+            ("New File", Message::OpenTab(None, ViewType::Editor)),
             ("Open File", Message::SelectFile),
             ("Save File", self.save_helper(self.file_path.clone())),
             ("Save As", self.save_helper(None)),
@@ -234,7 +217,7 @@ impl Modav {
         }
     }
 
-    fn update_tabs(&mut self, tsg: TabBarMessage) -> Command<Message> {
+    fn update_tabs(&mut self, tsg: TabsMessage) -> Command<Message> {
         if let Some(response) = self.tabs.update(tsg) {
             Command::perform(async { response }, |response| response)
         } else {
@@ -248,31 +231,31 @@ impl Modav {
         content: String,
     ) -> Command<Message> {
         match action {
-            FileIOAction::NewTab((TabIden::Counter, _)) => {
-                let idr = Identifier::Counter;
+            FileIOAction::NewTab((ViewType::Counter, _)) => {
+                let idr = View::Counter;
 
-                self.update_tabs(TabBarMessage::AddTab(idr))
+                self.update_tabs(TabsMessage::AddTab(idr))
             }
-            FileIOAction::NewTab((TabIden::Editor, path)) => {
+            FileIOAction::NewTab((ViewType::Editor, path)) => {
                 let data = EditorTabData::new(Some(path), content);
-                let idr = Identifier::Editor(data);
-                self.update_tabs(TabBarMessage::AddTab(idr))
+                let idr = View::Editor(data);
+                self.update_tabs(TabsMessage::AddTab(idr))
             }
-            FileIOAction::RefreshTab((TabIden::Counter, tid, _)) => {
-                self.update_tabs(TabBarMessage::RefreshTab((tid, Refresh::Counter)))
+            FileIOAction::RefreshTab((ViewType::Counter, tid, _)) => {
+                self.update_tabs(TabsMessage::RefreshTab((tid, Refresh::Counter)))
             }
-            FileIOAction::RefreshTab((TabIden::Editor, tid, path)) => {
+            FileIOAction::RefreshTab((ViewType::Editor, tid, path)) => {
                 let data = EditorTabData::new(Some(path), content);
                 let rsh = Refresh::Editor(data);
-                self.update_tabs(TabBarMessage::RefreshTab((tid, rsh)))
+                self.update_tabs(TabsMessage::RefreshTab((tid, rsh)))
             }
             FileIOAction::CloseTab(id) => {
-                let tsg = TabBarMessage::CloseTab((id, true));
+                let tsg = TabsMessage::CloseTab((id, true));
                 self.update_tabs(tsg)
             }
             FileIOAction::Exiting(id) => {
-                self.tabs.update(TabBarMessage::CloseTab((id, true)));
-                let tsg = TabBarMessage::Exit;
+                self.tabs.update(TabsMessage::CloseTab((id, true)));
+                let tsg = TabsMessage::Exit;
                 self.update_tabs(tsg)
             }
             FileIOAction::None => Command::none(),
@@ -309,7 +292,7 @@ impl Application for Modav {
                 title: String::from("Modav"),
                 theme: Theme::Nightfly,
                 // theme: Theme::Dark,
-                current_model: String::new(),
+                current_view: String::new(),
                 tabs,
                 error: AppError::None,
             },
@@ -335,7 +318,7 @@ impl Application for Modav {
             Message::FileSelected(Ok(p)) => {
                 self.error = AppError::None;
                 Command::perform(async { p }, |path| {
-                    Message::OpenTab(Some(path), TabIden::Editor)
+                    Message::OpenTab(Some(path), ViewType::Editor)
                 })
             }
             Message::FileSelected(Err(e)) => {
@@ -364,28 +347,28 @@ impl Application for Modav {
                     }
                     (Some(_path), false) => {
                         let idr = match tidr {
-                            TabIden::Counter => Identifier::Counter,
-                            TabIden::Editor => Identifier::None,
+                            ViewType::Counter => View::Counter,
+                            ViewType::Editor => View::None,
                         };
-                        self.update_tabs(TabBarMessage::AddTab(idr))
+                        self.update_tabs(TabsMessage::AddTab(idr))
                     }
 
                     (None, true) => {
                         let idr = match tidr {
-                            TabIden::Counter => Identifier::Counter,
-                            TabIden::Editor => {
+                            ViewType::Counter => View::Counter,
+                            ViewType::Editor => {
                                 let data = EditorTabData::new(None, String::new());
-                                Identifier::Editor(data)
+                                View::Editor(data)
                             }
                         };
-                        self.update_tabs(TabBarMessage::AddTab(idr))
+                        self.update_tabs(TabsMessage::AddTab(idr))
                     }
                     (None, false) => {
                         let idr = match tidr {
-                            TabIden::Counter => Identifier::Counter,
-                            TabIden::Editor => Identifier::None,
+                            ViewType::Counter => View::Counter,
+                            ViewType::Editor => View::None,
                         };
-                        self.update_tabs(TabBarMessage::AddTab(idr))
+                        self.update_tabs(TabsMessage::AddTab(idr))
                     }
                 }
             }
@@ -418,7 +401,7 @@ impl Application for Modav {
                 self.error = e;
                 Command::none()
             }
-            Message::CheckExit => self.update_tabs(TabBarMessage::Exit),
+            Message::CheckExit => self.update_tabs(TabsMessage::Exit),
             Message::CanExit => window::close(window::Id::MAIN),
             Message::NewActiveTab => {
                 self.file_path = self.tabs.active_path();
@@ -428,7 +411,7 @@ impl Application for Modav {
             Message::None => Command::none(),
             Message::Event(event) => match event {
                 Event::Window(window::Id::MAIN, window::Event::CloseRequested) => {
-                    self.update_tabs(TabBarMessage::Exit)
+                    self.update_tabs(TabsMessage::Exit)
                 }
                 Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => match key {
                     Key::Named(key::Named::Save) if modifiers.command() => {
@@ -542,7 +525,7 @@ mod utils {
 
         use crate::{
             styles::{ColoredContainer, CustomMenuBarStyle},
-            TabIden,
+            ViewType,
         };
 
         use super::{icon, MenuButtonStyle, Message};
@@ -630,8 +613,8 @@ mod utils {
 
         pub fn views_menu<'a>() -> Container<'a, Message> {
             let action_labels = vec![
-                ("Add Counter", Message::OpenTab(None, TabIden::Counter)),
-                ("Open Editor", Message::OpenTab(None, TabIden::Editor)),
+                ("Add Counter", Message::OpenTab(None, ViewType::Counter)),
+                ("Open Editor", Message::OpenTab(None, ViewType::Editor)),
             ];
 
             let children = create_children(action_labels);

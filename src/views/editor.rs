@@ -2,7 +2,8 @@ use iced::{widget::text_editor, Element, Length, Renderer, Theme};
 use iced_aw::TabLabel;
 use std::path::PathBuf;
 
-use super::{TabMessage, Viewable};
+use super::tabs::TabMessage;
+use super::{TabBarMessage, Viewable};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct EditorTabData {
@@ -94,14 +95,14 @@ impl Viewable for EditorTab {
         self.content.text().into()
     }
 
-    fn view(&self) -> Element<'_, super::TabBarMessage, iced::Theme, iced::Renderer> {
+    fn view(&self) -> Element<'_, TabBarMessage, iced::Theme, iced::Renderer> {
         let content: Element<'_, EditorMessage, Theme, Renderer> = text_editor(&self.content)
             .on_action(EditorMessage::Action)
             .height(Length::Fill)
             .padding([4; 4])
             .into();
 
-        content.map(|msg| super::TabBarMessage::UpdateTab((self.id, TabMessage::Editor(msg))))
+        content.map(|msg| TabBarMessage::UpdateTab((self.id, TabMessage::Editor(msg))))
     }
 
     fn modal_msg(&self) -> String {
