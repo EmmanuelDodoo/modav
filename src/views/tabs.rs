@@ -19,53 +19,53 @@ use crate::modal::Modal;
 use crate::FileIOAction;
 
 #[derive(Debug)]
-enum TabType {
+enum Tab {
     Counter(CounterTab),
     Editor(EditorTab),
 }
 
-impl TabType {
+impl Tab {
     fn id(&self) -> usize {
         match self {
-            TabType::Counter(tab) => tab.id(),
-            TabType::Editor(tab) => tab.id(),
+            Tab::Counter(tab) => tab.id(),
+            Tab::Editor(tab) => tab.id(),
         }
     }
 
     fn update(&mut self, tsg: TabMessage) {
         match (self, tsg) {
-            (TabType::Counter(tab), TabMessage::Counter(tsg)) => tab.update(tsg),
-            (TabType::Counter(_), _) => {}
-            (TabType::Editor(tab), TabMessage::Editor(tsg)) => tab.update(tsg),
-            (TabType::Editor(_), _) => {}
+            (Tab::Counter(tab), TabMessage::Counter(tsg)) => tab.update(tsg),
+            (Tab::Counter(_), _) => {}
+            (Tab::Editor(tab), TabMessage::Editor(tsg)) => tab.update(tsg),
+            (Tab::Editor(_), _) => {}
         }
     }
 
     fn is_dirty(&self) -> bool {
         match self {
-            TabType::Counter(tab) => tab.is_dirty(),
-            TabType::Editor(tab) => tab.is_dirty(),
+            Tab::Counter(tab) => tab.is_dirty(),
+            Tab::Editor(tab) => tab.is_dirty(),
         }
     }
 
     fn tab_label(&self) -> TabLabel {
         match self {
-            TabType::Counter(tab) => tab.tab_label(),
-            TabType::Editor(tab) => tab.tab_label(),
+            Tab::Counter(tab) => tab.tab_label(),
+            Tab::Editor(tab) => tab.tab_label(),
         }
     }
 
     fn content(&self) -> Option<String> {
         match self {
-            TabType::Editor(tab) => tab.content(),
-            TabType::Counter(tab) => tab.content(),
+            Tab::Editor(tab) => tab.content(),
+            Tab::Counter(tab) => tab.content(),
         }
     }
 
     fn view(&self) -> Element<'_, TabBarMessage> {
         match self {
-            TabType::Counter(tab) => tab.view(),
-            TabType::Editor(tab) => tab.view(),
+            Tab::Counter(tab) => tab.view(),
+            Tab::Editor(tab) => tab.view(),
         }
     }
 
@@ -73,42 +73,42 @@ impl TabType {
     /// Assumes the self.id matches Refresh's id
     fn refresh(&mut self, rsh: Refresh) {
         match (self, rsh) {
-            (TabType::Counter(tab), Refresh::Counter) => tab.refresh(()),
-            (TabType::Counter(_), _) => {}
-            (TabType::Editor(tab), Refresh::Editor(data)) => tab.refresh(data),
-            (TabType::Editor(_), _) => {}
+            (Tab::Counter(tab), Refresh::Counter) => tab.refresh(()),
+            (Tab::Counter(_), _) => {}
+            (Tab::Editor(tab), Refresh::Editor(data)) => tab.refresh(data),
+            (Tab::Editor(_), _) => {}
         }
     }
 
     /// Returns true if the identifier matches for self
     fn compare_idr(&self, idr: View) -> bool {
         match (self, idr) {
-            (TabType::Counter(_), View::Counter) => true,
-            (TabType::Counter(_), _) => false,
-            (TabType::Editor(_), View::Editor(_)) => true,
-            (TabType::Editor(_), _) => true,
+            (Tab::Counter(_), View::Counter) => true,
+            (Tab::Counter(_), _) => false,
+            (Tab::Editor(_), View::Editor(_)) => true,
+            (Tab::Editor(_), _) => true,
         }
     }
 
     ///Returns the corresponding TabIden of self
     fn kind(&self) -> ViewType {
         match self {
-            TabType::Editor(_) => ViewType::Editor,
-            TabType::Counter(_) => ViewType::Counter,
+            Tab::Editor(_) => ViewType::Editor,
+            Tab::Counter(_) => ViewType::Counter,
         }
     }
 
     fn modal_msg(&self) -> String {
         match self {
-            TabType::Counter(tab) => tab.modal_msg(),
-            TabType::Editor(tab) => tab.modal_msg(),
+            Tab::Counter(tab) => tab.modal_msg(),
+            Tab::Editor(tab) => tab.modal_msg(),
         }
     }
 
     fn path(&self) -> Option<PathBuf> {
         match self {
-            TabType::Counter(tab) => tab.path(),
-            TabType::Editor(tab) => tab.path(),
+            Tab::Counter(tab) => tab.path(),
+            Tab::Editor(tab) => tab.path(),
         }
     }
 }
@@ -145,8 +145,8 @@ pub enum TabBarMessage {
     None,
 }
 
-pub struct TabState {
-    tabs: Vec<TabType>,
+pub struct TabBarState {
+    tabs: Vec<Tab>,
     id_counter: usize,
     active_tab: usize,
     modal_shown: bool,
@@ -168,7 +168,7 @@ pub struct TabState {
 }
 
 #[allow(dead_code)]
-impl TabState {
+impl TabBarState {
     pub fn new() -> Self {
         Self {
             tabs: Vec::new(),
@@ -196,13 +196,13 @@ impl TabState {
         match identifier {
             View::Counter => {
                 let tab = CounterTab::new(self.id_counter, ());
-                self.tabs.push(TabType::Counter(tab));
+                self.tabs.push(Tab::Counter(tab));
                 self.active_tab = self.id_counter;
                 self.id_counter += 1;
             }
             View::Editor(data) => {
                 let tab = EditorTab::new(self.id_counter, data);
-                self.tabs.push(TabType::Editor(tab));
+                self.tabs.push(Tab::Editor(tab));
                 self.active_tab = self.id_counter;
                 self.id_counter += 1;
             }

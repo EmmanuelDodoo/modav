@@ -9,12 +9,14 @@ use iced_aw::TabLabel;
 
 pub mod tabs;
 pub use tabs::Refresh;
-use tabs::{TabBarMessage, TabState};
+use tabs::{TabBarMessage, TabBarState};
 
 mod editor;
 pub use editor::EditorTabData;
 
 mod temp;
+
+use crate::utils::status_icon;
 
 use super::Message;
 
@@ -60,10 +62,12 @@ pub trait Viewable {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub enum ViewType {
     Counter,
     Editor,
+    #[default]
+    None,
 }
 
 impl ViewType {
@@ -72,6 +76,30 @@ impl ViewType {
         match self {
             Self::Counter => false,
             Self::Editor => true,
+            Self::None => false,
+        }
+    }
+
+    pub fn name(&self) -> String {
+        match self {
+            Self::None => String::default(),
+            Self::Counter => "Counter".into(),
+            Self::Editor => "Editor".into(),
+        }
+    }
+
+    pub fn display(&self) -> Row<'_, Message, Theme, Renderer> {
+        let txt = text(self.name());
+        match self {
+            Self::Editor => {
+                let icon = status_icon('\u{E801}');
+                row!(icon, txt).spacing(5)
+            }
+            Self::Counter => {
+                let icon = status_icon('\u{E800}');
+                row!(icon, txt).spacing(5)
+            }
+            Self::None => Row::new(),
         }
     }
 }
@@ -108,5 +136,5 @@ pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
         .center_y()
 }
 
-pub type Tabs = TabState;
+pub type Tabs = TabBarState;
 pub type TabsMessage = TabBarMessage;

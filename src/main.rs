@@ -59,7 +59,7 @@ impl FileIOAction {
 pub struct Modav {
     theme: Theme,
     title: String,
-    current_view: String,
+    current_view: ViewType,
     file_path: Option<PathBuf>,
     tabs: Tabs,
     error: AppError,
@@ -89,12 +89,6 @@ pub enum Message {
 impl Modav {
     fn status_bar(&self) -> Container<'_, Message> {
         let current: Row<'_, Message> = {
-            let model = if self.current_view.is_empty() {
-                None
-            } else {
-                Some(text(self.current_view.clone()))
-            };
-
             let path = {
                 self.file_path.as_ref().and_then(|path| {
                     path.file_name()
@@ -108,11 +102,16 @@ impl Modav {
                 })
             };
 
-            match (path, model) {
-                (None, None) => row!(),
-                (None, Some(m)) => row!(m),
-                (Some(p), None) => row!(p),
-                (Some(p), Some(m)) => row!(m, vertical_rule(2), p),
+            match (path, &self.current_view) {
+                (None, ViewType::None) => row!(),
+                (None, vt) => {
+                    let txt = text("Untitled");
+                    let icon = status_icon('\u{F0F6}');
+                    let txt = row!(icon, txt).spacing(5);
+                    row!(vt.display(), vertical_rule(10), txt)
+                }
+                (Some(p), ViewType::None) => row!(p),
+                (Some(p), m) => row!(m.display(), vertical_rule(10), p),
             }
         }
         .spacing(10);
@@ -241,6 +240,7 @@ impl Modav {
                 let idr = View::Editor(data);
                 self.update_tabs(TabsMessage::AddTab(idr))
             }
+            FileIOAction::NewTab((ViewType::None, _)) => self.update_tabs(TabsMessage::None),
             FileIOAction::RefreshTab((ViewType::Counter, tid, _)) => {
                 self.update_tabs(TabsMessage::RefreshTab((tid, Refresh::Counter)))
             }
@@ -249,6 +249,7 @@ impl Modav {
                 let rsh = Refresh::Editor(data);
                 self.update_tabs(TabsMessage::RefreshTab((tid, rsh)))
             }
+            FileIOAction::RefreshTab((ViewType::None, _, _)) => self.update_tabs(TabsMessage::None),
             FileIOAction::CloseTab(id) => {
                 let tsg = TabsMessage::CloseTab((id, true));
                 self.update_tabs(tsg)
@@ -292,7 +293,7 @@ impl Application for Modav {
                 title: String::from("Modav"),
                 theme: Theme::Nightfly,
                 // theme: Theme::Dark,
-                current_view: String::new(),
+                current_view: ViewType::None,
                 tabs,
                 error: AppError::None,
             },
@@ -349,6 +350,7 @@ impl Application for Modav {
                         let idr = match tidr {
                             ViewType::Counter => View::Counter,
                             ViewType::Editor => View::None,
+                            ViewType::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
                     }
@@ -360,6 +362,7 @@ impl Application for Modav {
                                 let data = EditorTabData::new(None, String::new());
                                 View::Editor(data)
                             }
+                            ViewType::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
                     }
@@ -367,6 +370,7 @@ impl Application for Modav {
                         let idr = match tidr {
                             ViewType::Counter => View::Counter,
                             ViewType::Editor => View::None,
+                            ViewType::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
                     }
@@ -404,6 +408,7 @@ impl Application for Modav {
             Message::CheckExit => self.update_tabs(TabsMessage::Exit),
             Message::CanExit => window::close(window::Id::MAIN),
             Message::NewActiveTab => {
+                self.current_view = self.tabs.active_tab_type().unwrap_or(ViewType::None);
                 self.file_path = self.tabs.active_path();
                 Command::none()
             }
