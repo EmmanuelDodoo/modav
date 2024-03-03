@@ -1,4 +1,8 @@
-use iced::{widget::text_editor, Element, Length, Renderer, Theme};
+use iced::{
+    highlighter::{self, Highlighter},
+    widget::text_editor,
+    Element, Length, Renderer, Theme,
+};
 use iced_aw::TabLabel;
 use std::path::PathBuf;
 
@@ -96,10 +100,22 @@ impl Viewable for EditorTab {
     }
 
     fn view(&self) -> Element<'_, TabBarMessage, iced::Theme, iced::Renderer> {
+        let extension = self
+            .path()
+            .as_ref()
+            .and_then(|path| path.extension()?.to_str())
+            .unwrap_or("txt")
+            .to_string();
+        let highlighter_settings = highlighter::Settings {
+            extension,
+            theme: highlighter::Theme::SolarizedDark,
+        };
+
         let content: Element<'_, EditorMessage, Theme, Renderer> = text_editor(&self.content)
             .on_action(EditorMessage::Action)
             .height(Length::Fill)
-            .padding([4; 4])
+            .padding([4, 8])
+            .highlight::<Highlighter>(highlighter_settings, |hl, _theme| hl.to_format())
             .into();
 
         content.map(|msg| TabBarMessage::UpdateTab((self.id, TabMessage::Editor(msg))))
