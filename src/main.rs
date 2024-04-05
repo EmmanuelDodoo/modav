@@ -197,7 +197,7 @@ impl Modav {
         container(content)
             .center_x()
             .padding([15, 0])
-            .width(Length::FillPortion(1))
+            .width(Length::Fixed(220.0))
             .height(Length::Fill)
             .style(theme::Container::Custom(Box::new(bstyle)))
     }
@@ -279,7 +279,7 @@ impl Application for Modav {
     }
 
     fn new(_flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
-        let tabs = Tabs::new().width(Length::FillPortion(5));
+        let tabs = Tabs::new();
         let commands = [
             font::load(include_bytes!("../fonts/status-icons.ttf").as_slice())
                 .map(Message::IconLoaded),
