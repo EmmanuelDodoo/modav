@@ -98,7 +98,7 @@ impl Modav {
     fn status_bar(&self) -> Container<'_, Message> {
         let current: Row<'_, Message> = {
             let path = {
-                self.file_path.as_ref().and_then(|path| {
+                self.tabs.active_path().as_ref().and_then(|path| {
                     path.file_name()
                         .and_then(|name| name.to_str())
                         .filter(|name| !name.is_empty())
@@ -159,7 +159,7 @@ impl Modav {
         let action = FileIOAction::RefreshTab((
             iden.unwrap(),
             self.tabs.active_tab(),
-            self.file_path.clone().unwrap_or(PathBuf::new()),
+            self.tabs.active_path().unwrap_or(PathBuf::new()),
         ));
 
         Message::SaveFile((save_path, content, action))
@@ -172,7 +172,7 @@ impl Modav {
                 Message::OpenTab(None, View::Editor(EditorTabData::default())),
             ),
             ("Open File", Message::SelectFile),
-            ("Save File", self.save_helper(self.file_path.clone())),
+            ("Save File", self.save_helper(self.tabs.active_path())),
             ("Save As", self.save_helper(None)),
         ];
 
@@ -412,7 +412,7 @@ impl Application for Modav {
                 })
             }
             Message::SaveKeyPressed => {
-                let save_message = self.save_helper(self.file_path.clone());
+                let save_message = self.save_helper(self.tabs.active_path());
                 Command::perform(async { save_message }, |msg| msg)
             }
             Message::FileSaved((Ok((_path, content)), action)) => {
@@ -454,11 +454,11 @@ impl Application for Modav {
                 }
                 Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => match key {
                     Key::Named(key::Named::Save) if modifiers.command() => {
-                        let save_message = self.save_helper(self.file_path.clone());
+                        let save_message = self.save_helper(self.tabs.active_path());
                         Command::perform(async { save_message }, |msg| msg)
                     }
                     Key::Character(s) if s.as_str() == "s" && modifiers.command() => {
-                        let save_message = self.save_helper(self.file_path.clone());
+                        let save_message = self.save_helper(self.tabs.active_path());
                         Command::perform(async { save_message }, |msg| msg)
                     }
                     Key::Named(key::Named::Tab) => {
