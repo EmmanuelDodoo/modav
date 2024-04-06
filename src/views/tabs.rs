@@ -111,6 +111,13 @@ impl Tab {
             Tab::Editor(tab) => tab.path(),
         }
     }
+
+    fn can_save(&self) -> bool {
+        match self {
+            Tab::Editor(tab) => tab.can_save(),
+            Tab::Counter(tab) => tab.can_save(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -458,6 +465,14 @@ impl TabBarState {
     pub fn active_path(&self) -> Option<PathBuf> {
         let tab = self.tabs.iter().find(|tab| tab.id() == self.active_tab)?;
         tab.path()
+    }
+
+    pub fn active_tab_can_save(&self) -> bool {
+        self.tabs
+            .iter()
+            .find(|tab| tab.id() == self.active_tab)
+            .map(|tab| tab.can_save())
+            .unwrap_or(false)
     }
 
     pub fn is_empty(&self) -> bool {

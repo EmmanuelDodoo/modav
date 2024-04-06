@@ -74,6 +74,12 @@ pub trait Viewable {
     fn path(&self) -> Option<PathBuf> {
         None
     }
+
+    /// Returns true if self can be saved. Unlike [`is_dirty`], this represents
+    /// the logical reasoning of whether a view can be saved.
+    fn can_save(&self) -> bool {
+        false
+    }
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Copy)]

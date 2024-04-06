@@ -403,13 +403,17 @@ impl Application for Modav {
             Message::SaveFile((path, content, action)) => {
                 self.error = AppError::None;
 
-                Command::perform(save_file(path, content), |res| {
-                    let action = match &res {
-                        Err(_) => action,
-                        Ok((path, _)) => action.update_path(path.clone()),
-                    };
-                    Message::FileSaved((res, action))
-                })
+                if self.tabs.active_tab_can_save() {
+                    Command::perform(save_file(path, content), |res| {
+                        let action = match &res {
+                            Err(_) => action,
+                            Ok((path, _)) => action.update_path(path.clone()),
+                        };
+                        Message::FileSaved((res, action))
+                    })
+                } else {
+                    Command::none()
+                }
             }
             Message::SaveKeyPressed => {
                 let save_message = self.save_helper(self.tabs.active_path());

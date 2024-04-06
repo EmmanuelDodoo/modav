@@ -139,4 +139,8 @@ impl Viewable for EditorTab {
     fn path(&self) -> Option<PathBuf> {
         self.file_path.clone()
     }
+
+    fn can_save(&self) -> bool {
+        true
+    }
 }
