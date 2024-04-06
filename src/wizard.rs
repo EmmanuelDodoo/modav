@@ -173,10 +173,7 @@ where
                 None
             }
             Charm::Cancel => self.on_cancel.clone(),
-            Charm::Submit => {
-                println!("{:?}", state.config.clone());
-                Some((self.on_submit)(self.file.clone(), state.config.clone()))
-            }
+            Charm::Submit => Some((self.on_submit)(self.file.clone(), state.config.clone())),
             Charm::None => None,
         }
     }
