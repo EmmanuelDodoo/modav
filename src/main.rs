@@ -5,7 +5,7 @@ use iced::{
     keyboard::{self, key, Key},
     theme, widget,
     widget::{column, container, horizontal_space, row, text, vertical_rule, Container, Row},
-    window, Application, Command, Font, Length, Settings, Subscription, Theme,
+    window, Application, Command, Element, Font, Length, Settings, Subscription, Theme,
 };
 
 use iced_aw::native::menu::Item;
@@ -17,6 +17,10 @@ use utils::*;
 mod views;
 use views::{home_view, EditorTabData, Refresh, Tabs, TabsMessage, View, ViewType};
 mod modal;
+use modal::Modal;
+
+mod wizard;
+use wizard::Wizard;
 
 fn main() -> Result<(), iced::Error> {
     let window = window::settings::Settings {
@@ -33,7 +37,7 @@ fn main() -> Result<(), iced::Error> {
 #[derive(Debug, Clone)]
 pub enum FileIOAction {
     /// Create a new tab
-    NewTab((ViewType, PathBuf)),
+    NewTab((View, PathBuf)),
     /// Refresh an existing tab
     RefreshTab((ViewType, usize, PathBuf)),
     /// Close a specific tab
@@ -62,6 +66,7 @@ pub struct Modav {
     current_view: ViewType,
     file_path: Option<PathBuf>,
     tabs: Tabs,
+    wizard_shown: bool,
     error: AppError,
 }
 
@@ -81,9 +86,12 @@ pub enum Message {
     Event(Event),
     CheckExit,
     CanExit,
-    OpenTab(Option<PathBuf>, ViewType),
+    OpenTab(Option<PathBuf>, View),
     NewActiveTab,
     TabsMessage(TabsMessage),
+    Debugging,
+    WizardSubmit(PathBuf, View),
+    ToggleWizardShown,
 }
 
 impl Modav {
@@ -159,7 +167,10 @@ impl Modav {
 
     fn file_menu(&self) -> Container<'_, Message> {
         let actions_label = vec![
-            ("New File", Message::OpenTab(None, ViewType::Editor)),
+            (
+                "New File",
+                Message::OpenTab(None, View::Editor(EditorTabData::default())),
+            ),
             ("Open File", Message::SelectFile),
             ("Save File", self.save_helper(self.file_path.clone())),
             ("Save As", self.save_helper(None)),
@@ -182,14 +193,25 @@ impl Modav {
             .padding([0, 8])
             .width(Length::Fixed(125.0));
 
-        let menus = column!(
-            self.file_menu(),
-            menus::models_menu(),
-            menus::views_menu(),
-            menus::about_menu(),
-            menus::settings_menu()
-        )
-        .spacing(45);
+        let menus = {
+            let views_closure = |vt| match vt {
+                ViewType::Counter => Message::OpenTab(None, View::Counter),
+                ViewType::Editor => {
+                    let path = self.file_path.clone();
+                    let data = EditorTabData::new(path, String::default());
+                    Message::OpenTab(self.file_path.clone(), View::Editor(data))
+                }
+                ViewType::None => Message::None,
+            };
+            column!(
+                self.file_menu(),
+                menus::models_menu(),
+                menus::views_menu(views_closure),
+                menus::about_menu(),
+                menus::settings_menu()
+            )
+            .spacing(45)
+        };
 
         let content = column!(logo, menus).spacing(80);
 
@@ -230,17 +252,17 @@ impl Modav {
         content: String,
     ) -> Command<Message> {
         match action {
-            FileIOAction::NewTab((ViewType::Counter, _)) => {
+            FileIOAction::NewTab((View::Counter, _)) => {
                 let idr = View::Counter;
 
                 self.update_tabs(TabsMessage::AddTab(idr))
             }
-            FileIOAction::NewTab((ViewType::Editor, path)) => {
+            FileIOAction::NewTab((View::Editor(_), path)) => {
                 let data = EditorTabData::new(Some(path), content);
                 let idr = View::Editor(data);
                 self.update_tabs(TabsMessage::AddTab(idr))
             }
-            FileIOAction::NewTab((ViewType::None, _)) => self.update_tabs(TabsMessage::None),
+            FileIOAction::NewTab((View::None, _)) => self.update_tabs(TabsMessage::None),
             FileIOAction::RefreshTab((ViewType::Counter, tid, _)) => {
                 self.update_tabs(TabsMessage::RefreshTab((tid, Refresh::Counter)))
             }
@@ -285,6 +307,8 @@ impl Application for Modav {
                 .map(Message::IconLoaded),
             font::load(include_bytes!("../fonts/dash-icons.ttf").as_slice())
                 .map(Message::IconLoaded),
+            font::load(include_bytes!("../fonts/wizard-icons.ttf").as_slice())
+                .map(Message::IconLoaded),
             font::load(iced_aw::BOOTSTRAP_FONT_BYTES).map(Message::IconLoaded),
         ];
         (
@@ -293,8 +317,11 @@ impl Application for Modav {
                 title: String::from("Modav"),
                 theme: Theme::Nightfly,
                 // theme: Theme::Dark,
+                // theme: Theme::SolarizedLight,
+                // theme: Theme::GruvboxLight,
                 current_view: ViewType::None,
                 tabs,
+                wizard_shown: false,
                 error: AppError::None,
             },
             Command::batch(commands),
@@ -318,9 +345,9 @@ impl Application for Modav {
             }
             Message::FileSelected(Ok(p)) => {
                 self.error = AppError::None;
-                Command::perform(async { p }, |path| {
-                    Message::OpenTab(Some(path), ViewType::Editor)
-                })
+                self.file_path = Some(p);
+                self.wizard_shown = true;
+                Command::none()
             }
             Message::FileSelected(Err(e)) => {
                 self.error = e;
@@ -348,29 +375,19 @@ impl Application for Modav {
                     }
                     (Some(_path), false) => {
                         let idr = match tidr {
-                            ViewType::Counter => View::Counter,
-                            ViewType::Editor => View::None,
-                            ViewType::None => View::None,
+                            View::Counter => View::Counter,
+                            View::Editor(_) => View::None,
+                            View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
                     }
 
-                    (None, true) => {
-                        let idr = match tidr {
-                            ViewType::Counter => View::Counter,
-                            ViewType::Editor => {
-                                let data = EditorTabData::new(None, String::new());
-                                View::Editor(data)
-                            }
-                            ViewType::None => View::None,
-                        };
-                        self.update_tabs(TabsMessage::AddTab(idr))
-                    }
+                    (None, true) => self.update_tabs(TabsMessage::AddTab(tidr)),
                     (None, false) => {
                         let idr = match tidr {
-                            ViewType::Counter => View::Counter,
-                            ViewType::Editor => View::None,
-                            ViewType::None => View::None,
+                            View::Counter => View::Counter,
+                            View::Editor(_) => View::None,
+                            View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
                     }
@@ -414,6 +431,23 @@ impl Application for Modav {
             }
             Message::Convert => Command::none(),
             Message::None => Command::none(),
+            Message::Debugging => {
+                println!("Debugging Message sent!");
+                Command::none()
+            }
+            Message::ToggleWizardShown => {
+                if self.wizard_shown {
+                    self.wizard_shown = false;
+                    Command::perform(async {}, |_| Message::NewActiveTab)
+                } else {
+                    self.wizard_shown = true;
+                    Command::none()
+                }
+            }
+            Message::WizardSubmit(path, view) => {
+                self.wizard_shown = false;
+                Command::perform(async { Message::OpenTab(Some(path), view) }, |msg| msg)
+            }
             Message::Event(event) => match event {
                 Event::Window(window::Id::MAIN, window::Event::CloseRequested) => {
                     self.update_tabs(TabsMessage::Exit)
@@ -455,7 +489,23 @@ impl Application for Modav {
 
         let main_axis = column!(cross_axis, status_bar);
 
-        container(main_axis).height(Length::Fill).into()
+        let content: Element<'_, Message> = if self.wizard_shown {
+            let file = self
+                .file_path
+                .clone()
+                .expect("File path was empty for Wizard")
+                .clone();
+            let wizard = Wizard::new(file, Message::WizardSubmit)
+                .on_reselect(Message::SelectFile)
+                .on_cancel(Message::ToggleWizardShown);
+            Modal::new(main_axis, wizard)
+                .on_blur(Message::ToggleWizardShown)
+                .into()
+        } else {
+            main_axis.into()
+        };
+
+        container(content).height(Length::Fill).into()
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
@@ -616,11 +666,16 @@ mod utils {
             container_wrap(bar)
         }
 
-        pub fn views_menu<'a>() -> Container<'a, Message> {
-            let action_labels = vec![
-                ("Add Counter", Message::OpenTab(None, ViewType::Counter)),
-                ("Open Editor", Message::OpenTab(None, ViewType::Editor)),
-            ];
+        pub fn views_menu<'a, F>(on_select: F) -> Container<'a, Message>
+        where
+            F: Fn(ViewType) -> Message,
+        {
+            let action_labels = {
+                vec![
+                    ("Add Counter", (on_select)(ViewType::Counter)),
+                    ("Open Editor", (on_select)(ViewType::Editor)),
+                ]
+            };
 
             let children = create_children(action_labels);
 

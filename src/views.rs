@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::{
+    fmt::{self, Debug},
+    path::PathBuf,
+};
 
 use iced::{
     theme::{self, Theme},
@@ -28,9 +31,20 @@ pub enum View {
     None,
 }
 
+impl View {
+    /// Returns true if this tab requires the contents of a file to be loaded
+    pub fn should_load(&self) -> bool {
+        match self {
+            Self::Counter => false,
+            Self::Editor(_) => true,
+            Self::None => false,
+        }
+    }
+}
+
 pub trait Viewable {
-    type Message;
-    type Data;
+    type Message: Clone + Debug;
+    type Data: Default + Clone + Debug;
 
     fn new(id: usize, data: Self::Data) -> Self;
 
@@ -62,7 +76,7 @@ pub trait Viewable {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Copy)]
 pub enum ViewType {
     Counter,
     Editor,
@@ -71,14 +85,10 @@ pub enum ViewType {
 }
 
 impl ViewType {
-    /// Returns true if this tab requires the contents of a file to be loaded
-    pub fn should_load(&self) -> bool {
-        match self {
-            Self::Counter => false,
-            Self::Editor => true,
-            Self::None => false,
-        }
-    }
+    pub const ALL: &'static [Self] = &[Self::Counter, Self::Editor, Self::None];
+
+    /// Options for the setup wizard
+    pub const WIZARD: &'static [Self] = &[Self::Counter, Self::Editor];
 
     pub fn name(&self) -> String {
         match self {
@@ -102,11 +112,37 @@ impl ViewType {
             Self::None => Row::new(),
         }
     }
+
+    /// Returns true if this view type needs a setup configuration
+    pub fn has_config(&self) -> bool {
+        match self {
+            Self::Editor => false,
+            Self::Counter => false,
+            Self::None => false,
+        }
+    }
+}
+
+impl fmt::Display for ViewType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ViewType::Counter => "Counter",
+                ViewType::Editor => "Editor",
+                ViewType::None => "None",
+            }
+        )
+    }
 }
 
 pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
     let new_btn: Button<'_, Message, Theme, Renderer> = button("New File")
-        .on_press(Message::OpenTab(None, ViewType::Editor))
+        .on_press(Message::OpenTab(
+            None,
+            View::Editor(EditorTabData::default()),
+        ))
         .style(theme::Button::Text);
     let open_btn: Button<'_, Message, Theme, Renderer> = button("Open File")
         .on_press(Message::SelectFile)
