@@ -1,5 +1,4 @@
 use iced::{
-    color,
     event::{self, Event},
     executor, font,
     keyboard::{self, key, Key},
@@ -11,7 +10,7 @@ use iced::{
 use iced_aw::native::menu::Item;
 
 mod toast;
-use toast::Toast;
+use toast::{Status, Toast};
 
 use std::path::PathBuf;
 
@@ -130,18 +129,7 @@ impl Modav {
         }
         .spacing(10);
 
-        let error = {
-            let color = color!(255, 0, 0);
-            let msg = self.error.message();
-            if msg.is_empty() {
-                row!()
-            } else {
-                let icon = text("•").style(theme::Text::Color(color));
-                row!(icon, text(msg)).spacing(5)
-            }
-        };
-
-        let row: Row<'_, Message> = row!(error, horizontal_space(), current);
+        let row: Row<'_, Message> = row!(horizontal_space(), current);
 
         let bstyle = default_bordered_container(&self.theme);
 
@@ -341,7 +329,12 @@ impl Application for Modav {
         match message {
             Message::IconLoaded(Ok(_)) => Command::none(),
             Message::IconLoaded(Err(e)) => {
-                self.error = AppError::FontLoading(e);
+                let error = AppError::FontLoading(e);
+                let toast = Toast {
+                    status: Status::Error,
+                    body: error.message(),
+                };
+                self.toasts.push(toast);
                 Command::none()
             }
             Message::ToggleTheme => {
@@ -359,7 +352,11 @@ impl Application for Modav {
                 Command::none()
             }
             Message::FileSelected(Err(e)) => {
-                self.error = e;
+                let toast = Toast {
+                    status: Status::Error,
+                    body: e.message(),
+                };
+                self.toasts.push(toast);
                 Command::none()
             }
             Message::LoadFile((path, action)) => {
@@ -370,7 +367,11 @@ impl Application for Modav {
             }
             Message::FileLoaded((Ok(res), action)) => self.file_io_action_handler(action, res),
             Message::FileLoaded((Err(err), _)) => {
-                self.error = err;
+                let toast = Toast {
+                    status: Status::Error,
+                    body: err.message(),
+                };
+                self.toasts.push(toast);
                 Command::none()
             }
             Message::OpenTab(path, tidr) => {
@@ -432,7 +433,11 @@ impl Application for Modav {
                 self.file_io_action_handler(action, content)
             }
             Message::FileSaved((Err(e), _)) => {
-                self.error = e;
+                let toast = Toast {
+                    status: Status::Error,
+                    body: e.message(),
+                };
+                self.toasts.push(toast);
                 Command::none()
             }
             Message::CheckExit => self.update_tabs(TabsMessage::Exit),
