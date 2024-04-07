@@ -430,6 +430,11 @@ impl Application for Modav {
                 Command::perform(async { save_message }, |msg| msg)
             }
             Message::FileSaved((Ok((_path, content)), action)) => {
+                let toast = Toast {
+                    status: Status::Success,
+                    body: "Save Successful!".into(),
+                };
+                self.toasts.push(toast);
                 self.file_io_action_handler(action, content)
             }
             Message::FileSaved((Err(e), _)) => {
