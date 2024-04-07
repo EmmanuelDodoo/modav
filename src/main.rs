@@ -10,6 +10,9 @@ use iced::{
 
 use iced_aw::native::menu::Item;
 
+mod toast;
+use toast::Toast;
+
 use std::path::PathBuf;
 
 use styles::*;
@@ -66,6 +69,7 @@ pub struct Modav {
     current_view: ViewType,
     file_path: Option<PathBuf>,
     tabs: Tabs,
+    toasts: Vec<Toast>,
     wizard_shown: bool,
     error: AppError,
 }
@@ -92,6 +96,8 @@ pub enum Message {
     Debugging,
     WizardSubmit(PathBuf, View),
     ToggleWizardShown,
+    AddToast(Toast),
+    CloseToast(usize),
 }
 
 impl Modav {
@@ -309,18 +315,21 @@ impl Application for Modav {
                 .map(Message::IconLoaded),
             font::load(include_bytes!("../fonts/wizard-icons.ttf").as_slice())
                 .map(Message::IconLoaded),
+            font::load(include_bytes!("../fonts/toast-icons.ttf").as_slice())
+                .map(Message::IconLoaded),
             font::load(iced_aw::BOOTSTRAP_FONT_BYTES).map(Message::IconLoaded),
         ];
         (
             Modav {
                 file_path: None,
                 title: String::from("Modav"),
-                theme: Theme::Nightfly,
+                // theme: Theme::Nightfly,
                 // theme: Theme::Dark,
                 // theme: Theme::SolarizedLight,
-                // theme: Theme::GruvboxLight,
+                theme: Theme::GruvboxLight,
                 current_view: ViewType::None,
                 tabs,
+                toasts: Vec::default(),
                 wizard_shown: false,
                 error: AppError::None,
             },
@@ -452,6 +461,14 @@ impl Application for Modav {
                 self.wizard_shown = false;
                 Command::perform(async { Message::OpenTab(Some(path), view) }, |msg| msg)
             }
+            Message::AddToast(toast) => {
+                self.toasts.push(toast);
+                Command::none()
+            }
+            Message::CloseToast(index) => {
+                self.toasts.remove(index);
+                Command::none()
+            }
             Message::Event(event) => match event {
                 Event::Window(window::Id::MAIN, window::Event::CloseRequested) => {
                     self.update_tabs(TabsMessage::Exit)
@@ -508,6 +525,8 @@ impl Application for Modav {
         } else {
             main_axis.into()
         };
+
+        let content = toast::Manager::new(content, &self.toasts, Message::CloseToast, &self.theme);
 
         container(content).height(Length::Fill).into()
     }
