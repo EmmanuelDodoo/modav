@@ -1,7 +1,7 @@
 use crate::views::{EditorTabData, View};
 
-use super::utils::icon;
-use super::ViewType;
+use crate::utils::icon;
+use crate::ViewType;
 use iced::{
     alignment::{Alignment, Horizontal, Vertical},
     theme,

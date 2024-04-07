@@ -15,7 +15,7 @@ use super::{Message, View, ViewType, Viewable};
 
 use styles::CustomTabBarStyle;
 
-use crate::modal::Modal;
+use crate::widgets::modal::Modal;
 use crate::FileIOAction;
 
 #[derive(Debug)]

@@ -1,7 +1,7 @@
 // Code derived from Iced Github repo
 
-use super::styles::ColoredContainer;
-use super::utils::icon;
+use crate::styles::ColoredContainer;
+use crate::utils::icon;
 use std::{
     fmt::Display,
     time::{Duration, Instant},
