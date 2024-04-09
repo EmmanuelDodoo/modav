@@ -105,13 +105,25 @@ where
 
     fn default_view(&self, state: &Hex) -> Element<'_, Charm> {
         let file = {
-            let label = text("File:");
-            let file = text(
-                self.file
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or("No File"),
-            );
+            let label = text("File:").width(Length::FillPortion(1));
+
+            let file_name = self
+                .file
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("No File");
+
+            let file_name = if file_name.len() > 8 {
+                format!("{}...", &file_name[0..8])
+            } else {
+                file_name.to_string()
+            };
+
+            let file = container(text(file_name))
+                .padding([8, 8])
+                .center_y()
+                .width(Length::FillPortion(8))
+                .style(theme::Container::Custom(Box::new(FileBorderContainer)));
 
             let btn = button(
                 icon('\u{E802}', "wizard-icons")
@@ -122,9 +134,12 @@ where
             .width(Length::FillPortion(1))
             .on_press(Charm::ReselectFile);
 
-            let temp = row!(label, file).spacing(25).width(Length::FillPortion(5));
+            let temp = row!(label, file)
+                .align_items(Alignment::Center)
+                .spacing(46)
+                .width(Length::FillPortion(5));
 
-            row!(temp, btn)
+            row!(temp, horizontal_space(), btn)
                 .width(Length::Fill)
                 .align_items(Alignment::Center)
         };
@@ -224,6 +239,27 @@ where
 {
     fn from(value: Wizard<Message>) -> Self {
         component(value)
+    }
+}
+
+pub struct FileBorderContainer;
+
+impl widget::container::StyleSheet for FileBorderContainer {
+    type Style = Theme;
+
+    fn appearance(&self, style: &Self::Style) -> container::Appearance {
+        let border_color = style.extended_palette().primary.weak.color;
+
+        let border = Border {
+            color: border_color,
+            width: 1.0,
+            ..Default::default()
+        };
+
+        container::Appearance {
+            border,
+            ..Default::default()
+        }
     }
 }
 
