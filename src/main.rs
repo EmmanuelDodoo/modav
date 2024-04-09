@@ -18,7 +18,7 @@ mod utils;
 use utils::*;
 
 mod views;
-use views::{home_view, EditorTabData, Refresh, Tabs, TabsMessage, View, ViewType};
+use views::{home_view, EditorTabData, ModelTabData, Refresh, Tabs, TabsMessage, View, ViewType};
 
 mod widgets;
 use widgets::{
@@ -34,6 +34,7 @@ fn main() -> Result<(), iced::Error> {
     };
     Modav::run(Settings {
         window,
+        antialiasing: true,
         ..Default::default()
     })
 }
@@ -198,6 +199,7 @@ impl Modav {
                     let data = EditorTabData::new(path, String::default());
                     Message::OpenTab(self.file_path.clone(), View::Editor(data))
                 }
+                ViewType::Model => Message::None,
                 ViewType::None => Message::None,
             };
             column!(
@@ -259,6 +261,11 @@ impl Modav {
                 let idr = View::Editor(data);
                 self.update_tabs(TabsMessage::AddTab(idr))
             }
+            FileIOAction::NewTab((View::Model(_), path)) => {
+                let data = ModelTabData::new(path);
+                let idr = View::Model(data);
+                self.update_tabs(TabsMessage::AddTab(idr))
+            }
             FileIOAction::NewTab((View::None, _)) => self.update_tabs(TabsMessage::None),
             FileIOAction::RefreshTab((ViewType::Counter, tid, _)) => {
                 self.update_tabs(TabsMessage::RefreshTab((tid, Refresh::Counter)))
@@ -266,6 +273,11 @@ impl Modav {
             FileIOAction::RefreshTab((ViewType::Editor, tid, path)) => {
                 let data = EditorTabData::new(Some(path), content);
                 let rsh = Refresh::Editor(data);
+                self.update_tabs(TabsMessage::RefreshTab((tid, rsh)))
+            }
+            FileIOAction::RefreshTab((ViewType::Model, tid, path)) => {
+                let data = ModelTabData::new(path);
+                let rsh = Refresh::Model(data);
                 self.update_tabs(TabsMessage::RefreshTab((tid, rsh)))
             }
             FileIOAction::RefreshTab((ViewType::None, _, _)) => self.update_tabs(TabsMessage::None),
@@ -317,7 +329,7 @@ impl Application for Modav {
                 // theme: Theme::Nightfly,
                 // theme: Theme::Dark,
                 // theme: Theme::SolarizedLight,
-                theme: Theme::GruvboxLight,
+                theme: Theme::GruvboxDark,
                 current_view: ViewType::None,
                 tabs,
                 toasts: Vec::default(),
@@ -390,6 +402,7 @@ impl Application for Modav {
                         let idr = match tidr {
                             View::Counter => View::Counter,
                             View::Editor(_) => View::None,
+                            View::Model(data) => View::Model(data),
                             View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
@@ -400,6 +413,7 @@ impl Application for Modav {
                         let idr = match tidr {
                             View::Counter => View::Counter,
                             View::Editor(_) => View::None,
+                            View::Model(_) => View::None,
                             View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))

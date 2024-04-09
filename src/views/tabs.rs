@@ -10,6 +10,7 @@ use iced_aw::{TabBarPosition, TabBarStyles, TabLabel};
 use std::{path::PathBuf, rc::Rc};
 
 use super::editor::{EditorMessage, EditorTab, EditorTabData};
+use super::models::{ModelMessage, ModelTab, ModelTabData};
 use super::temp::{CounterMessage, CounterTab};
 use super::{Message, View, ViewType, Viewable};
 
@@ -22,6 +23,7 @@ use crate::FileIOAction;
 enum Tab {
     Counter(CounterTab),
     Editor(EditorTab),
+    Model(ModelTab),
 }
 
 impl Tab {
@@ -29,6 +31,7 @@ impl Tab {
         match self {
             Tab::Counter(tab) => tab.id(),
             Tab::Editor(tab) => tab.id(),
+            Tab::Model(tab) => tab.id(),
         }
     }
 
@@ -38,6 +41,8 @@ impl Tab {
             (Tab::Counter(_), _) => {}
             (Tab::Editor(tab), TabMessage::Editor(tsg)) => tab.update(tsg),
             (Tab::Editor(_), _) => {}
+            (Tab::Model(tab), TabMessage::Model(tsg)) => tab.update(tsg),
+            (Tab::Model(_), _) => {}
         }
     }
 
@@ -45,6 +50,7 @@ impl Tab {
         match self {
             Tab::Counter(tab) => tab.is_dirty(),
             Tab::Editor(tab) => tab.is_dirty(),
+            Tab::Model(tab) => tab.is_dirty(),
         }
     }
 
@@ -52,6 +58,7 @@ impl Tab {
         match self {
             Tab::Counter(tab) => tab.tab_label(),
             Tab::Editor(tab) => tab.tab_label(),
+            Tab::Model(tab) => tab.tab_label(),
         }
     }
 
@@ -59,6 +66,7 @@ impl Tab {
         match self {
             Tab::Editor(tab) => tab.content(),
             Tab::Counter(tab) => tab.content(),
+            Tab::Model(tab) => tab.content(),
         }
     }
 
@@ -66,6 +74,7 @@ impl Tab {
         match self {
             Tab::Counter(tab) => tab.view(),
             Tab::Editor(tab) => tab.view(),
+            Tab::Model(tab) => tab.view(),
         }
     }
 
@@ -77,16 +86,20 @@ impl Tab {
             (Tab::Counter(_), _) => {}
             (Tab::Editor(tab), Refresh::Editor(data)) => tab.refresh(data),
             (Tab::Editor(_), _) => {}
+            (Tab::Model(tab), Refresh::Model(data)) => tab.refresh(data),
+            (Tab::Model(_), _) => {}
         }
     }
 
     /// Returns true if the identifier matches for self
-    fn compare_idr(&self, idr: View) -> bool {
+    fn compare_idr(&self, idr: &View) -> bool {
         match (self, idr) {
             (Tab::Counter(_), View::Counter) => true,
             (Tab::Counter(_), _) => false,
             (Tab::Editor(_), View::Editor(_)) => true,
-            (Tab::Editor(_), _) => true,
+            (Tab::Editor(_), _) => false,
+            (Tab::Model(_), View::Model(_)) => true,
+            (Tab::Model(_), _) => false,
         }
     }
 
@@ -95,6 +108,7 @@ impl Tab {
         match self {
             Tab::Editor(_) => ViewType::Editor,
             Tab::Counter(_) => ViewType::Counter,
+            Tab::Model(_) => ViewType::Model,
         }
     }
 
@@ -102,6 +116,7 @@ impl Tab {
         match self {
             Tab::Counter(tab) => tab.modal_msg(),
             Tab::Editor(tab) => tab.modal_msg(),
+            Tab::Model(tab) => tab.modal_msg(),
         }
     }
 
@@ -109,6 +124,7 @@ impl Tab {
         match self {
             Tab::Counter(tab) => tab.path(),
             Tab::Editor(tab) => tab.path(),
+            Tab::Model(tab) => tab.path(),
         }
     }
 
@@ -116,6 +132,7 @@ impl Tab {
         match self {
             Tab::Editor(tab) => tab.can_save(),
             Tab::Counter(tab) => tab.can_save(),
+            Tab::Model(tab) => tab.can_save(),
         }
     }
 }
@@ -124,6 +141,7 @@ impl Tab {
 pub enum TabMessage {
     Counter(CounterMessage),
     Editor(EditorMessage),
+    Model(ModelMessage),
 }
 
 #[derive(Debug, Clone)]
@@ -135,6 +153,7 @@ pub enum DirtyTabAction {
 #[derive(Debug, Clone)]
 pub enum Refresh {
     Editor(EditorTabData),
+    Model(ModelTabData),
     Counter,
 }
 
@@ -210,6 +229,12 @@ impl TabBarState {
             View::Editor(data) => {
                 let tab = EditorTab::new(self.id_counter, data);
                 self.tabs.push(Tab::Editor(tab));
+                self.active_tab = self.id_counter;
+                self.id_counter += 1;
+            }
+            View::Model(data) => {
+                let tab = ModelTab::new(self.id_counter, data);
+                self.tabs.push(Tab::Model(tab));
                 self.active_tab = self.id_counter;
                 self.id_counter += 1;
             }
@@ -383,7 +408,7 @@ impl TabBarState {
             TabBarMessage::RefreshTab((id, rsh)) => {
                 if let Some(tab) = self.tabs.iter_mut().find(|tab| {
                     // Only Editor Tabs can be refreshed atm
-                    tab.id() == id && tab.compare_idr(View::Editor(EditorTabData::default()))
+                    tab.id() == id && tab.compare_idr(&View::Editor(EditorTabData::default()))
                 }) {
                     tab.refresh(rsh);
                     Some(Message::NewActiveTab)

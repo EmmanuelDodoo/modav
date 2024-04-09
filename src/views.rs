@@ -19,6 +19,9 @@ pub use editor::EditorTabData;
 
 mod temp;
 
+mod models;
+pub use models::ModelTabData;
+
 use crate::utils::status_icon;
 
 use super::Message;
@@ -27,6 +30,7 @@ use super::Message;
 pub enum View {
     Counter,
     Editor(EditorTabData),
+    Model(ModelTabData),
     #[default]
     None,
 }
@@ -37,6 +41,7 @@ impl View {
         match self {
             Self::Counter => false,
             Self::Editor(_) => true,
+            Self::Model(_) => false,
             Self::None => false,
         }
     }
@@ -86,21 +91,23 @@ pub trait Viewable {
 pub enum ViewType {
     Counter,
     Editor,
+    Model,
     #[default]
     None,
 }
 
 impl ViewType {
-    pub const ALL: &'static [Self] = &[Self::Counter, Self::Editor, Self::None];
+    pub const ALL: &'static [Self] = &[Self::Counter, Self::Editor, Self::Model, Self::None];
 
     /// Options for the setup wizard
-    pub const WIZARD: &'static [Self] = &[Self::Counter, Self::Editor];
+    pub const WIZARD: &'static [Self] = &[Self::Counter, Self::Editor, Self::Model];
 
     pub fn name(&self) -> String {
         match self {
             Self::None => String::default(),
             Self::Counter => "Counter".into(),
             Self::Editor => "Editor".into(),
+            Self::Model => "Model".into(),
         }
     }
 
@@ -115,6 +122,9 @@ impl ViewType {
                 let icon = status_icon('\u{E800}');
                 row!(icon, txt).spacing(5)
             }
+            Self::Model => {
+                row!("Need to add icon")
+            }
             Self::None => Row::new(),
         }
     }
@@ -124,6 +134,7 @@ impl ViewType {
         match self {
             Self::Editor => false,
             Self::Counter => false,
+            Self::Model => false,
             Self::None => false,
         }
     }
@@ -138,6 +149,7 @@ impl fmt::Display for ViewType {
                 ViewType::Counter => "Counter",
                 ViewType::Editor => "Editor",
                 ViewType::None => "None",
+                ViewType::Model => "Model",
             }
         )
     }

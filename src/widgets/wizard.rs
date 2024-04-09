@@ -1,4 +1,4 @@
-use crate::views::{EditorTabData, View};
+use crate::views::{EditorTabData, ModelTabData, View};
 
 use crate::utils::icon;
 use crate::ViewType;
@@ -82,6 +82,7 @@ where
         match &state.model {
             ViewType::Editor => Space::new(0, 0).into(),
             ViewType::Counter => Space::new(0, 0).into(),
+            ViewType::Model => Space::new(0, 0).into(),
             ViewType::None => Space::new(0, 0).into(),
         }
     }
@@ -158,6 +159,10 @@ where
                     ViewType::Editor => {
                         let data = EditorTabData::new(Some(self.file.clone()), String::default());
                         View::Editor(data)
+                    }
+                    ViewType::Model => {
+                        let data = ModelTabData::new(self.file.clone());
+                        View::Model(data)
                     }
                     ViewType::Counter => View::Counter,
                     ViewType::None => View::None,
