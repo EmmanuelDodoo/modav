@@ -53,7 +53,7 @@ where
         let axis_color = color!(205, 0, 150);
         let label_color = theme.palette().primary;
         let text_color = theme.palette().text;
-        let outlines_color = theme.extended_palette().background.strong.color;
+        let outlines_color = theme.extended_palette().background.weak.color;
 
         let height = frame.height();
         let width = frame.width();
