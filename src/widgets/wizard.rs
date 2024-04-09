@@ -113,8 +113,8 @@ where
                 .and_then(|name| name.to_str())
                 .unwrap_or("No File");
 
-            let file_name = if file_name.len() > 8 {
-                format!("{}...", &file_name[0..8])
+            let file_name = if file_name.len() > 10 {
+                format!("{}...", &file_name[0..10])
             } else {
                 file_name.to_string()
             };
@@ -256,7 +256,10 @@ impl widget::container::StyleSheet for FileBorderContainer {
             ..Default::default()
         };
 
+        let background = style.extended_palette().background.weak.color;
+
         container::Appearance {
+            background: Some(background.into()),
             border,
             ..Default::default()
         }
