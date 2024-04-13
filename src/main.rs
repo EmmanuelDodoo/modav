@@ -135,7 +135,7 @@ impl Modav {
 
         let row: Row<'_, Message> = row!(horizontal_space(), current);
 
-        let bstyle = default_bordered_container(&self.theme);
+        let bstyle = BorderedContainer::default();
 
         container(row)
             .padding([3, 10])
@@ -214,7 +214,7 @@ impl Modav {
 
         let content = column!(logo, menus).spacing(80);
 
-        let bstyle = default_bordered_container(&self.theme);
+        let bstyle = BorderedContainer::default();
         container(content)
             .center_x()
             .padding([15, 0])

@@ -1,29 +1,25 @@
 use iced::{
-    color,
     widget::{button, container},
     Background, Border, Color, Theme,
 };
 
 pub struct BorderedContainer {
     pub width: f32,
-    pub bcolor: Color,
 }
 
 impl Default for BorderedContainer {
     fn default() -> Self {
-        Self {
-            width: 0.75,
-            bcolor: color!(0, 0, 0, 1.),
-        }
+        Self { width: 0.75 }
     }
 }
 
 impl container::StyleSheet for BorderedContainer {
     type Style = Theme;
 
-    fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+    fn appearance(&self, style: &Self::Style) -> container::Appearance {
+        let color = style.extended_palette().secondary.strong.color;
         let border = Border {
-            color: self.bcolor,
+            color,
             width: self.width,
             ..Default::default()
         };
@@ -61,17 +57,6 @@ impl container::StyleSheet for ColoredContainer {
             border,
             ..Default::default()
         }
-    }
-}
-
-pub fn default_bordered_container(theme: &Theme) -> BorderedContainer {
-    match theme {
-        Theme::Light => BorderedContainer::default(),
-        Theme::Dark => BorderedContainer {
-            bcolor: color!(255, 255, 255),
-            ..Default::default()
-        },
-        _ => BorderedContainer::default(),
     }
 }
 
