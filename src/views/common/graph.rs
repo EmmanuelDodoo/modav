@@ -1,17 +1,19 @@
 /// Text always being overlayed is an Iced issue. Keep eye out for fix
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::{collections::HashMap, fmt::Display};
 
 use iced::widget::{
     canvas::{self, Canvas, Frame, Geometry, Path, Stroke, Text},
     component, Component,
 };
+
 use iced::{
     alignment::{Horizontal, Vertical},
-    color, mouse, Element, Length, Point, Rectangle, Renderer, Theme,
+    color, mouse, Color, Element, Length, Point, Rectangle, Renderer, Size, Theme,
 };
-use iced::{Color, Size};
+
+pub use modav_core::models::line::Point as GraphPoint;
 
 #[allow(dead_code)]
 const WHITE: Color = color!(255, 255, 255);
@@ -26,10 +28,10 @@ const GREEN: Color = color!(255, 0, 0);
 #[allow(dead_code)]
 const MAGENTA: Color = color!(205, 0, 150);
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Axis<T>
 where
-    T: Clone + Into<String> + Hash + Eq,
+    T: Clone + Display + Hash + Eq,
 {
     points: Vec<T>,
     label: Option<String>,
@@ -37,7 +39,7 @@ where
 
 impl<T> Axis<T>
 where
-    T: Clone + Into<String> + Hash + Eq,
+    T: Clone + Display + Hash + Eq,
 {
     const AXIS_THICKNESS: f32 = 2.0;
     const OUTLINES_THICKNESS: f32 = 0.5;
@@ -46,8 +48,13 @@ where
         Self { label, points }
     }
 
+    pub fn set_label(mut self, label: String) -> Self {
+        self.label = Some(label);
+        self
+    }
+
     #[allow(unused_variables)]
-    fn draw(axis: &Self, frame: &mut Frame, is_x_axis: bool, theme: &Theme) -> HashMap<T, f32> {
+    fn draw(&self, frame: &mut Frame, is_x_axis: bool, theme: &Theme) -> HashMap<T, f32> {
         let mut record = HashMap::new();
 
         let axis_color = color!(205, 0, 150);
@@ -92,10 +99,10 @@ where
 
             let x = x_padding_left + x_offset_left;
 
-            let dx = x_offset_length / (axis.points.len() as f32);
+            let dx = x_offset_length / (self.points.len() as f32);
             let stump_height = 0.01 * height;
 
-            for (i, point) in axis.points.iter().enumerate() {
+            for (i, point) in self.points.iter().enumerate() {
                 let i = i + 1;
                 let x = x + (i as f32) * dx;
 
@@ -115,7 +122,7 @@ where
                     y: y + stump_height,
                 };
                 let text = Text {
-                    content: point.clone().into(),
+                    content: point.clone().to_string(),
                     position: text_position,
                     horizontal_alignment: Horizontal::Center,
                     color: text_color,
@@ -173,7 +180,7 @@ where
                 );
             };
 
-            if let Some(label) = &axis.label {
+            if let Some(label) = &self.label {
                 let label_position = Point::new(axis_end.x + (0.45 * x_padding_right), y);
                 let label_size = f32::clamp(0.25 * x_padding_right, 10.0, 16.0);
 
@@ -209,10 +216,10 @@ where
 
             let y = y - y_offset_bottom;
 
-            let dy = y_offset_length / (axis.points.len() as f32);
+            let dy = y_offset_length / (self.points.len() as f32);
             let stump_length = 0.01 * height;
 
-            for (i, point) in axis.points.iter().enumerate() {
+            for (i, point) in self.points.iter().enumerate() {
                 let i = i + 1;
 
                 let y = y - (i as f32) * dy;
@@ -234,7 +241,7 @@ where
                 };
 
                 let text = Text {
-                    content: point.clone().into(),
+                    content: point.clone().to_string(),
                     position: text_position,
                     vertical_alignment: Vertical::Center,
                     horizontal_alignment: Horizontal::Right,
@@ -295,7 +302,7 @@ where
                 );
             };
 
-            if let Some(label) = &axis.label {
+            if let Some(label) = &self.label {
                 let label_position = Point::new(x, axis_start.y * 0.65);
 
                 let text = Text {
@@ -315,31 +322,11 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct GraphPoint<X, Y>
-where
-    X: Clone + Into<String> + Hash + Eq,
-    Y: Clone + Into<String> + Hash + Eq,
-{
-    x: X,
-    y: Y,
-}
-
-impl<X, Y> GraphPoint<X, Y>
-where
-    X: Clone + Into<String> + Hash + Eq,
-    Y: Clone + Into<String> + Hash + Eq,
-{
-    pub fn new(x: X, y: Y) -> Self {
-        GraphPoint { x, y }
-    }
-}
-
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GraphLine<X, Y>
 where
-    X: Clone + Into<String> + Hash + Eq + Debug,
-    Y: Clone + Into<String> + Hash + Eq + Debug,
+    X: Clone + Display + Hash + Eq + Debug,
+    Y: Clone + Display + Hash + Eq + Debug,
 {
     points: Vec<GraphPoint<X, Y>>,
     label: Option<String>,
@@ -348,8 +335,8 @@ where
 
 impl<X, Y> GraphLine<X, Y>
 where
-    X: Clone + Into<String> + Hash + Eq + Debug,
-    Y: Clone + Into<String> + Hash + Eq + Debug,
+    X: Clone + Display + Hash + Eq + Debug,
+    Y: Clone + Display + Hash + Eq + Debug,
 {
     pub fn new(points: Vec<GraphPoint<X, Y>>, label: Option<String>) -> Self {
         Self {
@@ -440,24 +427,24 @@ where
     }
 }
 
-#[derive(Debug, Default)]
-pub struct Graph<X, Y>
+#[derive(Debug)]
+pub struct Graph<'a, X, Y>
 where
-    X: Clone + Into<String> + Hash + Eq + Debug,
-    Y: Clone + Into<String> + Hash + Eq + Debug,
+    X: Clone + Display + Hash + Eq + Debug,
+    Y: Clone + Display + Hash + Eq + Debug,
 {
     x_axis: Axis<X>,
     y_axis: Axis<Y>,
-    lines: Vec<GraphLine<X, Y>>,
+    lines: &'a Vec<GraphLine<X, Y>>,
     cache: canvas::Cache,
 }
 
-impl<X, Y> Graph<X, Y>
+impl<'a, X, Y> Graph<'a, X, Y>
 where
-    X: Clone + Into<String> + Hash + Eq + Debug,
-    Y: Clone + Into<String> + Hash + Eq + Debug,
+    X: Clone + Display + Hash + Eq + Debug,
+    Y: Clone + Display + Hash + Eq + Debug,
 {
-    pub fn new(x_axis: Axis<X>, y_axis: Axis<Y>, lines: Vec<GraphLine<X, Y>>) -> Self {
+    pub fn new(x_axis: Axis<X>, y_axis: Axis<Y>, lines: &'a Vec<GraphLine<X, Y>>) -> Self {
         Self {
             x_axis,
             y_axis,
@@ -467,10 +454,10 @@ where
     }
 }
 
-impl<Message, X, Y> Component<Message> for Graph<X, Y>
+impl<'a, Message, X, Y> Component<Message> for Graph<'a, X, Y>
 where
-    X: Clone + Into<String> + Hash + Eq + Debug,
-    Y: Clone + Into<String> + Hash + Eq + Debug,
+    X: Clone + Display + Hash + Eq + Debug,
+    Y: Clone + Display + Hash + Eq + Debug,
 {
     type Event = GraphMessage;
     type State = ();
@@ -481,9 +468,9 @@ where
 
     fn view(&self, _state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
         Canvas::new(GraphCanvas {
-            x_axis: self.x_axis.clone(),
-            y_axis: self.y_axis.clone(),
-            lines: self.lines.clone(),
+            x_axis: &self.x_axis,
+            y_axis: &self.y_axis,
+            lines: &self.lines,
             cache: &self.cache,
         })
         .height(Length::Fill)
@@ -492,13 +479,13 @@ where
     }
 }
 
-impl<'a, Message, X, Y> From<Graph<X, Y>> for Element<'a, Message>
+impl<'a, Message, X, Y> From<Graph<'a, X, Y>> for Element<'a, Message>
 where
     Message: 'a + Clone + Debug,
-    X: 'a + Clone + Into<String> + Hash + Eq + Debug,
-    Y: 'a + Clone + Into<String> + Hash + Eq + Debug,
+    X: 'a + Clone + Display + Hash + Eq + Debug,
+    Y: 'a + Clone + Display + Hash + Eq + Debug,
 {
-    fn from(value: Graph<X, Y>) -> Self {
+    fn from(value: Graph<'a, X, Y>) -> Self {
         component(value)
     }
 }
@@ -620,19 +607,19 @@ impl LegendPosition {
 #[derive(Debug)]
 pub struct GraphCanvas<'a, X, Y>
 where
-    X: Clone + Into<String> + Hash + Eq + Debug,
-    Y: Clone + Into<String> + Hash + Eq + Debug,
+    X: Clone + Display + Hash + Eq + Debug,
+    Y: Clone + Display + Hash + Eq + Debug,
 {
-    x_axis: Axis<X>,
-    y_axis: Axis<Y>,
-    lines: Vec<GraphLine<X, Y>>,
+    x_axis: &'a Axis<X>,
+    y_axis: &'a Axis<Y>,
+    lines: &'a Vec<GraphLine<X, Y>>,
     cache: &'a canvas::Cache,
 }
 
 impl<'a, X, Y> GraphCanvas<'a, X, Y>
 where
-    X: Clone + Into<String> + Hash + Eq + Debug,
-    Y: Clone + Into<String> + Hash + Eq + Debug,
+    X: Clone + Display + Hash + Eq + Debug,
+    Y: Clone + Display + Hash + Eq + Debug,
 {
     fn legend(
         &self,
@@ -713,8 +700,8 @@ where
 
 impl<'a, X, Y> canvas::Program<GraphMessage> for GraphCanvas<'a, X, Y>
 where
-    X: Clone + Into<String> + Hash + Eq + Debug,
-    Y: Clone + Into<String> + Hash + Eq + Debug,
+    X: Clone + Display + Hash + Eq + Debug,
+    Y: Clone + Display + Hash + Eq + Debug,
 {
     type State = ();
 

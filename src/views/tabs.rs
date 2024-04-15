@@ -10,7 +10,7 @@ use iced_aw::{TabBarPosition, TabBarStyles, TabLabel};
 use std::{path::PathBuf, rc::Rc};
 
 use super::editor::{EditorMessage, EditorTab, EditorTabData};
-use super::models::{ModelMessage, ModelTab, ModelTabData};
+use super::line::{LineGraphTab, LineTabData, ModelMessage};
 use super::temp::{CounterMessage, CounterTab};
 use super::{Message, View, ViewType, Viewable};
 
@@ -23,7 +23,7 @@ use crate::FileIOAction;
 enum Tab {
     Counter(CounterTab),
     Editor(EditorTab),
-    Model(ModelTab),
+    Model(LineGraphTab),
 }
 
 impl Tab {
@@ -98,7 +98,7 @@ impl Tab {
             (Tab::Counter(_), _) => false,
             (Tab::Editor(_), View::Editor(_)) => true,
             (Tab::Editor(_), _) => false,
-            (Tab::Model(_), View::Model(_)) => true,
+            (Tab::Model(_), View::LineGraph(_)) => true,
             (Tab::Model(_), _) => false,
         }
     }
@@ -108,7 +108,7 @@ impl Tab {
         match self {
             Tab::Editor(_) => ViewType::Editor,
             Tab::Counter(_) => ViewType::Counter,
-            Tab::Model(_) => ViewType::Model,
+            Tab::Model(_) => ViewType::LineGraph,
         }
     }
 
@@ -153,7 +153,7 @@ pub enum DirtyTabAction {
 #[derive(Debug, Clone)]
 pub enum Refresh {
     Editor(EditorTabData),
-    Model(ModelTabData),
+    Model(LineTabData),
     Counter,
 }
 
@@ -232,8 +232,8 @@ impl TabBarState {
                 self.active_tab = self.id_counter;
                 self.id_counter += 1;
             }
-            View::Model(data) => {
-                let tab = ModelTab::new(self.id_counter, data);
+            View::LineGraph(data) => {
+                let tab = LineGraphTab::new(self.id_counter, data);
                 self.tabs.push(Tab::Model(tab));
                 self.active_tab = self.id_counter;
                 self.id_counter += 1;

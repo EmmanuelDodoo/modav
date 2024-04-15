@@ -1,6 +1,6 @@
-use crate::views::{EditorTabData, ModelTabData, View};
+use crate::views::{EditorTabData, FileType, LineTabData, View};
 
-use crate::utils::icon;
+use crate::utils::{icon, AppError};
 use crate::ViewType;
 use iced::{
     alignment::{Alignment, Horizontal, Vertical},
@@ -12,6 +12,11 @@ use iced::{
     Border, Element, Length, Theme,
 };
 use std::{fmt::Debug, path::PathBuf};
+
+mod line;
+use line::LineGraphConfig;
+
+pub use line::LineConfigState;
 
 #[derive(Debug, Clone)]
 pub struct Hex {
@@ -30,40 +35,45 @@ impl Default for Hex {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone)]
 pub enum Charm {
     ReselectFile,
     ModelSelected(ViewType),
     ViewConfig,
     ViewDefault,
     Cancel,
+    ConfigSubmit(View),
+    Error(AppError),
     Submit,
     #[default]
     None,
 }
 
-pub struct Wizard<Message>
+pub struct Wizard<'a, Message>
 where
     Message: Debug + Clone,
 {
     on_reselect_file: Option<Message>,
     on_cancel: Option<Message>,
-    on_submit: Box<dyn Fn(PathBuf, View) -> Message>,
+    on_error: Box<dyn Fn(AppError) -> Message + 'a>,
+    on_submit: Box<dyn Fn(PathBuf, View) -> Message + 'a>,
     file: PathBuf,
 }
 
-impl<Message> Wizard<Message>
+impl<'a, Message> Wizard<'a, Message>
 where
     Message: Debug + Clone,
 {
-    pub fn new<F>(file: PathBuf, on_submit: F) -> Self
+    pub fn new<F, E>(file: PathBuf, on_submit: F, on_error: E) -> Self
     where
-        F: 'static + Fn(PathBuf, View) -> Message,
+        F: 'a + Fn(PathBuf, View) -> Message,
+        E: 'a + Fn(AppError) -> Message,
     {
         Self {
             file,
             on_reselect_file: None,
             on_submit: Box::new(on_submit),
+            on_error: Box::new(on_error),
             on_cancel: None,
         }
     }
@@ -82,25 +92,32 @@ where
         match &state.model {
             ViewType::Editor => Space::new(0, 0).into(),
             ViewType::Counter => Space::new(0, 0).into(),
-            ViewType::Model => Space::new(0, 0).into(),
+            ViewType::LineGraph => LineGraphConfig::new(
+                &self.file,
+                Charm::ConfigSubmit,
+                Charm::ViewDefault,
+                Charm::Cancel,
+                Charm::Error,
+            )
+            .into(),
             ViewType::None => Space::new(0, 0).into(),
         }
     }
 
     fn actions(&self, state: &Hex) -> Element<'_, Charm> {
+        if state.model.has_config() && state.config_view {
+            return Space::new(0, 0).into();
+        };
+
         let cancel = button(text("Cancel").size(13.0)).on_press(Charm::Cancel);
 
-        let next = if state.model.has_config() && state.config_view {
-            let prev = button(text("Previous").size(13.0)).on_press(Charm::ViewDefault);
-            let submit = button(text("Open").size(13.0));
-            row!(prev, submit).spacing(10.0)
-        } else if state.model.has_config() {
+        let action = if state.model.has_config() {
             row!(button(text("Next").size(13.0)).on_press(Charm::ViewConfig))
         } else {
             row!(button(text("Open").size(13.0)).on_press(Charm::Submit))
         };
 
-        row!(cancel, horizontal_space(), next).into()
+        row!(cancel, horizontal_space(), action).into()
     }
 
     fn default_view(&self, state: &Hex) -> Element<'_, Charm> {
@@ -147,7 +164,15 @@ where
         let options = {
             let label = text("Model:");
 
-            let list = pick_list(ViewType::WIZARD, Some(state.model), Charm::ModelSelected);
+            let filetype = FileType::new(&self.file);
+
+            let options: Vec<ViewType> = ViewType::WIZARD
+                .iter()
+                .map(|view| view.to_owned())
+                .filter(|view| view.is_supported_filetype(&filetype))
+                .collect();
+
+            let list = pick_list(options, Some(state.model), Charm::ModelSelected);
 
             row!(label, list).spacing(8).align_items(Alignment::Center)
         };
@@ -158,7 +183,7 @@ where
     }
 }
 
-impl<Message> Component<Message> for Wizard<Message>
+impl<'a, Message> Component<Message> for Wizard<'a, Message>
 where
     Message: Debug + Clone,
 {
@@ -167,22 +192,35 @@ where
 
     fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
         match event {
+            Charm::ConfigSubmit(config) => Some((self.on_submit)(self.file.clone(), config)),
+            Charm::Error(err) => Some((self.on_error)(err)),
             Charm::ReselectFile => self.on_reselect_file.clone(),
             Charm::ModelSelected(model) => {
                 state.model = model;
-                state.config = match state.model {
+                let config = match state.model {
+                    ViewType::LineGraph => {
+                        LineTabData::new(self.file.clone(), LineConfigState::default())
+                            .and_then(|data| Ok(View::LineGraph(data)))
+                    }
                     ViewType::Editor => {
                         let data = EditorTabData::new(Some(self.file.clone()), String::default());
-                        View::Editor(data)
+                        Ok(View::Editor(data))
                     }
-                    ViewType::Model => {
-                        let data = ModelTabData::new(self.file.clone());
-                        View::Model(data)
-                    }
-                    ViewType::Counter => View::Counter,
-                    ViewType::None => View::None,
+                    ViewType::Counter => Ok(View::Counter),
+                    ViewType::None => Ok(View::None),
                 };
-                None
+                match config {
+                    Err(_err) => {
+                        // No need to report error at selecting stage. Configuration
+                        // is still not complete
+                        // Some((self.on_error)(err))
+                        None
+                    }
+                    Ok(view) => {
+                        state.config = view;
+                        None
+                    }
+                }
             }
             Charm::ViewConfig => {
                 state.config_view = true;
@@ -206,12 +244,11 @@ where
 
         let content = if state.config_view {
             column!(
-                header,
-                vertical_space(),
+                header.height(Length::FillPortion(1)),
                 self.model_config(state),
-                vertical_space(),
-                self.actions(state)
             )
+            .height(Length::Fill)
+            .spacing(20)
         } else {
             column!(
                 header,
@@ -224,8 +261,8 @@ where
 
         container(content)
             .padding([20.0, 25.0])
-            .width(300.0)
-            .height(350.0)
+            .width(375.0)
+            .height(400.0)
             .style(theme::Container::Custom(Box::new(WizardContainer::new(
                 10.0,
             ))))
@@ -233,11 +270,11 @@ where
     }
 }
 
-impl<'a, Message> From<Wizard<Message>> for Element<'a, Message>
+impl<'a, Message> From<Wizard<'a, Message>> for Element<'a, Message>
 where
     Message: 'a + Clone + Debug,
 {
-    fn from(value: Wizard<Message>) -> Self {
+    fn from(value: Wizard<'a, Message>) -> Self {
         component(value)
     }
 }

@@ -9,14 +9,32 @@ use std::fmt::{Debug, Display};
 use std::io;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, PartialEq, Default)]
+use modav_core::repr::csv::utils::CSVError;
+
+#[derive(Debug, Default)]
 pub enum AppError {
     FontLoading(font::Error),
     FileDialogClosed,
     FileLoading(io::ErrorKind),
     FileSaving(io::ErrorKind),
+    CSVError(CSVError),
+    Simple(String),
     #[default]
     None,
+}
+
+impl Clone for AppError {
+    fn clone(&self) -> Self {
+        match self {
+            Self::FileSaving(err) => Self::FileSaving(err.clone()),
+            Self::FileLoading(err) => Self::FileLoading(err.clone()),
+            Self::FileDialogClosed => Self::FileDialogClosed,
+            Self::FontLoading(err) => Self::FontLoading(err.clone()),
+            Self::Simple(s) => Self::Simple(s.clone()),
+            Self::CSVError(err) => AppError::Simple(err.to_string()),
+            Self::None => Self::None,
+        }
+    }
 }
 
 impl AppError {
@@ -26,6 +44,8 @@ impl AppError {
             Self::FileDialogClosed => String::from("File Dialog closed prematurely"),
             Self::FileLoading(_) => String::from("Error while loading file"),
             Self::FileSaving(_) => String::from("Error while saving file"),
+            Self::Simple(s) => s.clone(),
+            Self::CSVError(err) => err.to_string(),
             Self::None => String::new(),
         }
     }
@@ -39,6 +59,8 @@ impl Display for AppError {
             Self::FileLoading(err) => std::fmt::Display::fmt(err, f),
             Self::FileSaving(err) => std::fmt::Display::fmt(err, f),
             Self::FileDialogClosed => write!(f, "{}", msg),
+            Self::CSVError(err) => std::fmt::Display::fmt(err, f),
+            Self::Simple(s) => write!(f, "{s}"),
             Self::None => write!(f, "{}", msg),
         }
     }

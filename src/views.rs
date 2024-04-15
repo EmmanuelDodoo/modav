@@ -19,18 +19,48 @@ pub use editor::EditorTabData;
 
 mod temp;
 
-mod models;
-pub use models::ModelTabData;
+mod line;
+pub use line::LineTabData;
+
+mod common;
 
 use crate::utils::status_icon;
 
 use super::Message;
 
+#[derive(Debug, Clone, PartialEq, Default, Copy)]
+pub enum FileType {
+    CSV,
+    JSON,
+    TXT,
+    #[default]
+    Other,
+}
+
+#[allow(dead_code)]
+impl FileType {
+    fn create<'a>(ext: &'a str) -> Self {
+        match ext {
+            "csv" => Self::CSV,
+            "json" => Self::JSON,
+            "txt" => Self::TXT,
+            _ => Self::Other,
+        }
+    }
+
+    pub fn new(file: &PathBuf) -> Self {
+        file.extension()
+            .and_then(|ext| ext.to_str())
+            .and_then(|ext| Some(Self::create(ext)))
+            .unwrap_or(Self::default())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum View {
     Counter,
     Editor(EditorTabData),
-    Model(ModelTabData),
+    LineGraph(LineTabData),
     #[default]
     None,
 }
@@ -41,7 +71,7 @@ impl View {
         match self {
             Self::Counter => false,
             Self::Editor(_) => true,
-            Self::Model(_) => false,
+            Self::LineGraph(_) => false,
             Self::None => false,
         }
     }
@@ -49,7 +79,7 @@ impl View {
 
 pub trait Viewable {
     type Message: Clone + Debug;
-    type Data: Default + Clone + Debug;
+    type Data: Clone + Debug;
 
     fn new(id: usize, data: Self::Data) -> Self;
 
@@ -91,23 +121,23 @@ pub trait Viewable {
 pub enum ViewType {
     Counter,
     Editor,
-    Model,
+    LineGraph,
     #[default]
     None,
 }
 
 impl ViewType {
-    pub const ALL: &'static [Self] = &[Self::Counter, Self::Editor, Self::Model, Self::None];
+    pub const ALL: &'static [Self] = &[Self::Counter, Self::Editor, Self::LineGraph, Self::None];
 
     /// Options for the setup wizard
-    pub const WIZARD: &'static [Self] = &[Self::Counter, Self::Editor, Self::Model];
+    pub const WIZARD: &'static [Self] = &[Self::Counter, Self::Editor, Self::LineGraph];
 
     pub fn name(&self) -> String {
         match self {
             Self::None => String::default(),
             Self::Counter => "Counter".into(),
             Self::Editor => "Editor".into(),
-            Self::Model => "Model".into(),
+            Self::LineGraph => "Model".into(),
         }
     }
 
@@ -122,7 +152,7 @@ impl ViewType {
                 let icon = status_icon('\u{E800}');
                 row!(icon, txt).spacing(5)
             }
-            Self::Model => {
+            Self::LineGraph => {
                 row!("Need to add icon")
             }
             Self::None => Row::new(),
@@ -134,7 +164,19 @@ impl ViewType {
         match self {
             Self::Editor => false,
             Self::Counter => false,
-            Self::Model => false,
+            Self::LineGraph => true,
+            Self::None => false,
+        }
+    }
+
+    pub fn is_supported_filetype(&self, extn: &FileType) -> bool {
+        match self {
+            Self::LineGraph => match extn {
+                FileType::CSV => true,
+                _ => false,
+            },
+            Self::Counter => true,
+            Self::Editor => true,
             Self::None => false,
         }
     }
@@ -149,7 +191,7 @@ impl fmt::Display for ViewType {
                 ViewType::Counter => "Counter",
                 ViewType::Editor => "Editor",
                 ViewType::None => "None",
-                ViewType::Model => "Model",
+                ViewType::LineGraph => "Line Graph",
             }
         )
     }

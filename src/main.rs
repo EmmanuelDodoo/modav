@@ -18,13 +18,13 @@ mod utils;
 use utils::*;
 
 mod views;
-use views::{home_view, EditorTabData, ModelTabData, Refresh, Tabs, TabsMessage, View, ViewType};
+use views::{home_view, EditorTabData, LineTabData, Refresh, Tabs, TabsMessage, View, ViewType};
 
 mod widgets;
 use widgets::{
     modal::Modal,
     toast::{self, Status, Toast},
-    wizard::Wizard,
+    wizard::{LineConfigState, Wizard},
 };
 
 fn main() -> Result<(), iced::Error> {
@@ -101,6 +101,7 @@ pub enum Message {
     ToggleWizardShown,
     AddToast(Toast),
     CloseToast(usize),
+    Error(AppError),
 }
 
 impl Modav {
@@ -199,7 +200,7 @@ impl Modav {
                     let data = EditorTabData::new(path, String::default());
                     Message::OpenTab(self.file_path.clone(), View::Editor(data))
                 }
-                ViewType::Model => Message::None,
+                ViewType::LineGraph => Message::None,
                 ViewType::None => Message::None,
             };
             column!(
@@ -261,10 +262,19 @@ impl Modav {
                 let idr = View::Editor(data);
                 self.update_tabs(TabsMessage::AddTab(idr))
             }
-            FileIOAction::NewTab((View::Model(_), path)) => {
-                let data = ModelTabData::new(path);
-                let idr = View::Model(data);
-                self.update_tabs(TabsMessage::AddTab(idr))
+            FileIOAction::NewTab((View::LineGraph(_), path)) => {
+                let data = LineTabData::new(path, LineConfigState::default());
+                match data {
+                    Err(err) => {
+                        let msg = Message::Error(err);
+                        Command::perform(async { msg }, |msg| msg)
+                    }
+
+                    Ok(data) => {
+                        let idr = View::LineGraph(data);
+                        self.update_tabs(TabsMessage::AddTab(idr))
+                    }
+                }
             }
             FileIOAction::NewTab((View::None, _)) => self.update_tabs(TabsMessage::None),
             FileIOAction::RefreshTab((ViewType::Counter, tid, _)) => {
@@ -275,10 +285,18 @@ impl Modav {
                 let rsh = Refresh::Editor(data);
                 self.update_tabs(TabsMessage::RefreshTab((tid, rsh)))
             }
-            FileIOAction::RefreshTab((ViewType::Model, tid, path)) => {
-                let data = ModelTabData::new(path);
-                let rsh = Refresh::Model(data);
-                self.update_tabs(TabsMessage::RefreshTab((tid, rsh)))
+            FileIOAction::RefreshTab((ViewType::LineGraph, tid, path)) => {
+                let data = LineTabData::new(path, LineConfigState::default());
+                match data {
+                    Err(err) => {
+                        let msg = Message::Error(err);
+                        Command::perform(async { msg }, |msg| msg)
+                    }
+                    Ok(data) => {
+                        let rsh = Refresh::Model(data);
+                        self.update_tabs(TabsMessage::RefreshTab((tid, rsh)))
+                    }
+                }
             }
             FileIOAction::RefreshTab((ViewType::None, _, _)) => self.update_tabs(TabsMessage::None),
             FileIOAction::CloseTab(id) => {
@@ -342,9 +360,19 @@ impl Application for Modav {
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
+            Message::Error(err) => {
+                println!("{}", err.to_string());
+                let toast = Toast {
+                    status: Status::Error,
+                    body: err.message(),
+                };
+                self.toasts.push(toast);
+                Command::none()
+            }
             Message::IconLoaded(Ok(_)) => Command::none(),
             Message::IconLoaded(Err(e)) => {
                 let error = AppError::FontLoading(e);
+                println!("{}", error.to_string());
                 let toast = Toast {
                     status: Status::Error,
                     body: error.message(),
@@ -402,7 +430,7 @@ impl Application for Modav {
                         let idr = match tidr {
                             View::Counter => View::Counter,
                             View::Editor(_) => View::None,
-                            View::Model(data) => View::Model(data),
+                            View::LineGraph(data) => View::LineGraph(data),
                             View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
@@ -413,7 +441,7 @@ impl Application for Modav {
                         let idr = match tidr {
                             View::Counter => View::Counter,
                             View::Editor(_) => View::None,
-                            View::Model(_) => View::None,
+                            View::LineGraph(_) => View::None,
                             View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
@@ -543,7 +571,7 @@ impl Application for Modav {
                 .clone()
                 .expect("File path was empty for Wizard")
                 .clone();
-            let wizard = Wizard::new(file, Message::WizardSubmit)
+            let wizard = Wizard::new(file, Message::WizardSubmit, Message::Error)
                 .on_reselect(Message::SelectFile)
                 .on_cancel(Message::ToggleWizardShown);
             Modal::new(main_axis, wizard)
