@@ -693,6 +693,10 @@ where
             .filter(|line| line.label.is_some())
             .enumerate()
         {
+            if i > 5 {
+                break;
+            }
+
             let width = 12.0;
             let height = 12.0;
 
