@@ -102,37 +102,43 @@ where
             let dx = x_offset_length / (self.points.len() as f32);
             let stump_height = 0.01 * height;
 
-            for (i, point) in self.points.iter().enumerate() {
-                let i = i + 1;
-                let x = x + (i as f32) * dx;
+            let outlines_number = if dx < 50.0 { 1 } else { 5 };
+            let outlines_width = dx / ((outlines_number) as f32);
+            let mut outlines_count = 1;
 
-                let path = Path::line([x, y].into(), [x, y + stump_height].into());
+            let mut points = self.points.iter();
 
-                frame.stroke(
-                    &path,
-                    Stroke::default()
-                        .with_width(Self::AXIS_THICKNESS)
-                        .with_color(axis_color),
-                );
+            while (outlines_width * (outlines_count as f32)) <= x_offset_length {
+                let x = x + outlines_width * (outlines_count as f32);
+                // This is a point outline
+                if outlines_count % outlines_number == 0 {
+                    let path = Path::line([x, y].into(), [x, y + stump_height].into());
+                    frame.stroke(
+                        &path,
+                        Stroke::default()
+                            .with_width(Self::AXIS_THICKNESS)
+                            .with_color(axis_color),
+                    );
 
-                record.insert(point.clone(), x);
+                    if let Some(point) = points.next() {
+                        record.insert(point.clone(), x);
 
-                let text_position = Point {
-                    x,
-                    y: y + stump_height,
-                };
-                let text = Text {
-                    content: point.clone().to_string(),
-                    position: text_position,
-                    horizontal_alignment: Horizontal::Center,
-                    color: text_color,
+                        let text_position = Point {
+                            x,
+                            y: y + stump_height,
+                        };
+                        let text = Text {
+                            content: point.clone().to_string(),
+                            position: text_position,
+                            horizontal_alignment: Horizontal::Center,
+                            color: text_color,
 
-                    ..Default::default()
-                };
+                            ..Default::default()
+                        };
 
-                frame.fill_text(text);
+                        frame.fill_text(text);
+                    }
 
-                {
                     let outlines = Path::line([x, y].into(), [x, y_padding_top].into());
 
                     frame.stroke(
@@ -141,11 +147,8 @@ where
                             .with_width(Self::OUTLINES_THICKNESS)
                             .with_color(outlines_color),
                     );
-
-                    let outlines = Path::line(
-                        [x - 0.5 * dx, y].into(),
-                        [x - 0.5 * dx, y_padding_top].into(),
-                    );
+                } else {
+                    let outlines = Path::line([x, y].into(), [x, y_padding_top].into());
 
                     frame.stroke(
                         &outlines,
@@ -154,6 +157,8 @@ where
                             .with_color(outlines_color),
                     );
                 }
+
+                outlines_count += 1;
             }
 
             // Axis end arrows
@@ -219,39 +224,44 @@ where
             let dy = y_offset_length / (self.points.len() as f32);
             let stump_length = 0.01 * height;
 
-            for (i, point) in self.points.iter().enumerate() {
-                let i = i + 1;
+            let outlines_number = if dy < 50.0 { 1 } else { 5 };
+            let outlines_height = dy / ((outlines_number) as f32);
+            let mut outlines_count = 1;
 
-                let y = y - (i as f32) * dy;
+            let mut points = self.points.iter();
 
-                let path = Path::line([x, y].into(), [x - stump_length, y].into());
+            while (outlines_height * (outlines_count as f32)) <= x_offset_length {
+                let y = y - outlines_height * (outlines_count as f32);
+                // This is a point outline
+                if outlines_count % outlines_number == 0 {
+                    let path = Path::line([x, y].into(), [x - stump_length, y].into());
+                    frame.stroke(
+                        &path,
+                        Stroke::default()
+                            .with_width(Self::AXIS_THICKNESS)
+                            .with_color(axis_color),
+                    );
 
-                frame.stroke(
-                    &path,
-                    Stroke::default()
-                        .with_width(Self::AXIS_THICKNESS)
-                        .with_color(axis_color),
-                );
+                    if let Some(point) = points.next() {
+                        record.insert(point.clone(), y);
 
-                record.insert(point.clone(), y);
+                        let text_position = Point {
+                            x: (x * 0.95) - stump_length,
+                            y,
+                        };
 
-                let text_position = Point {
-                    x: (x * 0.95) - stump_length,
-                    y,
-                };
+                        let text = Text {
+                            content: point.clone().to_string(),
+                            position: text_position,
+                            vertical_alignment: Vertical::Center,
+                            horizontal_alignment: Horizontal::Right,
+                            color: text_color,
+                            ..Default::default()
+                        };
 
-                let text = Text {
-                    content: point.clone().to_string(),
-                    position: text_position,
-                    vertical_alignment: Vertical::Center,
-                    horizontal_alignment: Horizontal::Right,
-                    color: text_color,
-                    ..Default::default()
-                };
+                        frame.fill_text(text);
+                    }
 
-                frame.fill_text(text);
-
-                {
                     let outlines = Path::line(
                         [x, y].into(),
                         [x + x_offset_length + x_offset_right, y].into(),
@@ -263,7 +273,7 @@ where
                             .with_width(Self::OUTLINES_THICKNESS)
                             .with_color(outlines_color),
                     );
-
+                } else {
                     let outlines = Path::line(
                         [x, y + 0.5 * dy].into(),
                         [x + x_offset_length + x_offset_right, y + 0.5 * dy].into(),
@@ -276,6 +286,8 @@ where
                             .with_color(outlines_color),
                     );
                 }
+
+                outlines_count += 1;
             }
 
             //Axis end arrow
