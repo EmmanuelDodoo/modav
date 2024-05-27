@@ -1977,6 +1977,7 @@ dependencies = [
  "iced_aw",
  "iced_widget 0.1.3",
  "modav_core",
+ "rand",
  "rfd",
  "tokio",
 ]

@@ -7,8 +7,8 @@ use modav_core::{
     repr::csv::{utils::Data, SheetBuilder},
 };
 
-use crate::utils::AppError;
 use crate::widgets::wizard::LineConfigState;
+use crate::{coloring, utils::AppError};
 
 use super::{TabBarMessage, Viewable};
 
@@ -20,10 +20,13 @@ use iced::{
     Alignment, Background, Border, Element, Length, Renderer, Theme,
 };
 
+use coloring::ColorEngine;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct LineTabData {
     file: PathBuf,
     title: String,
+    theme: Theme,
     line: LineGraph<String, Data>,
 }
 
@@ -61,7 +64,17 @@ impl LineTabData {
             )
             .map_err(AppError::CSVError)?;
 
-        Ok(Self { file, title, line })
+        Ok(Self {
+            file,
+            title,
+            line,
+            theme: Theme::default(),
+        })
+    }
+
+    pub fn theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
     }
 }
 
@@ -78,6 +91,7 @@ pub struct LineGraphTab {
     x_label: Option<String>,
     y_label: Option<String>,
     lines: Vec<GraphLine<String, Data>>,
+    theme: Theme,
 }
 
 impl LineGraphTab {
@@ -95,7 +109,13 @@ impl Viewable for LineGraphTab {
     type Data = LineTabData;
 
     fn new(id: usize, data: Self::Data) -> Self {
-        let LineTabData { file, title, line } = data;
+        let LineTabData {
+            file,
+            title,
+            line,
+            theme,
+        } = data;
+
         let LineGraph {
             x_scale,
             y_scale,
@@ -103,17 +123,21 @@ impl Viewable for LineGraphTab {
             y_label,
             x_label,
         } = line;
+
         let title = if title.is_empty() {
             "Untitled".into()
         } else {
             title
         };
 
+        let colors = ColorEngine::new(&theme);
+
         let lines = lines
             .into_iter()
-            .map(|line| {
+            .zip(colors)
+            .map(|(line, color)| {
                 let Line { points, label } = line;
-                GraphLine::new(points, label)
+                GraphLine::new(points, label, color)
             })
             .collect();
 
@@ -122,6 +146,7 @@ impl Viewable for LineGraphTab {
             file,
             title,
             lines,
+            theme,
             x_scale,
             y_scale,
             x_label: Some(x_label),
@@ -168,7 +193,13 @@ impl Viewable for LineGraphTab {
     }
 
     fn refresh(&mut self, data: Self::Data) {
-        let LineTabData { file, title, line } = data;
+        let LineTabData {
+            file,
+            title,
+            line,
+            theme,
+        } = data;
+
         let LineGraph {
             x_scale,
             y_scale,
@@ -177,17 +208,21 @@ impl Viewable for LineGraphTab {
             lines,
         } = line;
 
+        let colors = ColorEngine::new(&self.theme);
+
         let lines = lines
             .into_iter()
-            .map(|line| {
+            .zip(colors)
+            .map(|(line, color)| {
                 let Line { points, label } = line;
-                GraphLine::new(points, label)
+                GraphLine::new(points, label, color)
             })
             .collect();
 
         self.title = title;
         self.file = file;
         self.lines = lines;
+        self.theme = theme;
         self.x_scale = x_scale;
         self.y_scale = y_scale;
         self.x_label = Some(x_label);

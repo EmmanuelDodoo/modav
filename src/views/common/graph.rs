@@ -350,10 +350,10 @@ where
     X: Clone + Display + Hash + Eq + Debug,
     Y: Clone + Display + Hash + Eq + Debug,
 {
-    pub fn new(points: Vec<GraphPoint<X, Y>>, label: Option<String>) -> Self {
+    pub fn new(points: Vec<GraphPoint<X, Y>>, label: Option<String>, color: Color) -> Self {
         Self {
             points,
-            color: color!(0, 0, 0),
+            color,
             label,
         }
     }

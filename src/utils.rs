@@ -11,6 +11,239 @@ use std::path::PathBuf;
 
 use modav_core::repr::csv::utils::CSVError;
 
+#[allow(dead_code)]
+pub mod coloring {
+    use rand::{thread_rng, Rng};
+    use std::fmt::Display;
+
+    use iced::{color, Color, Theme};
+
+    /// Floating point values in the range [0,1]
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    struct F2(f32);
+
+    impl Display for F2 {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl Default for F2 {
+        fn default() -> Self {
+            F2(0.0)
+        }
+    }
+
+    impl From<f32> for F2 {
+        fn from(value: f32) -> Self {
+            match F2::new(value) {
+                Some(res) => res,
+                None => F2::default(),
+            }
+        }
+    }
+
+    impl From<F2> for f32 {
+        fn from(value: F2) -> Self {
+            value.0
+        }
+    }
+
+    impl F2 {
+        /// Returns a new F2 value if value is between the expected range.
+        /// Else returns None
+        fn new(value: f32) -> Option<Self> {
+            if value >= 0.0 && value <= 1.0 {
+                return Some(Self(value));
+            }
+            None
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Default)]
+    struct HSV {
+        /// The hue expressed as a fraction of 360 degrees
+        h: F2,
+        /// The saturation expressed as a fraction of 100
+        s: F2,
+        /// The value expressed as a fraction of 100
+        v: F2,
+    }
+
+    impl HSV {
+        fn new(hue: impl Into<F2>, saturation: impl Into<F2>, value: impl Into<F2>) -> Self {
+            Self {
+                h: hue.into(),
+                s: saturation.into(),
+                v: value.into(),
+            }
+        }
+    }
+
+    impl From<Color> for HSV {
+        fn from(value: Color) -> Self {
+            let r = value.r;
+            let g = value.g;
+            let b = value.b;
+
+            let cmin = f32::min(r, g.min(b));
+            let cmax = f32::max(r, g.max(b));
+            let cdiff = cmax - cmin;
+
+            let h = if cmin == cmax {
+                0.0
+            } else if cmax == r {
+                (60.0 * ((g - b) / cdiff) + 360.0) % 360.0
+            } else if cmax == g {
+                (60.0 * ((b - r) / cdiff) + 120.0) % 360.0
+            } else {
+                (60.0 * ((r - g) / cdiff) + 240.0) % 360.0
+            };
+
+            let s = if cmax == 0.0 {
+                0.0
+            } else {
+                (cdiff / cmax) * 100.0
+            };
+
+            let v = cmax * 100.0;
+
+            let h = h / 360.0;
+            let s = s / 100.0;
+            let v = v / 100.0;
+
+            HSV::new(h, s, v)
+        }
+    }
+
+    impl From<HSV> for Color {
+        fn from(value: HSV) -> Self {
+            let h: f32 = value.h.into();
+            let s: f32 = value.s.into();
+            let v: f32 = value.v.into();
+
+            let h = h * 360.0;
+
+            let c = v * s;
+            let hcomp = h / 60.0;
+            let x = c * (1.0 - f32::abs((hcomp % 2.0) - 1.0));
+            let m = v - c;
+
+            let (r, g, b) = if 0.0 <= h && h < 60.0 {
+                (c, x, 0.0)
+            } else if 60.0 <= h && h < 120.0 {
+                (x, c, 0.0)
+            } else if 120.0 <= h && h < 180.0 {
+                (0.0, c, x)
+            } else if 180.0 <= h && h < 240.0 {
+                (0.0, x, c)
+            } else if 240.0 <= h && h < 300.0 {
+                (x, 0.0, c)
+            } else {
+                (c, 0.0, x)
+            };
+
+            let r = (r + m) * 255.0;
+            let g = (g + m) * 255.0;
+            let b = (b + m) * 255.0;
+
+            color!(r, g, b)
+        }
+    }
+
+    #[test]
+    fn test_rgb_to_hsv() {
+        let rgb = color!(20, 145, 200);
+        let hsv: HSV = rgb.into();
+
+        assert_eq!(hsv.h, F2(0.5509259));
+        assert_eq!(hsv.s, F2(0.9));
+        assert_eq!(hsv.v, F2(0.78431374));
+
+        let rgb = color!(255, 0, 0);
+        let hsv: HSV = rgb.into();
+
+        assert_eq!(hsv.h, F2(0.0));
+        assert_eq!(hsv.s, F2(1.));
+        assert_eq!(hsv.v, F2(1.));
+
+        let rgb = color!(0, 255, 255);
+        let hsv: HSV = rgb.into();
+
+        assert_eq!(hsv.h, F2(0.5));
+        assert_eq!(hsv.s, F2(1.0));
+        assert_eq!(hsv.v, F2(1.0));
+    }
+
+    #[test]
+    fn test_hsv_to_rgb() {
+        let hsv = HSV::new(0.0, 1.0, 1.0);
+        let rbg: Color = hsv.into();
+
+        assert_eq!(rbg.r, 1.0);
+        assert_eq!(rbg.g, 0.0);
+        assert_eq!(rbg.b, 0.0);
+
+        let hsv = HSV::new(2.0 / 3.0, 1.0, 0.5);
+        let rbg: Color = hsv.into();
+
+        assert_eq!(rbg.r, 0.0);
+        assert_eq!(rbg.g, 0.0);
+        assert_eq!(rbg.b, 0.5);
+
+        let hsv = HSV::new(1.0 / 3.0, 0.5, 0.75);
+        let rbg: Color = hsv.into();
+
+        assert_eq!(rbg.r, 0.375);
+        assert_eq!(rbg.g, 0.75);
+        assert_eq!(rbg.b, 0.375);
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct ColorEngine {
+        seed: HSV,
+        is_dark: bool,
+        temp: f32,
+    }
+
+    impl ColorEngine {
+        const RATIO: f32 = 0.60;
+
+        pub fn new<'a>(seed: &'a Theme) -> Self {
+            let rng: f32 = thread_rng().gen();
+            Self {
+                seed: seed.extended_palette().secondary.base.color.into(),
+                is_dark: seed.extended_palette().is_dark,
+                temp: rng,
+            }
+        }
+
+        /// Generates a Color taking into consideration previously generated colors
+        fn generate(&mut self) -> Color {
+            let seed: f32 = self.seed.h.into();
+            let h = (self.temp + Self::RATIO + seed) % 1.0;
+
+            let generated = if self.is_dark {
+                HSV::new(h, 0.8, 0.5)
+            } else {
+                HSV::new(h, 0.69, 0.85)
+            };
+
+            self.seed = generated;
+
+            generated.into()
+        }
+    }
+
+    impl Iterator for ColorEngine {
+        type Item = Color;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            Some(self.generate())
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub enum AppError {
     FontLoading(font::Error),

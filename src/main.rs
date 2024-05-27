@@ -271,6 +271,7 @@ impl Modav {
                     }
 
                     Ok(data) => {
+                        let data = data.theme(self.theme.clone());
                         let idr = View::LineGraph(data);
                         self.update_tabs(TabsMessage::AddTab(idr))
                     }
@@ -430,7 +431,10 @@ impl Application for Modav {
                         let idr = match tidr {
                             View::Counter => View::Counter,
                             View::Editor(_) => View::None,
-                            View::LineGraph(data) => View::LineGraph(data),
+                            View::LineGraph(data) => {
+                                let data = data.theme(self.theme.clone());
+                                View::LineGraph(data)
+                            }
                             View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
