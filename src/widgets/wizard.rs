@@ -194,7 +194,17 @@ where
         match event {
             Charm::ConfigSubmit(config) => Some((self.on_submit)(self.file.clone(), config)),
             Charm::Error(err) => Some((self.on_error)(err)),
-            Charm::ReselectFile => self.on_reselect_file.clone(),
+            Charm::ReselectFile => {
+                // Reselecting file means returning to default state
+                state.model = ViewType::Editor;
+                state.config_view = false;
+
+                let data = EditorTabData::new(Some(self.file.clone()), String::default());
+
+                state.config = View::Editor(data);
+
+                self.on_reselect_file.clone()
+            }
             Charm::ModelSelected(model) => {
                 state.model = model;
                 let config = match state.model {
