@@ -203,7 +203,7 @@ pub mod coloring {
     pub struct ColorEngine {
         seed: HSV,
         is_dark: bool,
-        temp: f32,
+        random: f32,
     }
 
     impl ColorEngine {
@@ -214,14 +214,14 @@ pub mod coloring {
             Self {
                 seed: seed.extended_palette().secondary.base.color.into(),
                 is_dark: seed.extended_palette().is_dark,
-                temp: rng,
+                random: rng,
             }
         }
 
         /// Generates a Color taking into consideration previously generated colors
         fn generate(&mut self) -> Color {
             let seed: f32 = self.seed.h.into();
-            let h = (self.temp + Self::RATIO + seed) % 1.0;
+            let h = (self.random + Self::RATIO + seed) % 1.0;
 
             let generated = if self.is_dark {
                 HSV::new(h, 0.8, 0.5)
