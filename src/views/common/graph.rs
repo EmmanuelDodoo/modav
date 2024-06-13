@@ -230,7 +230,7 @@ where
 
             let mut points = self.points.iter();
 
-            while (outlines_height * (outlines_count as f32)) <= x_offset_length {
+            while (outlines_height * (outlines_count as f32)) <= y_offset_length {
                 let y = y - outlines_height * (outlines_count as f32);
                 // This is a point outline
                 if outlines_count % outlines_number == 0 {
@@ -275,8 +275,8 @@ where
                     );
                 } else {
                     let outlines = Path::line(
-                        [x, y + 0.5 * dy].into(),
-                        [x + x_offset_length + x_offset_right, y + 0.5 * dy].into(),
+                        [x, y].into(),
+                        [x + x_offset_length + x_offset_right, y].into(),
                     );
 
                     frame.stroke(
