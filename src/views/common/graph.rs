@@ -102,7 +102,13 @@ where
             let dx = x_offset_length / (self.points.len() as f32);
             let stump_height = 0.01 * height;
 
-            let outlines_number = if dx < 50.0 { 1 } else { 5 };
+            let outlines_number = if dx < 50.0 {
+                1
+            } else if dx < 250.0 {
+                5
+            } else {
+                10
+            };
             let outlines_width = dx / ((outlines_number) as f32);
             let mut outlines_count = 1;
 

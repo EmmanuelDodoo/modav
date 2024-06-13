@@ -242,9 +242,9 @@ impl Viewable for LineGraphTab {
         };
 
         let content_area = container(self.graph())
-            .max_width(1100)
+            .max_width(1300)
             // .padding([5, 10])
-            // .width(Length::FillPortion(20))
+            .width(Length::FillPortion(20))
             // .height(Length::FillPortion(3))
             .style(theme::Container::Custom(Box::new(ContentAreaContainer)));
 
