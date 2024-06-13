@@ -362,7 +362,6 @@ impl Application for Modav {
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
             Message::Error(err) => {
-                println!("{}", err.to_string());
                 let toast = Toast {
                     status: Status::Error,
                     body: err.message(),
@@ -373,13 +372,7 @@ impl Application for Modav {
             Message::IconLoaded(Ok(_)) => Command::none(),
             Message::IconLoaded(Err(e)) => {
                 let error = AppError::FontLoading(e);
-                println!("{}", error.to_string());
-                let toast = Toast {
-                    status: Status::Error,
-                    body: error.message(),
-                };
-                self.toasts.push(toast);
-                Command::none()
+                Command::perform(async { error }, Message::Error)
             }
             Message::ToggleTheme => {
                 self.toggle_theme();
@@ -395,14 +388,7 @@ impl Application for Modav {
                 self.wizard_shown = true;
                 Command::none()
             }
-            Message::FileSelected(Err(e)) => {
-                let toast = Toast {
-                    status: Status::Error,
-                    body: e.message(),
-                };
-                self.toasts.push(toast);
-                Command::none()
-            }
+            Message::FileSelected(Err(e)) => Command::perform(async { e }, Message::Error),
             Message::LoadFile((path, action)) => {
                 self.error = AppError::None;
                 Command::perform(load_file(path), move |(res, _)| {
@@ -410,14 +396,7 @@ impl Application for Modav {
                 })
             }
             Message::FileLoaded((Ok(res), action)) => self.file_io_action_handler(action, res),
-            Message::FileLoaded((Err(err), _)) => {
-                let toast = Toast {
-                    status: Status::Error,
-                    body: err.message(),
-                };
-                self.toasts.push(toast);
-                Command::none()
-            }
+            Message::FileLoaded((Err(err), _)) => Command::perform(async { err }, Message::Error),
             Message::OpenTab(path, tidr) => {
                 let path = path.filter(|path| path.is_file());
 
@@ -486,14 +465,7 @@ impl Application for Modav {
                 self.toasts.push(toast);
                 self.file_io_action_handler(action, content)
             }
-            Message::FileSaved((Err(e), _)) => {
-                let toast = Toast {
-                    status: Status::Error,
-                    body: e.message(),
-                };
-                self.toasts.push(toast);
-                Command::none()
-            }
+            Message::FileSaved((Err(e), _)) => Command::perform(async { e }, Message::Error),
             Message::CheckExit => self.update_tabs(TabsMessage::Exit),
             Message::CanExit => window::close(window::Id::MAIN),
             Message::NewActiveTab => {
