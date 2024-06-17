@@ -567,11 +567,12 @@ pub enum LegendPosition {
     BottomLeft,
     BottomCenter,
     BottomRight,
+    None,
 }
 
 #[allow(dead_code)]
 impl LegendPosition {
-    const ALL: [Self; 9] = [
+    const ALL: [Self; 10] = [
         Self::TopLeft,
         Self::TopCenter,
         Self::TopRight,
@@ -581,6 +582,7 @@ impl LegendPosition {
         Self::BottomLeft,
         Self::BottomCenter,
         Self::BottomRight,
+        Self::None,
     ];
 
     fn icon(&self) -> char {
@@ -681,6 +683,7 @@ impl LegendPosition {
 
                 Point::new(x, y)
             }
+            LegendPosition::None => Point::new(f32::INFINITY, f32::INFINITY),
         }
     }
 }
@@ -700,6 +703,7 @@ impl fmt::Display for LegendPosition {
                 LegendPosition::BottomLeft => "Bottom Left",
                 LegendPosition::BottomCenter => "Bottom Center",
                 LegendPosition::BottomRight => "Bottom Right",
+                LegendPosition::None => "No Legend",
             }
         )
     }
@@ -757,6 +761,10 @@ where
         theme: &Theme,
     ) -> Geometry {
         let mut frame = Frame::new(renderer, bounds.size());
+
+        if position == LegendPosition::None {
+            return frame.into_geometry();
+        }
 
         let labels_len = self
             .lines
@@ -846,13 +854,6 @@ where
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
         let content = self.cache.draw(renderer, bounds.size(), |frame| {
-            // frame.stroke(
-            // &Path::rectangle(Point::ORIGIN, frame.size()),
-            // Stroke::default()
-            // .with_width(1.5)
-            // .with_color(color!(0, 150, 255)),
-            // );
-
             let x_record = Axis::draw(&self.x_axis, frame, true, theme);
 
             let y_record = Axis::draw(&self.y_axis, frame, false, theme);
