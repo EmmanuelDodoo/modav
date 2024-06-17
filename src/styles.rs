@@ -1,6 +1,6 @@
 use iced::{
     widget::{button, container},
-    Background, Border, Color, Theme,
+    Background, Border, Color, Shadow, Theme,
 };
 
 pub struct BorderedContainer {
@@ -100,6 +100,32 @@ impl iced_aw::menu::StyleSheet for CustomMenuBarStyle {
             bar_border: border,
             bar_background: Background::Color(Color::TRANSPARENT),
             path: Background::Color(Color::TRANSPARENT),
+            ..Default::default()
+        }
+    }
+}
+
+pub struct ToolTipContainerStyle;
+
+impl container::StyleSheet for ToolTipContainerStyle {
+    type Style = Theme;
+
+    fn appearance(&self, style: &Self::Style) -> container::Appearance {
+        let background = style.extended_palette().background.weak.color;
+        let shadow = Shadow {
+            color: style.extended_palette().primary.strong.color,
+            offset: [0.0, 1.0].into(),
+            blur_radius: 1.0,
+        };
+        let border = Border {
+            width: 0.5,
+            color: style.extended_palette().secondary.weak.color,
+            radius: 5.0.into(),
+        };
+        container::Appearance {
+            background: Some(Background::Color(background)),
+            border,
+            shadow,
             ..Default::default()
         }
     }

@@ -239,13 +239,14 @@ impl Viewable for LineGraphTab {
             row!(horizontal_space(), text, horizontal_space())
                 .width(Length::Fill)
                 .align_items(Alignment::Center)
-        };
+        }
+        .height(Length::Shrink);
 
         let content_area = container(self.graph())
-            .max_width(1300)
+            .max_width(1450)
             // .padding([5, 10])
-            .width(Length::FillPortion(20))
-            // .height(Length::FillPortion(3))
+            .width(Length::Fill)
+            .height(Length::Fill)
             .style(theme::Container::Custom(Box::new(ContentAreaContainer)));
 
         let content = column!(title, content_area)
@@ -255,7 +256,7 @@ impl Viewable for LineGraphTab {
             .width(Length::Fill);
 
         container(content)
-            .padding([10, 30, 30, 30])
+            .padding([10, 30, 30, 15])
             .width(Length::Fill)
             .height(Length::Fill)
             .into()

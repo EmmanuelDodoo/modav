@@ -267,13 +267,7 @@ where
         } else {
             self.sheet_config(state)
         };
-        let content = column!(
-            text("Line Graph Config here!"),
-            config,
-            vertical_space(),
-            self.actions(state)
-        )
-        .spacing(10.0);
+        let content = column!(config, vertical_space(), self.actions(state)).spacing(10.0);
 
         container(content).height(Length::FillPortion(5)).into()
     }
@@ -289,12 +283,12 @@ where
 }
 
 mod tip {
-    use crate::utils::icon;
+    use crate::{utils::icon, ToolTipContainerStyle};
 
     use iced::{
         theme,
         widget::{container, text, tooltip::Tooltip},
-        Background, Border, Length, Shadow, Theme,
+        Length,
     };
 
     use iced::widget::tooltip as tt;
@@ -315,31 +309,5 @@ mod tip {
         Tooltip::new(icon, desc, tt::Position::Right)
             .gap(10.0)
             .snap_within_viewport(true)
-    }
-
-    struct ToolTipContainerStyle;
-
-    impl container::StyleSheet for ToolTipContainerStyle {
-        type Style = Theme;
-
-        fn appearance(&self, style: &Self::Style) -> container::Appearance {
-            let background = style.extended_palette().background.weak.color;
-            let shadow = Shadow {
-                color: style.extended_palette().primary.strong.color,
-                offset: [0.0, 1.0].into(),
-                blur_radius: 2.5,
-            };
-            let border = Border {
-                width: 0.5,
-                color: style.extended_palette().secondary.weak.color,
-                radius: 5.0.into(),
-            };
-            container::Appearance {
-                background: Some(Background::Color(background)),
-                border,
-                shadow,
-                ..Default::default()
-            }
-        }
     }
 }

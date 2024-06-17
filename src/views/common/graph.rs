@@ -1,3 +1,4 @@
+use core::fmt;
 /// Text always being overlayed is an Iced issue. Keep eye out for fix
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -5,15 +6,20 @@ use std::{collections::HashMap, fmt::Display};
 
 use iced::widget::{
     canvas::{self, Canvas, Frame, Geometry, Path, Stroke, Text},
-    component, Component,
+    component, row, Component,
 };
+use iced::widget::{container, text, Tooltip};
 
 use iced::{
     alignment::{Horizontal, Vertical},
     color, mouse, Color, Element, Length, Point, Rectangle, Renderer, Size, Theme,
 };
+use iced::{theme, Font};
 
 pub use modav_core::models::line::Point as GraphPoint;
+
+use crate::widgets::toolbar::{ToolbarMenu, ToolbarOption};
+use crate::ToolTipContainerStyle;
 
 #[allow(dead_code)]
 const WHITE: Color = color!(255, 255, 255);
@@ -445,6 +451,16 @@ where
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum GraphMessage {
+    Legend(LegendPosition),
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct GraphState {
+    legend_position: LegendPosition,
+}
+
 #[derive(Debug)]
 pub struct Graph<'a, X, Y>
 where
@@ -470,6 +486,30 @@ where
             cache: canvas::Cache::default(),
         }
     }
+
+    fn toolbar(&self, legend: LegendPosition) -> Element<'_, GraphMessage, Theme, Renderer> {
+        let icons = Font::with_name("status-icons");
+        let menu = {
+            let menu = ToolbarMenu::new(LegendPosition::ALL, legend, GraphMessage::Legend, icons)
+                .padding([8, 8])
+                .menu_padding([8, 15, 8, 8])
+                .spacing(5.0);
+
+            let tooltip = container(text("Legend Position").size(12.0))
+                .max_width(200.0)
+                .padding([6, 8])
+                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
+                .height(Length::Shrink);
+
+            let menu = Tooltip::new(menu, tooltip, iced::widget::tooltip::Position::Bottom)
+                .gap(2.0)
+                .snap_within_viewport(true);
+
+            menu
+        };
+
+        menu.into()
+    }
 }
 
 impl<'a, Message, X, Y> Component<Message> for Graph<'a, X, Y>
@@ -478,22 +518,28 @@ where
     Y: Clone + Display + Hash + Eq + Debug,
 {
     type Event = GraphMessage;
-    type State = ();
+    type State = GraphState;
 
-    fn update(&mut self, _state: &mut Self::State, _event: Self::Event) -> Option<Message> {
+    fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
+        match event {
+            GraphMessage::Legend(position) => {
+                state.legend_position = position;
+            }
+        };
         None
     }
 
-    fn view(&self, _state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
-        Canvas::new(GraphCanvas {
-            x_axis: &self.x_axis,
-            y_axis: &self.y_axis,
-            lines: &self.lines,
-            cache: &self.cache,
-        })
+    fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
+        let canvas = Canvas::new(
+            GraphCanvas::new(&self.x_axis, &self.y_axis, &self.lines, &self.cache)
+                .legend_position(state.legend_position),
+        )
         .height(Length::Fill)
-        .width(Length::Fill)
-        .into()
+        .width(Length::FillPortion(24));
+
+        let toolbar = self.toolbar(state.legend_position);
+
+        row!(canvas, toolbar).into()
     }
 }
 
@@ -508,10 +554,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum GraphMessage {}
-
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Copy, PartialEq)]
 #[allow(dead_code)]
 pub enum LegendPosition {
     TopLeft,
@@ -526,7 +569,27 @@ pub enum LegendPosition {
     BottomRight,
 }
 
+#[allow(dead_code)]
 impl LegendPosition {
+    const ALL: [Self; 9] = [
+        Self::TopLeft,
+        Self::TopCenter,
+        Self::TopRight,
+        Self::CenterLeft,
+        Self::Center,
+        Self::CenterRight,
+        Self::BottomLeft,
+        Self::BottomCenter,
+        Self::BottomRight,
+    ];
+
+    fn icon(&self) -> char {
+        match self {
+            Self::TopRight => '\u{E800}',
+            _ => '\u{F0F6}',
+        }
+    }
+
     /// Returns the top left point of the legend given its size and a bound.
     fn position(&self, bounds: Rectangle, size: Size) -> Point {
         // Bottom poistions also need some review
@@ -622,6 +685,32 @@ impl LegendPosition {
     }
 }
 
+impl fmt::Display for LegendPosition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                LegendPosition::TopLeft => "Top Left",
+                LegendPosition::TopCenter => "Top Center",
+                LegendPosition::TopRight => "Top Right",
+                LegendPosition::CenterLeft => "Center Left",
+                LegendPosition::Center => "Center",
+                LegendPosition::CenterRight => "Center Right",
+                LegendPosition::BottomLeft => "Bottom Left",
+                LegendPosition::BottomCenter => "Bottom Center",
+                LegendPosition::BottomRight => "Bottom Right",
+            }
+        )
+    }
+}
+
+impl ToolbarOption for LegendPosition {
+    fn icon(&self) -> char {
+        self.icon()
+    }
+}
+
 #[derive(Debug)]
 pub struct GraphCanvas<'a, X, Y>
 where
@@ -632,6 +721,7 @@ where
     y_axis: &'a Axis<Y>,
     lines: &'a Vec<GraphLine<X, Y>>,
     cache: &'a canvas::Cache,
+    legend: LegendPosition,
 }
 
 impl<'a, X, Y> GraphCanvas<'a, X, Y>
@@ -639,6 +729,26 @@ where
     X: Clone + Display + Hash + Eq + Debug,
     Y: Clone + Display + Hash + Eq + Debug,
 {
+    fn new(
+        x_axis: &'a Axis<X>,
+        y_axis: &'a Axis<Y>,
+        lines: &'a Vec<GraphLine<X, Y>>,
+        cache: &'a canvas::Cache,
+    ) -> Self {
+        Self {
+            x_axis,
+            y_axis,
+            lines,
+            cache,
+            legend: LegendPosition::default(),
+        }
+    }
+
+    fn legend_position(mut self, position: LegendPosition) -> Self {
+        self.legend = position;
+        self
+    }
+
     fn legend(
         &self,
         renderer: &Renderer,
@@ -752,9 +862,6 @@ where
                 .for_each(|line| GraphLine::draw(line, frame, &x_record, &y_record));
         });
 
-        vec![
-            content,
-            self.legend(renderer, bounds, LegendPosition::default(), theme),
-        ]
+        vec![content, self.legend(renderer, bounds, self.legend, theme)]
     }
 }
