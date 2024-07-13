@@ -417,7 +417,7 @@ where
 
         let icon = Text {
             content: &selected.borrow().icon().to_string(),
-            size: icon_size * 1.25,
+            size: icon_size * 1.05,
             line_height: LineHeight::default(),
             bounds: Size::new(
                 bounds.width - self.padding.horizontal(),
@@ -1010,7 +1010,7 @@ where
 
             let icon_text = Text {
                 content: &icon.to_string(),
-                bounds: Size::new(f32::INFINITY, bounds.height),
+                bounds: Size::new(bounds.width, bounds.height),
                 size: icon_size,
                 line_height: LineHeight::default(),
                 font: self.icon_font,
@@ -1033,7 +1033,7 @@ where
             renderer.fill_text(
                 Text {
                     content: &option.to_string(),
-                    bounds: Size::new(f32::INFINITY, bounds.height),
+                    bounds: Size::new(bounds.width, bounds.height),
                     size: text_size,
                     line_height: LineHeight::default(),
                     font: self.text_font.unwrap_or(renderer.default_font()),
@@ -1152,4 +1152,3 @@ where
         Element::new(value)
     }
 }
-
