@@ -1,20 +1,22 @@
-use core::fmt;
 /// Text always being overlayed is an Iced issue. Keep eye out for fix
-use std::fmt::Debug;
-use std::hash::Hash;
-use std::{collections::HashMap, fmt::Display};
-
-use iced::widget::{
-    canvas::{self, Canvas, Frame, Geometry, Path, Stroke, Text},
-    component, row, Component,
+use std::{
+    collections::HashMap,
+    fmt::{self, Debug, Display},
+    hash::Hash,
+    rc::Rc,
 };
-use iced::widget::{container, text, Tooltip};
 
 use iced::{
     alignment::{Horizontal, Vertical},
-    color, mouse, Color, Element, Length, Point, Rectangle, Renderer, Size, Theme,
+    color, mouse, theme,
+    widget::{
+        self,
+        canvas::{self, Canvas, Frame, Geometry, Path, Stroke, Text},
+        column, component, container, overlay, row, text, Component, Tooltip,
+    },
+    Alignment, Background, Border, Color, Element, Font, Length, Point, Rectangle, Renderer, Size,
+    Theme,
 };
-use iced::{theme, Font};
 
 pub use modav_core::models::line::Point as GraphPoint;
 
@@ -30,7 +32,7 @@ const BLUE: Color = color!(0, 0, 255);
 #[allow(dead_code)]
 const RED: Color = color!(255, 0, 0);
 #[allow(dead_code)]
-const GREEN: Color = color!(255, 0, 0);
+const GREEN: Color = color!(0, 255, 0);
 #[allow(dead_code)]
 const MAGENTA: Color = color!(205, 0, 150);
 
@@ -380,6 +382,7 @@ where
         frame: &mut Frame,
         x_record: &HashMap<X, f32>,
         y_record: &HashMap<Y, f32>,
+        kind: GraphType,
     ) {
         line.points.iter().fold(None, |prev, point| {
             let x = x_record
@@ -404,22 +407,42 @@ where
 
             let point = Point { x, y };
 
-            let path = Path::circle(point.clone(), 2.0);
+            match kind {
+                GraphType::Point => {
+                    let path = Path::circle(point.clone(), 4.5);
 
-            frame.stroke(
-                &path,
-                Stroke::default().with_width(3.0).with_color(line.color),
-            );
+                    frame.fill(&path, line.color);
+                }
 
-            if let Some(prev) = prev {
-                let path = Path::new(|bdr| {
-                    bdr.move_to(prev);
-                    bdr.line_to(point);
-                });
-                frame.stroke(
-                    &path,
-                    Stroke::default().with_width(3.0).with_color(line.color),
-                );
+                GraphType::Line => {
+                    if let Some(prev) = prev {
+                        let path = Path::new(|bdr| {
+                            bdr.move_to(prev);
+                            bdr.line_to(point);
+                        });
+                        frame.stroke(
+                            &path,
+                            Stroke::default().with_width(3.0).with_color(line.color),
+                        );
+                    };
+                }
+
+                GraphType::LinePoint => {
+                    let path = Path::circle(point.clone(), 3.5);
+
+                    frame.fill(&path, line.color);
+
+                    if let Some(prev) = prev {
+                        let path = Path::new(|bdr| {
+                            bdr.move_to(prev);
+                            bdr.line_to(point);
+                        });
+                        frame.stroke(
+                            &path,
+                            Stroke::default().with_width(3.0).with_color(line.color),
+                        );
+                    };
+                }
             };
 
             return Some(point);
@@ -454,11 +477,13 @@ where
 #[derive(Debug, Clone, Copy)]
 pub enum GraphMessage {
     Legend(LegendPosition),
+    GraphType(GraphType),
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct GraphState {
     legend_position: LegendPosition,
+    graph_type: GraphType,
 }
 
 #[derive(Debug)]
@@ -487,13 +512,22 @@ where
         }
     }
 
-    fn toolbar(&self, legend: LegendPosition) -> Element<'_, GraphMessage, Theme, Renderer> {
-        let icons = Font::with_name("status-icons");
-        let menu = {
+    fn toolbar(
+        &self,
+        legend: LegendPosition,
+        kind: GraphType,
+    ) -> Element<'_, GraphMessage, Theme, Renderer> {
+        let style = ToolbarStyle;
+        let menu_style = ToolbarMenuStyle;
+
+        let legend = {
+            let icons = Font::with_name("legend-icons");
+
             let menu = ToolbarMenu::new(LegendPosition::ALL, legend, GraphMessage::Legend, icons)
-                .padding([8, 8])
-                .menu_padding([8, 15, 8, 8])
-                .spacing(5.0);
+                .padding([4, 4])
+                .menu_padding([4, 10, 4, 8])
+                .spacing(5.0)
+                .style(theme::PickList::Custom(Rc::new(style), Rc::new(menu_style)));
 
             let tooltip = container(text("Legend Position").size(12.0))
                 .max_width(200.0)
@@ -508,7 +542,38 @@ where
             menu
         };
 
-        menu.into()
+        let kind = {
+            let icons = Font::with_name("line-type-icons");
+
+            let menu = ToolbarMenu::new(GraphType::ALL, kind, GraphMessage::GraphType, icons)
+                .padding([4, 4])
+                .menu_padding([4, 10, 4, 8])
+                .spacing(17.0)
+                .style(theme::PickList::Custom(Rc::new(style), Rc::new(menu_style)));
+
+            let tooltip = container(text("Graph Type").size(12.0))
+                .max_width(200.0)
+                .padding([6, 8])
+                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
+                .height(Length::Shrink);
+
+            let menu = Tooltip::new(menu, tooltip, iced::widget::tooltip::Position::Bottom)
+                .gap(2.0)
+                .snap_within_viewport(true);
+
+            menu
+        };
+
+        container(
+            column!(legend, kind)
+                .width(Length::Fill)
+                .align_items(Alignment::Center)
+                .spacing(8.0),
+        )
+        .width(Length::Fixed(40.0))
+        .padding([6.0, 2.0])
+        .style(theme::Container::Custom(Box::new(ToolbarContainerStyle)))
+        .into()
     }
 }
 
@@ -525,6 +590,7 @@ where
             GraphMessage::Legend(position) => {
                 state.legend_position = position;
             }
+            GraphMessage::GraphType(kind) => state.graph_type = kind,
         };
         None
     }
@@ -532,12 +598,13 @@ where
     fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
         let canvas = Canvas::new(
             GraphCanvas::new(&self.x_axis, &self.y_axis, &self.lines, &self.cache)
-                .legend_position(state.legend_position),
+                .legend_position(state.legend_position)
+                .graph_type(state.graph_type),
         )
         .height(Length::Fill)
         .width(Length::FillPortion(24));
 
-        let toolbar = self.toolbar(state.legend_position);
+        let toolbar = self.toolbar(state.legend_position, state.graph_type);
 
         row!(canvas, toolbar).into()
     }
@@ -587,8 +654,16 @@ impl LegendPosition {
 
     fn icon(&self) -> char {
         match self {
-            Self::TopRight => '\u{E800}',
-            _ => '\u{F0F6}',
+            Self::TopLeft => '\u{E808}',
+            Self::TopCenter => '\u{E807}',
+            Self::TopRight => '\u{E809}',
+            Self::CenterLeft => '\u{E804}',
+            Self::Center => '\u{E803}',
+            Self::CenterRight => '\u{E805}',
+            Self::BottomLeft => '\u{E801}',
+            Self::BottomCenter => '\u{E800}',
+            Self::BottomRight => '\u{E802}',
+            Self::None => '\u{E806}',
         }
     }
 
@@ -715,6 +790,42 @@ impl ToolbarOption for LegendPosition {
     }
 }
 
+#[derive(Debug, Clone, Default, Copy, PartialEq)]
+pub enum GraphType {
+    Line,
+    Point,
+    #[default]
+    LinePoint,
+}
+
+impl GraphType {
+    const ALL: [Self; 3] = [Self::LinePoint, Self::Line, Self::Point];
+}
+
+impl fmt::Display for GraphType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Line => "Line Graph",
+                Self::Point => "Points Graph",
+                Self::LinePoint => "Line Graph with Points",
+            }
+        )
+    }
+}
+
+impl ToolbarOption for GraphType {
+    fn icon(&self) -> char {
+        match self {
+            Self::Line => '\u{E800}',
+            Self::Point => '\u{E801}',
+            Self::LinePoint => '\u{E802}',
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct GraphCanvas<'a, X, Y>
 where
@@ -726,6 +837,7 @@ where
     lines: &'a Vec<GraphLine<X, Y>>,
     cache: &'a canvas::Cache,
     legend: LegendPosition,
+    graph_type: GraphType,
 }
 
 impl<'a, X, Y> GraphCanvas<'a, X, Y>
@@ -745,11 +857,17 @@ where
             lines,
             cache,
             legend: LegendPosition::default(),
+            graph_type: GraphType::default(),
         }
     }
 
     fn legend_position(mut self, position: LegendPosition) -> Self {
         self.legend = position;
+        self
+    }
+
+    fn graph_type(mut self, kind: GraphType) -> Self {
+        self.graph_type = kind;
         self
     }
 
@@ -858,11 +976,111 @@ where
 
             let y_record = Axis::draw(&self.y_axis, frame, false, theme);
 
-            self.lines
-                .iter()
-                .for_each(|line| GraphLine::draw(line, frame, &x_record, &y_record));
+            self.lines.iter().for_each(|line| {
+                GraphLine::draw(line, frame, &x_record, &y_record, self.graph_type)
+            });
         });
 
         vec![content, self.legend(renderer, bounds, self.legend, theme)]
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ToolbarContainerStyle;
+
+impl widget::container::StyleSheet for ToolbarContainerStyle {
+    type Style = Theme;
+
+    fn appearance(&self, style: &Self::Style) -> container::Appearance {
+        let pallete = style.extended_palette();
+
+        let background = Background::Color(pallete.background.weak.color);
+
+        let border = Border {
+            color: pallete.primary.base.color,
+            width: 0.5,
+            radius: 5.0.into(),
+        };
+
+        container::Appearance {
+            background: Some(background),
+            border,
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ToolbarStyle;
+
+impl widget::pick_list::StyleSheet for ToolbarStyle {
+    type Style = Theme;
+
+    fn active(
+        &self,
+        style: &<Self as widget::pick_list::StyleSheet>::Style,
+    ) -> widget::pick_list::Appearance {
+        let pallete = style.extended_palette();
+        let text_color = pallete.background.base.text;
+        let background = Background::Color(pallete.background.weak.color);
+        let border = Border {
+            color: pallete.background.weak.color,
+            width: 0.25,
+            radius: 3.0.into(),
+        };
+
+        widget::pick_list::Appearance {
+            text_color,
+            placeholder_color: text_color,
+            handle_color: text_color,
+            background,
+            border,
+        }
+    }
+
+    fn hovered(
+        &self,
+        style: &<Self as widget::pick_list::StyleSheet>::Style,
+    ) -> widget::pick_list::Appearance {
+        let pallete = style.extended_palette();
+        let text_color = pallete.primary.strong.color;
+        let background = Background::Color(pallete.background.weak.color);
+        let border = Border {
+            color: pallete.primary.strong.color,
+            width: 0.5,
+            radius: 3.0.into(),
+        };
+
+        widget::pick_list::Appearance {
+            text_color,
+            placeholder_color: text_color,
+            handle_color: text_color,
+            background,
+            border,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ToolbarMenuStyle;
+
+impl overlay::menu::StyleSheet for ToolbarMenuStyle {
+    type Style = Theme;
+
+    fn appearance(&self, style: &Self::Style) -> overlay::menu::Appearance {
+        let pallete = style.extended_palette();
+
+        let text_color = pallete.primary.base.text;
+        let background = Background::Color(pallete.background.weak.color);
+        let border = Border::default();
+        let selected_background = Background::Color(pallete.primary.base.color);
+
+        overlay::menu::Appearance {
+            text_color,
+            selected_text_color: text_color,
+            background,
+            border,
+            selected_background,
+        }
     }
 }

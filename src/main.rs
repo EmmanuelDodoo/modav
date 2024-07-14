@@ -2,8 +2,8 @@ use iced::{
     event::{self, Event},
     executor, font,
     keyboard::{self, key, Key},
-    theme, widget,
-    widget::{column, container, horizontal_space, row, text, vertical_rule, Container, Row},
+    theme,
+    widget::{self, column, container, horizontal_space, row, text, vertical_rule, Container, Row},
     window, Application, Command, Element, Font, Length, Settings, Subscription, Theme,
 };
 
@@ -35,6 +35,7 @@ fn main() -> Result<(), iced::Error> {
     Modav::run(Settings {
         window,
         antialiasing: true,
+        flags: Flags::Line,
         ..Default::default()
     })
 }
@@ -75,6 +76,58 @@ pub struct Modav {
     toasts: Vec<Toast>,
     wizard_shown: bool,
     error: AppError,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum Flags {
+    Line,
+    #[default]
+    Prod,
+}
+
+impl Flags {
+    fn create(&self) -> Modav {
+        let theme = Theme::GruvboxDark;
+        let toasts = Vec::default();
+        let title = String::from("Modav");
+        let error = AppError::None;
+        let mut tabs = Tabs::new().width(Length::FillPortion(5));
+        match self {
+            Self::Prod => Modav {
+                file_path: None,
+                current_view: ViewType::None,
+                wizard_shown: false,
+                title,
+                theme,
+                toasts,
+                error,
+                tabs,
+            },
+            Self::Line => {
+                let file_path = PathBuf::from("../../../alter.csv");
+                let current_view = ViewType::LineGraph;
+
+                {
+                    let data = LineTabData::new(file_path.clone(), LineConfigState::default())
+                        .expect("Line Graph Panic when running dev flag");
+                    let view = View::LineGraph(data);
+
+                    tabs.update(TabsMessage::AddTab(view));
+                }
+
+                Modav {
+                    wizard_shown: false,
+                    file_path: Some(file_path),
+                    current_view,
+                    title,
+                    theme,
+                    toasts,
+                    error,
+                    tabs,
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -316,7 +369,7 @@ impl Modav {
 
 impl Application for Modav {
     type Theme = Theme;
-    type Flags = ();
+    type Flags = Flags;
     type Message = Message;
     type Executor = executor::Default;
 
@@ -328,8 +381,7 @@ impl Application for Modav {
         self.theme.clone()
     }
 
-    fn new(_flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
-        let tabs = Tabs::new().width(Length::FillPortion(5));
+    fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
         let commands = [
             font::load(include_bytes!("../fonts/status-icons.ttf").as_slice())
                 .map(Message::IconLoaded),
@@ -339,24 +391,13 @@ impl Application for Modav {
                 .map(Message::IconLoaded),
             font::load(include_bytes!("../fonts/toast-icons.ttf").as_slice())
                 .map(Message::IconLoaded),
+            font::load(include_bytes!("../fonts/legend-icons.ttf").as_slice())
+                .map(Message::IconLoaded),
+            font::load(include_bytes!("../fonts/line-type-icons.ttf").as_slice())
+                .map(Message::IconLoaded),
             font::load(iced_aw::BOOTSTRAP_FONT_BYTES).map(Message::IconLoaded),
         ];
-        (
-            Modav {
-                file_path: None,
-                title: String::from("Modav"),
-                // theme: Theme::Nightfly,
-                // theme: Theme::Dark,
-                // theme: Theme::SolarizedLight,
-                theme: Theme::GruvboxDark,
-                current_view: ViewType::None,
-                tabs,
-                toasts: Vec::default(),
-                wizard_shown: false,
-                error: AppError::None,
-            },
-            Command::batch(commands),
-        )
+        (flags.create(), Command::batch(commands))
     }
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
