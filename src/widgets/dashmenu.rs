@@ -1,6 +1,8 @@
 use iced::{
     advanced, alignment, theme,
-    widget::{self, button, column, component, row, text, Column, Component, Space},
+    widget::{
+        self, button, column, component, horizontal_space, row, text, Column, Component, Space,
+    },
     Alignment, Background, Border, Element, Font, Length, Padding, Pixels, Renderer, Shadow, Theme,
     Vector,
 };
@@ -353,12 +355,13 @@ where
             icon
         };
 
+        let pair = row!(icon, label).spacing(self.spacing);
+
         let main = button(
-            row!(icon, label, indicator)
-                .spacing(self.spacing)
+            column!(row!(pair, horizontal_space(), indicator).align_items(Alignment::Center))
                 .width(self.width)
                 .height(self.height)
-                .align_items(Alignment::Center)
+                .align_items(Alignment::Start)
                 .padding(self.padding),
         )
         .width(self.width)

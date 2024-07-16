@@ -4,10 +4,8 @@ use iced::{
     keyboard::{self, key, Key},
     theme,
     widget::{self, column, container, horizontal_space, row, text, vertical_rule, Container, Row},
-    window, Application, Command, Element, Font, Length, Settings, Subscription, Theme,
+    window, Application, Command, Element, Font, Length, Renderer, Settings, Subscription, Theme,
 };
-
-use iced_aw::native::menu::Item;
 
 use std::path::PathBuf;
 
@@ -22,6 +20,7 @@ use views::{home_view, EditorTabData, LineTabData, Refresh, Tabs, TabsMessage, V
 
 pub mod widgets;
 use widgets::{
+    dashmenu::{DashMenu, DashMenuOption},
     modal::Modal,
     toast::{self, Status, Toast},
     wizard::{LineConfigState, Wizard},
@@ -217,22 +216,23 @@ impl Modav {
         Message::SaveFile((save_path, content, action))
     }
 
-    fn file_menu(&self) -> Container<'_, Message> {
-        let actions_label = vec![
-            (
+    fn file_menu(&self) -> DashMenu<Message, Renderer> {
+        let options = vec![
+            DashMenuOption::new(
                 "New File",
-                Message::OpenTab(None, View::Editor(EditorTabData::default())),
+                Some(Message::OpenTab(
+                    None,
+                    View::Editor(EditorTabData::default()),
+                )),
             ),
-            ("Open File", Message::SelectFile),
-            ("Save File", self.save_helper(self.tabs.active_path())),
-            ("Save As", self.save_helper(None)),
+            DashMenuOption::new("Open File", Some(Message::SelectFile)),
+            DashMenuOption::new("Save File", Some(self.save_helper(self.tabs.active_path()))),
+            DashMenuOption::new("Save As", Some(self.save_helper(None))),
         ];
 
-        let children: Vec<Item<'_, Message, _, _>> = menus::create_children(actions_label);
+        let menu = DashMenu::new('\u{F0F6}', "File").submenus(options);
 
-        let bar = menus::create_menu("File", '\u{F0F6}', children);
-
-        menus::container_wrap(bar)
+        menus::menu_styler(menu)
     }
 
     fn dashboard(&self) -> Container<'_, Message> {
