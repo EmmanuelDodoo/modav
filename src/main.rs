@@ -20,7 +20,7 @@ use utils::*;
 mod views;
 use views::{home_view, EditorTabData, LineTabData, Refresh, Tabs, TabsMessage, View, ViewType};
 
-mod widgets;
+pub mod widgets;
 use widgets::{
     modal::Modal,
     toast::{self, Status, Toast},
@@ -230,7 +230,7 @@ impl Modav {
 
         let children: Vec<Item<'_, Message, _, _>> = menus::create_children(actions_label);
 
-        let bar = menus::create_menu("File", '\u{F15C}', children);
+        let bar = menus::create_menu("File", '\u{F0F6}', children);
 
         menus::container_wrap(bar)
     }

@@ -152,8 +152,11 @@ impl<Message> DashMenuOption<Message>
 where
     Message: Clone,
 {
-    pub fn new(label: String, on_select: Option<Message>) -> Self {
-        Self { label, on_select }
+    pub fn new(label: impl Into<String>, on_select: Option<Message>) -> Self {
+        Self {
+            label: label.into(),
+            on_select,
+        }
     }
 }
 
@@ -195,7 +198,7 @@ where
     Message: Clone,
     Renderer: advanced::text::Renderer,
 {
-    pub fn new(icon: char, label: String) -> Self {
+    pub fn new(icon: char, label: impl Into<String>) -> Self {
         Self {
             icon,
             icon_font: None,
@@ -204,7 +207,7 @@ where
             text_font: None,
             submenu_text_font: None,
             submenu_text_size: None,
-            label,
+            label: label.into(),
             on_select: None,
             options: Vec::default(),
             width: Length::Shrink,
