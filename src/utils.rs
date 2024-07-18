@@ -9,7 +9,7 @@ use std::fmt::{Debug, Display};
 use std::io;
 use std::path::PathBuf;
 
-use modav_core::repr::csv::utils::CSVError;
+use modav_core::repr::csv::utils::Error;
 
 #[allow(dead_code)]
 pub mod coloring {
@@ -250,7 +250,7 @@ pub enum AppError {
     FileDialogClosed,
     FileLoading(io::ErrorKind),
     FileSaving(io::ErrorKind),
-    CSVError(CSVError),
+    CSVError(Error),
     Simple(String),
     #[default]
     None,
