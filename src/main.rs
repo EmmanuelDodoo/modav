@@ -7,7 +7,10 @@ use iced::{
     window, Application, Command, Element, Font, Length, Renderer, Settings, Subscription, Theme,
 };
 
-use std::path::PathBuf;
+use tracing::{info, span, Level};
+use tracing_subscriber::EnvFilter;
+
+use std::{fs::File, path::PathBuf};
 
 mod styles;
 use styles::*;
@@ -26,7 +29,25 @@ use widgets::{
     wizard::{LineConfigState, Wizard},
 };
 
+pub const LOG_FILE: &'static str = "modav.log";
+
 fn main() -> Result<(), iced::Error> {
+    let span = span!(Level::INFO, "Modav");
+    let _guard = span.enter();
+
+    let log_file = File::create(LOG_FILE).unwrap();
+
+    let (non_blocking, _log_writer) = tracing_appender::non_blocking(log_file);
+
+    let filter = EnvFilter::new("error")
+        .add_directive("modav=info".parse().unwrap())
+        .add_directive("modav_core=info".parse().unwrap());
+
+    tracing_subscriber::fmt()
+        .with_writer(non_blocking)
+        .with_env_filter(filter)
+        .init();
+
     let window = window::settings::Settings {
         exit_on_close_request: false,
         ..Default::default()
@@ -382,6 +403,8 @@ impl Application for Modav {
     }
 
     fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
+        info!("Creating new app");
+
         let commands = [
             font::load(include_bytes!("../fonts/status-icons.ttf").as_slice())
                 .map(Message::IconLoaded),
