@@ -7,7 +7,7 @@ use iced::{
     window, Application, Command, Element, Font, Length, Renderer, Settings, Subscription, Theme,
 };
 
-use tracing::{info, span, Level};
+use tracing::{error, info, span, warn, Level};
 use tracing_subscriber::EnvFilter;
 
 use std::{fs::File, path::PathBuf};
@@ -55,7 +55,7 @@ fn main() -> Result<(), iced::Error> {
     Modav::run(Settings {
         window,
         antialiasing: true,
-        flags: Flags::Line,
+        flags: Flags::Prod,
         ..Default::default()
     })
 }
@@ -386,6 +386,22 @@ impl Modav {
             FileIOAction::None => Command::none(),
         }
     }
+
+    fn push_toast(&mut self, toast: Toast) {
+        match toast.status {
+            Status::Info => info!(toast.body),
+            Status::Warn => warn!(toast.body),
+            Status::Success => info!(toast.body),
+            Status::Error => error!(toast.body),
+        }
+
+        self.toasts.push(toast);
+    }
+
+    fn info_log(&mut self, message: impl Into<String>) {
+        let message: String = message.into();
+        info!(message);
+    }
 }
 
 impl Application for Modav {
@@ -403,8 +419,6 @@ impl Application for Modav {
     }
 
     fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
-        info!("Creating new app");
-
         let commands = [
             font::load(include_bytes!("../fonts/status-icons.ttf").as_slice())
                 .map(Message::IconLoaded),
@@ -430,15 +444,19 @@ impl Application for Modav {
                     status: Status::Error,
                     body: err.message(),
                 };
-                self.toasts.push(toast);
+                self.push_toast(toast);
                 Command::none()
             }
-            Message::IconLoaded(Ok(_)) => Command::none(),
+            Message::IconLoaded(Ok(_)) => {
+                self.info_log("Icon Loaded Successfully");
+                Command::none()
+            }
             Message::IconLoaded(Err(e)) => {
                 let error = AppError::FontLoading(e);
                 Command::perform(async { error }, Message::Error)
             }
             Message::ToggleTheme => {
+                self.info_log("Theme toggled");
                 self.toggle_theme();
                 Command::none()
             }
@@ -448,6 +466,12 @@ impl Application for Modav {
             }
             Message::FileSelected(Ok(p)) => {
                 self.error = AppError::None;
+                self.info_log(format!(
+                    "{} file selected",
+                    p.file_name()
+                        .map(|name| name.to_str().unwrap_or("None"))
+                        .unwrap_or("None")
+                ));
                 self.file_path = Some(p);
                 self.wizard_shown = true;
                 Command::none()
@@ -459,9 +483,14 @@ impl Application for Modav {
                     Message::FileLoaded((res, action))
                 })
             }
-            Message::FileLoaded((Ok(res), action)) => self.file_io_action_handler(action, res),
+            Message::FileLoaded((Ok(res), action)) => {
+                self.info_log("File loaded");
+                self.file_io_action_handler(action, res)
+            }
+
             Message::FileLoaded((Err(err), _)) => Command::perform(async { err }, Message::Error),
             Message::OpenTab(path, tidr) => {
+                self.info_log("Tab opened");
                 let path = path.filter(|path| path.is_file());
 
                 match (path, tidr.should_load()) {
@@ -526,13 +555,17 @@ impl Application for Modav {
                     status: Status::Success,
                     body: "Save Successful!".into(),
                 };
-                self.toasts.push(toast);
+                self.push_toast(toast);
                 self.file_io_action_handler(action, content)
             }
             Message::FileSaved((Err(e), _)) => Command::perform(async { e }, Message::Error),
             Message::CheckExit => self.update_tabs(TabsMessage::Exit),
-            Message::CanExit => window::close(window::Id::MAIN),
+            Message::CanExit => {
+                self.info_log("Application closing");
+                window::close(window::Id::MAIN)
+            }
             Message::NewActiveTab => {
+                self.info_log("New active tab");
                 self.current_view = self.tabs.active_tab_type().unwrap_or(ViewType::None);
                 self.file_path = self.tabs.active_path();
                 Command::none()
@@ -540,7 +573,7 @@ impl Application for Modav {
             Message::Convert => Command::none(),
             Message::None => Command::none(),
             Message::Debugging => {
-                println!("Debugging Message sent!");
+                dbg!("Debugging Message sent!");
                 Command::none()
             }
             Message::ToggleWizardShown => {
@@ -554,10 +587,11 @@ impl Application for Modav {
             }
             Message::WizardSubmit(path, view) => {
                 self.wizard_shown = false;
+                self.info_log("Wizard Submitted");
                 Command::perform(async { Message::OpenTab(Some(path), view) }, |msg| msg)
             }
             Message::AddToast(toast) => {
-                self.toasts.push(toast);
+                self.push_toast(toast);
                 Command::none()
             }
             Message::CloseToast(index) => {
