@@ -1,4 +1,3 @@
-use super::styles::*;
 use super::Message;
 use iced::{
     alignment, font,
@@ -312,135 +311,60 @@ pub fn status_icon(unicode: char) -> Text<'static> {
 
 pub mod menus {
 
-    use iced_aw::{
-        menu::{Item, Menu, MenuBar},
-        menu_bar, style,
-    };
-
     use crate::{
-        styles::{ColoredContainer, CustomMenuBarStyle},
+        widgets::dashmenu::{DashMenu, DashMenuOption},
         ViewType,
     };
 
-    use super::{icon, MenuButtonStyle, Message};
+    use super::Message;
 
-    use iced::{
-        color,
-        theme::{self, Theme},
-        widget::{button, container, row, text, Button, Container, Row, Text},
-        Element, Length, Renderer,
-    };
+    use iced::{Font, Length, Renderer};
 
-    fn dash_icon(unicode: char) -> Text<'static> {
-        icon(unicode, "dash-icons")
+    pub fn menu_styler(menu: DashMenu<Message, Renderer>) -> DashMenu<Message, Renderer> {
+        menu.spacing(10.0)
+            .width(Length::Fixed(150.0))
+            .padding([2.0, 8.0])
+            .submenu_padding([2.0, 8.0])
+            .icon_font(Font::with_name("dash-icons"))
     }
 
-    /// The last item in a Menu Tree
-    fn base_tree(label: &str, msg: Message) -> Item<'_, Message, Theme, Renderer> {
-        let btn = button(text(label).width(Length::Shrink).height(Length::Shrink))
-            .on_press(msg)
-            .style(theme::Button::Custom(Box::new(MenuButtonStyle {})))
-            .padding([4, 16])
-            .width(Length::Shrink)
-            .height(Length::Shrink);
+    pub fn models_menu<'a>() -> DashMenu<Message, Renderer> {
+        let options = vec![DashMenuOption::new("Line Graph", Some(Message::Convert))];
 
-        Item::new(btn)
+        let menu = DashMenu::new('\u{E802}', "Models").submenus(options);
+
+        menu_styler(menu)
     }
 
-    pub fn create_children(
-        labels: Vec<(&str, Message)>,
-    ) -> Vec<Item<'_, Message, Theme, Renderer>> {
-        labels
-            .into_iter()
-            .map(|curr| {
-                let label = curr.0;
-                let msg = curr.1;
-                base_tree(label, msg)
-            })
-            .collect()
-    }
-
-    fn create_label<'a>(
-        icon: char,
-        label: impl Into<Element<'a, Message, Theme, Renderer>>,
-    ) -> Row<'a, Message> {
-        let icon = dash_icon(icon);
-        row!(icon, label.into()).spacing(8).padding([0, 8])
-    }
-
-    pub fn create_menu<'a>(
-        label: impl Into<Element<'a, Message, Theme, Renderer>>,
-        icon: char,
-        children: Vec<Item<'a, Message, Theme, Renderer>>,
-    ) -> MenuBar<'a, Message, Theme, Renderer> {
-        let label = create_label(icon, label.into());
-        let item = container(label).width(Length::Fill);
-        let menu = Menu::new(children).offset(5.0).width(Length::Shrink);
-
-        menu_bar!((item, menu))
-            .check_bounds_width(30.0)
-            .width(Length::Fill)
-            .style(style::MenuBarStyle::Custom(Box::new(CustomMenuBarStyle)))
-    }
-
-    pub fn container_wrap<'a>(
-        item: impl Into<Element<'a, Message, Theme, Renderer>>,
-    ) -> Container<'a, Message> {
-        container(item)
-            .padding([8, 0])
-            .width(Length::Fixed(125.0))
-            .style(theme::Container::Custom(Box::new(ColoredContainer {
-                color: color!(255, 0, 255, 0.3),
-                radius: 8.0,
-            })))
-    }
-
-    pub fn models_menu<'a>() -> Container<'a, Message> {
-        let actions_labels = vec![("Line Graph", Message::Convert)];
-
-        let children = create_children(actions_labels);
-
-        let bar = create_menu("Models", '\u{E802}', children);
-
-        container_wrap(bar)
-    }
-
-    pub fn views_menu<'a, F>(on_select: F) -> Container<'a, Message>
+    pub fn views_menu<'a, F>(on_select: F) -> DashMenu<Message, Renderer>
     where
         F: Fn(ViewType) -> Message,
     {
-        let action_labels = {
-            vec![
-                ("Add Counter", (on_select)(ViewType::Counter)),
-                ("Open Editor", (on_select)(ViewType::Editor)),
-            ]
-        };
+        let options = vec![
+            DashMenuOption::new("Add Counter", Some((on_select)(ViewType::Counter))),
+            DashMenuOption::new("Open Editor", Some((on_select)(ViewType::Editor))),
+        ];
 
-        let children = create_children(action_labels);
+        let menu = DashMenu::new('\u{E800}', "Views").submenus(options);
 
-        let bar = create_menu("Views", '\u{E800}', children);
-
-        container_wrap(bar)
+        menu_styler(menu)
     }
 
-    pub fn about_menu<'a>() -> Container<'a, Message> {
-        let label = create_label('\u{E801}', text("About"));
-        let btn: Button<'_, Message, Theme, Renderer> = button(label)
-            .style(theme::Button::Text)
-            .padding([0, 0])
-            .on_press(Message::None);
+    pub fn about_menu<'a>() -> DashMenu<Message, Renderer> {
+        let menu = DashMenu::new('\u{F129}', "About").on_select(Message::None);
 
-        container_wrap(btn)
+        menu_styler(menu)
     }
 
-    pub fn settings_menu<'a>() -> Container<'a, Message> {
-        let actions_labels = vec![("Toggle Theme", Message::ToggleTheme)];
+    pub fn settings_menu<'a>() -> DashMenu<Message, Renderer> {
+        let options = vec![DashMenuOption::new(
+            "Toggle Theme",
+            Some(Message::ToggleTheme),
+        )];
 
-        let children = create_children(actions_labels);
+        let menu = DashMenu::new('\u{E800}', "Settings").submenus(options);
 
-        let bar = create_menu("Settings", '\u{E800}', children);
-
-        container_wrap(bar)
+        menu_styler(menu)
     }
 }
 
