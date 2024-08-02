@@ -13,6 +13,8 @@ use iced::{
 };
 use std::{fmt::Debug, path::PathBuf};
 
+use super::style::dialog_container;
+
 mod line;
 use line::LineGraphConfig;
 
@@ -269,14 +271,7 @@ where
             )
         };
 
-        container(content)
-            .padding([20.0, 25.0])
-            .width(375.0)
-            .height(400.0)
-            .style(theme::Container::Custom(Box::new(WizardContainer::new(
-                10.0,
-            ))))
-            .into()
+        dialog_container(content).into()
     }
 }
 
@@ -304,35 +299,6 @@ impl widget::container::StyleSheet for FileBorderContainer {
         };
 
         let background = style.extended_palette().background.weak.color;
-
-        container::Appearance {
-            background: Some(background.into()),
-            border,
-            ..Default::default()
-        }
-    }
-}
-
-pub struct WizardContainer {
-    pub radius: f32,
-}
-
-impl WizardContainer {
-    pub fn new(radius: f32) -> Self {
-        Self { radius }
-    }
-}
-
-impl widget::container::StyleSheet for WizardContainer {
-    type Style = Theme;
-
-    fn appearance(&self, style: &Self::Style) -> container::Appearance {
-        let border = Border {
-            radius: self.radius.into(),
-            ..Default::default()
-        };
-
-        let background = style.extended_palette().background.base.color;
 
         container::Appearance {
             background: Some(background.into()),

@@ -357,12 +357,7 @@ pub mod menus {
     }
 
     pub fn settings_menu<'a>() -> DashMenu<Message, Renderer> {
-        let options = vec![DashMenuOption::new(
-            "Toggle Theme",
-            Some(Message::ToggleTheme),
-        )];
-
-        let menu = DashMenu::new('\u{E800}', "Settings").submenus(options);
+        let menu = DashMenu::new('\u{E800}', "Settings").on_select(Message::ToggleSettingsDialog);
 
         menu_styler(menu)
     }

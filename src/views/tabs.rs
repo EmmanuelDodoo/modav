@@ -1,6 +1,7 @@
 //
 use iced::{
     alignment::Horizontal,
+    theme,
     widget::{button, column, container, row, text},
     Element, Font, Length, Renderer, Theme,
 };
@@ -13,6 +14,8 @@ use super::editor::{EditorMessage, EditorTab, EditorTabData};
 use super::line::{LineGraphTab, LineTabData, ModelMessage};
 use super::temp::{CounterMessage, CounterTab};
 use super::{Message, View, ViewType, Viewable};
+
+use crate::widgets::style::DialogContainer;
 
 use styles::CustomTabBarStyle;
 
@@ -382,7 +385,14 @@ impl TabBarState {
             .width(Length::Fill)
             .spacing(24);
 
-        container(col).padding(16).width(300).into()
+        container(col)
+            .style(theme::Container::Custom(Box::new(
+                DialogContainer::default(),
+            )))
+            .height(175)
+            .padding(16)
+            .width(300)
+            .into()
     }
 
     pub fn update(&mut self, tsg: TabBarMessage) -> Option<Message> {

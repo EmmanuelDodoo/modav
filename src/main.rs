@@ -25,6 +25,7 @@ pub mod widgets;
 use widgets::{
     dashmenu::{DashMenu, DashMenuOption},
     modal::Modal,
+    settings::SettingsDialog,
     toast::{self, Status, Toast},
     wizard::{LineConfigState, Wizard},
 };
@@ -89,12 +90,14 @@ impl FileIOAction {
 
 pub struct Modav {
     theme: Theme,
+    theme_shadow: Theme,
     title: String,
     current_view: ViewType,
     file_path: Option<PathBuf>,
     tabs: Tabs,
     toasts: Vec<Toast>,
     wizard_shown: bool,
+    settings_shown: bool,
     error: AppError,
 }
 
@@ -107,7 +110,7 @@ pub enum Flags {
 
 impl Flags {
     fn create(&self) -> Modav {
-        let theme = Theme::GruvboxDark;
+        let theme = Theme::Nightfly;
         let toasts = Vec::default();
         let title = String::from("Modav");
         let error = AppError::None;
@@ -117,6 +120,8 @@ impl Flags {
                 file_path: None,
                 current_view: ViewType::None,
                 wizard_shown: false,
+                settings_shown: false,
+                theme_shadow: theme.clone(),
                 title,
                 theme,
                 toasts,
@@ -137,7 +142,9 @@ impl Flags {
 
                 Modav {
                     wizard_shown: false,
+                    settings_shown: false,
                     file_path: Some(file_path),
+                    theme_shadow: theme.clone(),
                     current_view,
                     title,
                     theme,
@@ -172,6 +179,11 @@ pub enum Message {
     Debugging,
     WizardSubmit(PathBuf, View),
     ToggleWizardShown,
+    ToggleSettingsDialog,
+    AbortSettings,
+    SaveSettings(Theme),
+    OpenLogFile,
+    ChangeTheme(Theme),
     AddToast(Toast),
     CloseToast(usize),
     Error(AppError),
@@ -300,14 +312,38 @@ impl Modav {
 
     fn toggle_theme(&mut self) {
         match self.theme {
-            Theme::Dark => self.theme = Theme::Light,
-            Theme::Light => self.theme = Theme::Dark,
-            Theme::SolarizedLight => self.theme = Theme::SolarizedDark,
-            Theme::SolarizedDark => self.theme = Theme::SolarizedLight,
-            Theme::GruvboxLight => self.theme = Theme::GruvboxDark,
-            Theme::GruvboxDark => self.theme = Theme::GruvboxLight,
-            Theme::TokyoNight => self.theme = Theme::TokyoNightLight,
-            Theme::TokyoNightLight => self.theme = Theme::TokyoNight,
+            Theme::Dark => {
+                self.theme = Theme::Light;
+                self.theme_shadow = self.theme.clone();
+            }
+            Theme::Light => {
+                self.theme = Theme::Dark;
+                self.theme_shadow = self.theme.clone();
+            }
+            Theme::SolarizedLight => {
+                self.theme = Theme::SolarizedDark;
+                self.theme_shadow = self.theme.clone();
+            }
+            Theme::SolarizedDark => {
+                self.theme = Theme::SolarizedLight;
+                self.theme_shadow = self.theme.clone();
+            }
+            Theme::GruvboxLight => {
+                self.theme = Theme::GruvboxDark;
+                self.theme_shadow = self.theme.clone();
+            }
+            Theme::GruvboxDark => {
+                self.theme = Theme::GruvboxLight;
+                self.theme_shadow = self.theme.clone();
+            }
+            Theme::TokyoNight => {
+                self.theme = Theme::TokyoNightLight;
+                self.theme_shadow = self.theme.clone();
+            }
+            Theme::TokyoNightLight => {
+                self.theme = Theme::TokyoNight;
+                self.theme_shadow = self.theme.clone();
+            }
             _ => {}
         }
     }
@@ -487,6 +523,19 @@ impl Application for Modav {
                 self.info_log("File loaded");
                 self.file_io_action_handler(action, res)
             }
+            Message::OpenLogFile => {
+                self.settings_shown = false;
+                self.theme = self.theme_shadow.clone();
+                self.info_log("Opening Log file");
+
+                let path = PathBuf::from(LOG_FILE);
+                let data = EditorTabData::new(Some(path.clone()), String::default());
+                let action = FileIOAction::NewTab((View::Editor(data), path.clone()));
+
+                Command::perform(load_file(path), move |(res, _)| {
+                    Message::FileLoaded((res, action))
+                })
+            }
 
             Message::FileLoaded((Err(err), _)) => Command::perform(async { err }, Message::Error),
             Message::OpenTab(path, tidr) => {
@@ -590,6 +639,35 @@ impl Application for Modav {
                 self.info_log("Wizard Submitted");
                 Command::perform(async { Message::OpenTab(Some(path), view) }, |msg| msg)
             }
+            Message::ChangeTheme(theme) => {
+                self.theme = theme;
+                self.info_log("Theme Changed");
+                Command::none()
+            }
+            Message::ToggleSettingsDialog => {
+                self.settings_shown = !self.settings_shown;
+                self.info_log("Settings Dialog Closed");
+                Command::none()
+            }
+            Message::AbortSettings => {
+                self.theme = self.theme_shadow.clone();
+                self.settings_shown = false;
+                self.info_log("Settings Aborted");
+                Command::none()
+            }
+            Message::SaveSettings(theme) => {
+                self.theme_shadow = theme.clone();
+                self.theme = theme;
+                self.settings_shown = false;
+
+                let toast = Toast {
+                    body: "Settings Saved".into(),
+                    status: Status::Success,
+                };
+                self.push_toast(toast);
+
+                Command::none()
+            }
             Message::AddToast(toast) => {
                 self.push_toast(toast);
                 Command::none()
@@ -639,7 +717,16 @@ impl Application for Modav {
 
         let main_axis = column!(cross_axis, status_bar);
 
-        let content: Element<'_, Message> = if self.wizard_shown {
+        let content: Element<'_, Message> = if self.settings_shown {
+            let settings = SettingsDialog::new(self.theme.clone())
+                .on_cancel(Message::AbortSettings)
+                .on_submit(Message::SaveSettings)
+                .on_log(Message::OpenLogFile)
+                .on_theme_change(Message::ChangeTheme);
+            Modal::new(main_axis, settings)
+                .on_blur(Message::AbortSettings)
+                .into()
+        } else if self.wizard_shown {
             let file = self
                 .file_path
                 .clone()
