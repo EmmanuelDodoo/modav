@@ -35,7 +35,7 @@ impl widget::button::StyleSheet for DashMenuStyle {
         let pallete = style.extended_palette();
 
         let text = pallete.primary.base.text;
-        let background = Background::Color(pallete.primary.strong.color);
+        let background = Background::Color(pallete.primary.weak.color);
 
         let Self {
             shadow,

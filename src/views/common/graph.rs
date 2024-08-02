@@ -904,7 +904,7 @@ where
         let position = position.position(bounds, size);
 
         let background = theme.extended_palette().background.weak.color;
-        let text_color = theme.extended_palette().secondary.base.text;
+        let text_color = theme.extended_palette().background.base.text;
 
         frame.stroke(
             &Path::rectangle(position, size),
