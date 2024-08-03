@@ -895,9 +895,11 @@ where
             return frame.into_geometry();
         }
 
+        let labels_len = usize::min(labels_len, 7);
+
         let size = {
             let width = f32::min(frame.size().width * 0.125, 150.0);
-            let height = 45.0 + 15.0 * ((labels_len - 1) as f32);
+            let height = 40.0 + 15.0 * (labels_len as f32);
             Size::new(width, height)
         };
 
@@ -908,7 +910,7 @@ where
 
         frame.stroke(
             &Path::rectangle(position, size),
-            Stroke::default().with_width(2.0),
+            Stroke::default().with_width(1.5),
         );
 
         frame.fill(&Path::rectangle(position, size), background);
