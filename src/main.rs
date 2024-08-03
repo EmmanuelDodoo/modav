@@ -96,6 +96,7 @@ pub struct Modav {
     file_path: Option<PathBuf>,
     tabs: Tabs,
     toasts: Vec<Toast>,
+    toast_timeout: u64,
     wizard_shown: bool,
     settings_shown: bool,
     error: AppError,
@@ -115,16 +116,20 @@ impl Flags {
         let title = String::from("Modav");
         let error = AppError::None;
         let mut tabs = Tabs::new().width(Length::FillPortion(5));
+        let wizard_shown = false;
+        let settings_shown = false;
+        let toast_timeout = 5;
         match self {
             Self::Prod => Modav {
                 file_path: None,
                 current_view: ViewType::None,
-                wizard_shown: false,
-                settings_shown: false,
                 theme_shadow: theme.clone(),
+                wizard_shown,
+                settings_shown,
                 title,
                 theme,
                 toasts,
+                toast_timeout,
                 error,
                 tabs,
             },
@@ -141,14 +146,15 @@ impl Flags {
                 }
 
                 Modav {
-                    wizard_shown: false,
-                    settings_shown: false,
                     file_path: Some(file_path),
                     theme_shadow: theme.clone(),
+                    wizard_shown,
+                    settings_shown,
                     current_view,
                     title,
                     theme,
                     toasts,
+                    toast_timeout,
                     error,
                     tabs,
                 }
@@ -181,7 +187,7 @@ pub enum Message {
     ToggleWizardShown,
     ToggleSettingsDialog,
     AbortSettings,
-    SaveSettings(Theme),
+    SaveSettings(Theme, u64),
     OpenLogFile,
     ChangeTheme(Theme),
     AddToast(Toast),
@@ -655,9 +661,10 @@ impl Application for Modav {
                 self.info_log("Settings Aborted");
                 Command::none()
             }
-            Message::SaveSettings(theme) => {
+            Message::SaveSettings(theme, timeout) => {
                 self.theme_shadow = theme.clone();
                 self.theme = theme;
+                self.toast_timeout = timeout;
                 self.settings_shown = false;
 
                 let toast = Toast {
@@ -718,7 +725,7 @@ impl Application for Modav {
         let main_axis = column!(cross_axis, status_bar);
 
         let content: Element<'_, Message> = if self.settings_shown {
-            let settings = SettingsDialog::new(self.theme.clone())
+            let settings = SettingsDialog::new(self.theme.clone(), self.toast_timeout)
                 .on_cancel(Message::AbortSettings)
                 .on_submit(Message::SaveSettings)
                 .on_log(Message::OpenLogFile)
@@ -742,7 +749,8 @@ impl Application for Modav {
             main_axis.into()
         };
 
-        let content = toast::Manager::new(content, &self.toasts, Message::CloseToast, &self.theme);
+        let content = toast::Manager::new(content, &self.toasts, Message::CloseToast, &self.theme)
+            .timeout(self.toast_timeout);
 
         container(content).height(Length::Fill).into()
     }

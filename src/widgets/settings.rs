@@ -3,8 +3,8 @@ use std::fmt::Debug;
 use iced::{
     alignment::Horizontal,
     widget::{
-        button, column, component, horizontal_space, pick_list, row, text, vertical_space,
-        Component,
+        button, column, component, horizontal_space, pick_list, row, text, text_input,
+        vertical_space, Component,
     },
     Alignment, Element, Length, Renderer, Theme,
 };
@@ -21,13 +21,15 @@ const THEMES: [Theme; 5] = [
 
 #[derive(Debug, Clone)]
 pub struct State {
-    selected_theme: Option<Theme>,
+    selected_theme: Theme,
+    toast_timeout: Option<u64>,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
-            selected_theme: Some(Theme::TokyoNight),
+            selected_theme: Theme::TokyoNight,
+            toast_timeout: None,
         }
     }
 }
@@ -36,6 +38,7 @@ impl Default for State {
 pub enum SettingsMessage {
     ThemeSelected(Theme),
     Submit,
+    TimeOutChanged(String),
     OpenLogFile,
     Cancel,
 }
@@ -43,18 +46,20 @@ pub enum SettingsMessage {
 pub struct SettingsDialog<'a, Message> {
     on_theme_change: Option<Box<dyn Fn(Theme) -> Message + 'a>>,
     current_theme: Theme,
+    current_timeout: Option<u64>,
     on_cancel: Option<Message>,
     on_log: Option<Message>,
-    on_submit: Option<Box<dyn Fn(Theme) -> Message + 'a>>,
+    on_submit: Option<Box<dyn Fn(Theme, u64) -> Message + 'a>>,
 }
 
 impl<'a, Message> SettingsDialog<'a, Message>
 where
     Message: Debug + Clone,
 {
-    pub fn new(current_theme: Theme) -> Self {
+    pub fn new(current_theme: Theme, current_timeout: u64) -> Self {
         Self {
             current_theme,
+            current_timeout: Some(current_timeout),
             on_theme_change: None,
             on_cancel: None,
             on_submit: None,
@@ -90,7 +95,7 @@ where
         self
     }
 
-    pub fn on_submit(mut self, on_submit: impl Fn(Theme) -> Message + 'a) -> Self {
+    pub fn on_submit(mut self, on_submit: impl Fn(Theme, u64) -> Message + 'a) -> Self {
         self.on_submit = Some(Box::new(on_submit));
         self
     }
@@ -115,14 +120,30 @@ where
 
     fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
         match event {
-            SettingsMessage::Submit => match (&self.on_submit, &state.selected_theme) {
-                (Some(on_submit), Some(theme)) => Some((on_submit)(theme.clone())),
+            SettingsMessage::Submit => match &self.on_submit {
+                Some(on_submit) => {
+                    let timeout = state
+                        .toast_timeout
+                        .filter(|time| time > &0)
+                        .unwrap_or(self.current_timeout.unwrap());
+
+                    Some((on_submit)(state.selected_theme.clone(), timeout))
+                }
                 _ => None,
             },
             SettingsMessage::Cancel => self.on_cancel.clone(),
             SettingsMessage::OpenLogFile => self.on_log.clone(),
+            SettingsMessage::TimeOutChanged(timeout) => {
+                if !timeout.is_empty() {
+                    state.toast_timeout = timeout.parse().ok();
+                } else {
+                    state.toast_timeout = Some(0);
+                }
+
+                None
+            }
             SettingsMessage::ThemeSelected(theme) => {
-                state.selected_theme = Some(theme.clone());
+                state.selected_theme = theme.clone();
                 if let Some(on_change) = &self.on_theme_change {
                     Some((on_change)(theme))
                 } else {
@@ -132,16 +153,39 @@ where
         }
     }
 
-    fn view(&self, _state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
+    fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
         let header = text("Settings Menu")
             .width(Length::Fill)
             .horizontal_alignment(Horizontal::Center)
             .size(18.0);
 
         let theme = self.theme();
+
+        let timeout = {
+            let value = if state.toast_timeout.is_some() {
+                state.toast_timeout.as_ref()
+            } else {
+                self.current_timeout.as_ref()
+            };
+
+            let label = text("Toast timeout:");
+
+            let input = text_input("", value.map(u64::to_string).as_deref().unwrap_or(""))
+                .on_input(SettingsMessage::TimeOutChanged)
+                .width(40.0);
+
+            row!(
+                label,
+                row!(input, text("seconds"))
+                    .align_items(Alignment::Center)
+                    .spacing(5)
+            )
+            .spacing(20.0)
+        };
+
         let log = button(text("Open Log File").size(15.0)).on_press(SettingsMessage::OpenLogFile);
 
-        let content = column!(theme, log).spacing(20.0);
+        let content = column!(theme, timeout, log).spacing(20.0);
 
         let content = column!(
             header,
