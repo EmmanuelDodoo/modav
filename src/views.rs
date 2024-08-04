@@ -24,7 +24,7 @@ pub use line::LineTabData;
 
 mod common;
 
-use crate::utils::icons::status;
+use crate::utils::icons::{dashboard, status};
 
 use super::Message;
 
@@ -153,7 +153,8 @@ impl ViewType {
                 row!(icon, txt).spacing(5)
             }
             Self::LineGraph => {
-                row!("Need to add icon")
+                let icon = dashboard::icon(dashboard::CHART);
+                row!(icon, txt).spacing(5)
             }
             Self::None => Row::new(),
         }
