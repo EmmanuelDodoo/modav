@@ -4,7 +4,8 @@ use iced::{
     keyboard::{self, key, Key},
     theme,
     widget::{self, column, container, horizontal_space, row, text, vertical_rule, Container, Row},
-    window, Application, Command, Element, Font, Length, Renderer, Settings, Subscription, Theme,
+    window, Alignment, Application, Command, Element, Font, Length, Renderer, Settings,
+    Subscription, Theme,
 };
 
 use tracing::{error, info, span, warn, Level};
@@ -56,7 +57,7 @@ fn main() -> Result<(), iced::Error> {
     Modav::run(Settings {
         window,
         antialiasing: true,
-        flags: Flags::Prod,
+        flags: Flags::Line,
         ..Default::default()
     })
 }
@@ -223,14 +224,17 @@ impl Modav {
                 (Some(p), m) => row!(m.display(), vertical_rule(10), p),
             }
         }
+        .align_items(Alignment::Center)
         .spacing(10);
 
-        let row: Row<'_, Message> = row!(horizontal_space(), current);
+        let row: Row<'_, Message> = row!(horizontal_space(), current)
+            .height(Length::Fill)
+            .align_items(Alignment::Center);
 
         let bstyle = BorderedContainer::default();
 
         container(row)
-            .padding([3, 10])
+            .padding([0, 10])
             .style(theme::Container::Custom(Box::new(bstyle)))
     }
 
@@ -720,7 +724,7 @@ impl Application for Modav {
             self.tabs.content().map(Message::TabsMessage)
         };
 
-        let cross_axis = row!(dashboard, content).height(Length::FillPortion(25));
+        let cross_axis = row!(dashboard, content).height(Length::FillPortion(30));
 
         let main_axis = column!(cross_axis, status_bar);
 
