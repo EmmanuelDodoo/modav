@@ -1,7 +1,7 @@
 // Code derived from Iced Github repo
 
 use crate::styles::ColoredContainer;
-use crate::utils::icon;
+use crate::utils::icons::toast;
 use std::{
     fmt::Display,
     time::{Duration, Instant},
@@ -21,10 +21,6 @@ use iced::{
 };
 
 use iced::advanced::Widget;
-
-fn toast_icon(unicode: char) -> Text<'static> {
-    icon(unicode, "toast-icons")
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Status {
@@ -52,10 +48,10 @@ impl Status {
     fn icon(&self, is_dark: bool) -> Text<'static> {
         let style = theme::Text::Color(self.color(is_dark));
         match self {
-            Self::Success => toast_icon('\u{E802}').style(style),
-            Self::Info => toast_icon('\u{F086}').style(style),
-            Self::Warn => toast_icon('\u{E806}').style(style),
-            Self::Error => toast_icon('\u{E807}').style(style),
+            Self::Success => toast::icon(toast::SUCCESS).style(style),
+            Self::Info => toast::icon(toast::INFO).style(style),
+            Self::Warn => toast::icon(toast::WARN).style(style),
+            Self::Error => toast::icon(toast::ERROR).style(style),
         }
     }
 
@@ -128,7 +124,7 @@ where
                 };
 
                 let close = button(
-                    toast_icon('\u{E801}')
+                    toast::icon(toast::CLOSE)
                         .size(24)
                         .style(theme::Text::Color(text_color)),
                 )

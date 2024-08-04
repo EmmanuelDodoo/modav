@@ -7,8 +7,8 @@ use modav_core::{
     repr::csv::{utils::Data, SheetBuilder},
 };
 
+use crate::utils::{coloring, AppError};
 use crate::widgets::wizard::LineConfigState;
-use crate::{coloring, utils::AppError};
 
 use super::{TabBarMessage, Viewable};
 

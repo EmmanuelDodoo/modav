@@ -1,9 +1,5 @@
 use super::Message;
-use iced::{
-    alignment, font,
-    widget::{text, Text},
-    Font,
-};
+use iced::font;
 use std::fmt::{Debug, Display};
 use std::io;
 use std::path::PathBuf;
@@ -243,6 +239,85 @@ pub mod coloring {
     }
 }
 
+#[allow(dead_code, unused_imports)]
+pub mod icons {
+    use iced::{
+        alignment,
+        widget::{text, Text},
+        Font,
+    };
+
+    fn icon_maker(unicode: char, name: &'static str) -> Text<'static> {
+        let fnt: Font = Font::with_name(name);
+        text(unicode.to_string())
+            .font(fnt)
+            .horizontal_alignment(alignment::Horizontal::Center)
+    }
+
+    pub mod status {
+        use super::icon_maker;
+        use iced::widget::Text;
+
+        const NAME: &'static str = "status-icons";
+
+        pub const COUNTER: char = '\u{E800}';
+        pub const EDITOR: char = '\u{E801}';
+        pub const FILE: char = '\u{F0F6}';
+
+        pub fn icon(unicode: char) -> Text<'static> {
+            icon_maker(unicode, NAME)
+        }
+    }
+
+    pub mod dashboard {
+        use super::icon_maker;
+        use iced::widget::Text;
+
+        const NAME: &'static str = "dash-icons";
+        pub const ANGLE_UP: char = '\u{F106}';
+        pub const ANGLE_DOWN: char = '\u{F107}';
+        pub const CHART: char = '\u{E802}';
+        pub const SETTINGS: char = '\u{E800}';
+        pub const FILE: char = '\u{F0F6}';
+        pub const INFO: char = '\u{F129}';
+
+        pub fn icon(unicode: char) -> Text<'static> {
+            icon_maker(unicode, NAME)
+        }
+    }
+
+    pub mod wizard {
+        use super::icon_maker;
+        use iced::widget::Text;
+
+        const NAME: &'static str = "wizard-icons";
+
+        pub const HELP: char = '\u{E800}';
+        pub const REDO: char = '\u{E802}';
+
+        pub fn icon(unicode: char) -> Text<'static> {
+            icon_maker(unicode, NAME)
+        }
+    }
+
+    pub mod toast {
+        use super::icon_maker;
+        use iced::widget::Text;
+
+        const NAME: &'static str = "toast-icons";
+
+        pub const SUCCESS: char = '\u{E802}';
+        pub const INFO: char = '\u{F086}';
+        pub const WARN: char = '\u{E806}';
+        pub const ERROR: char = '\u{E807}';
+        pub const CLOSE: char = '\u{E801}';
+
+        pub fn icon(unicode: char) -> Text<'static> {
+            icon_maker(unicode, NAME)
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub enum AppError {
     FontLoading(font::Error),
@@ -298,17 +373,6 @@ impl Display for AppError {
     }
 }
 
-pub fn icon(unicode: char, name: &'static str) -> Text<'static> {
-    let fnt: Font = Font::with_name(name);
-    text(unicode.to_string())
-        .font(fnt)
-        .horizontal_alignment(alignment::Horizontal::Center)
-}
-
-pub fn status_icon(unicode: char) -> Text<'static> {
-    icon(unicode, "status-icons")
-}
-
 pub mod menus {
 
     use crate::{
@@ -316,7 +380,7 @@ pub mod menus {
         ViewType,
     };
 
-    use super::Message;
+    use super::{icons::dashboard, Message};
 
     use iced::{Font, Length, Renderer};
 
@@ -331,7 +395,7 @@ pub mod menus {
     pub fn models_menu<'a>() -> DashMenu<Message, Renderer> {
         let options = vec![DashMenuOption::new("Line Graph", Some(Message::Convert))];
 
-        let menu = DashMenu::new('\u{E802}', "Models").submenus(options);
+        let menu = DashMenu::new(dashboard::CHART, "Models").submenus(options);
 
         menu_styler(menu)
     }
@@ -345,19 +409,20 @@ pub mod menus {
             DashMenuOption::new("Open Editor", Some((on_select)(ViewType::Editor))),
         ];
 
-        let menu = DashMenu::new('\u{E800}', "Views").submenus(options);
+        let menu = DashMenu::new(dashboard::SETTINGS, "Views").submenus(options);
 
         menu_styler(menu)
     }
 
     pub fn about_menu<'a>() -> DashMenu<Message, Renderer> {
-        let menu = DashMenu::new('\u{F129}', "About").on_select(Message::None);
+        let menu = DashMenu::new(dashboard::INFO, "About").on_select(Message::None);
 
         menu_styler(menu)
     }
 
     pub fn settings_menu<'a>() -> DashMenu<Message, Renderer> {
-        let menu = DashMenu::new('\u{E800}', "Settings").on_select(Message::ToggleSettingsDialog);
+        let menu =
+            DashMenu::new(dashboard::SETTINGS, "Settings").on_select(Message::ToggleSettingsDialog);
 
         menu_styler(menu)
     }

@@ -17,7 +17,7 @@ mod styles;
 use styles::*;
 
 mod utils;
-use utils::*;
+use utils::{icons::status, load_file, menus, pick_file, save_file, AppError};
 
 mod views;
 use views::{home_view, EditorTabData, LineTabData, Refresh, Tabs, TabsMessage, View, ViewType};
@@ -206,7 +206,7 @@ impl Modav {
                         .filter(|name| !name.is_empty())
                         .map(|file| {
                             let text = text(file);
-                            let icon = status_icon('\u{F0F6}');
+                            let icon = status::icon(status::FILE);
                             row!(icon, text).spacing(5)
                         })
                 })
@@ -216,7 +216,7 @@ impl Modav {
                 (None, ViewType::None) => row!(),
                 (None, vt) => {
                     let txt = text("Untitled");
-                    let icon = status_icon('\u{F0F6}');
+                    let icon = status::icon(status::FILE);
                     let txt = row!(icon, txt).spacing(5);
                     row!(vt.display(), vertical_rule(10), txt)
                 }

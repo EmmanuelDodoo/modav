@@ -1,9 +1,11 @@
+use crate::utils::icons::dashboard;
+
 use iced::{
     advanced, alignment, theme,
     widget::{
         self, button, column, component, horizontal_space, row, text, Column, Component, Space,
     },
-    Alignment, Background, Border, Element, Font, Length, Padding, Pixels, Renderer, Shadow, Theme,
+    Alignment, Background, Border, Element, Length, Padding, Pixels, Renderer, Shadow, Theme,
     Vector,
 };
 
@@ -341,13 +343,11 @@ where
             let icon = if self.options.is_empty() {
                 Space::new(0, 0).into()
             } else if state.is_open {
-                text('\u{F106}')
-                    .font(Font::with_name("dash-icons"))
+                dashboard::icon(dashboard::ANGLE_UP)
                     .horizontal_alignment(alignment::Horizontal::Center)
                     .into()
             } else {
-                text('\u{F107}')
-                    .font(Font::with_name("dash-icons"))
+                dashboard::icon(dashboard::ANGLE_DOWN)
                     .horizontal_alignment(alignment::Horizontal::Center)
                     .into()
             };

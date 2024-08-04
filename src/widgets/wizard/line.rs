@@ -283,7 +283,7 @@ where
 }
 
 mod tip {
-    use crate::{utils::icon, ToolTipContainerStyle};
+    use crate::{utils::icons::wizard, ToolTipContainerStyle};
 
     use iced::{
         theme,
@@ -304,7 +304,7 @@ mod tip {
             .height(Length::Shrink)
             .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)));
 
-        let icon = icon('\u{E800}', "wizard-icons");
+        let icon = wizard::icon(wizard::HELP);
 
         Tooltip::new(icon, desc, tt::Position::Right)
             .gap(10.0)

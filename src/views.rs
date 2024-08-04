@@ -24,7 +24,7 @@ pub use line::LineTabData;
 
 mod common;
 
-use crate::utils::status_icon;
+use crate::utils::icons::status;
 
 use super::Message;
 
@@ -145,11 +145,11 @@ impl ViewType {
         let txt = text(self.name());
         match self {
             Self::Editor => {
-                let icon = status_icon('\u{E801}');
+                let icon = status::icon(status::EDITOR);
                 row!(icon, txt).spacing(5)
             }
             Self::Counter => {
-                let icon = status_icon('\u{E800}');
+                let icon = status::icon(status::COUNTER);
                 row!(icon, txt).spacing(5)
             }
             Self::LineGraph => {

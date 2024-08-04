@@ -1,6 +1,6 @@
 use crate::views::{EditorTabData, FileType, LineTabData, View};
 
-use crate::utils::{icon, AppError};
+use crate::utils::{icons::wizard, AppError};
 use crate::ViewType;
 use iced::{
     alignment::{Alignment, Horizontal, Vertical},
@@ -145,7 +145,7 @@ where
                 .style(theme::Container::Custom(Box::new(FileBorderContainer)));
 
             let btn = button(
-                icon('\u{E802}', "wizard-icons")
+                wizard::icon(wizard::REDO)
                     .vertical_alignment(Vertical::Center)
                     .size(15.0),
             )
