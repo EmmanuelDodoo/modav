@@ -56,7 +56,7 @@ fn main() -> Result<(), iced::Error> {
     Modav::run(Settings {
         window,
         antialiasing: true,
-        flags: Flags::Line,
+        flags: Flags::Prod,
         ..Default::default()
     })
 }

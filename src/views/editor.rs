@@ -130,10 +130,8 @@ impl Viewable for EditorTab {
     }
 
     fn refresh(&mut self, data: Self::Data) {
-        let EditorTabData { path, data } = data;
-        self.file_path = path;
+        self.file_path = data.path;
         self.is_dirty = false;
-        self.content = text_editor::Content::with_text(data.as_str());
     }
 
     fn path(&self) -> Option<PathBuf> {
