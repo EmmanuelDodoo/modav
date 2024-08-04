@@ -22,6 +22,7 @@ const THEMES: [Theme; 5] = [
 #[derive(Debug, Clone)]
 pub struct State {
     selected_theme: Theme,
+    theme_changed: bool,
     toast_timeout: Option<u64>,
 }
 
@@ -29,6 +30,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             selected_theme: Theme::TokyoNight,
+            theme_changed: false,
             toast_timeout: None,
         }
     }
@@ -127,14 +129,25 @@ where
                         .filter(|time| time > &0)
                         .unwrap_or(self.current_timeout.unwrap());
 
-                    Some((on_submit)(state.selected_theme.clone(), timeout))
+                    let theme = if state.theme_changed {
+                        state.selected_theme.clone()
+                    } else {
+                        self.current_theme.clone()
+                    };
+
+                    Some((on_submit)(theme, timeout))
                 }
                 _ => None,
             },
             SettingsMessage::Cancel => self.on_cancel.clone(),
             SettingsMessage::OpenLogFile => self.on_log.clone(),
-            SettingsMessage::TimeOutChanged(timeout) => {
+            SettingsMessage::TimeOutChanged(mut timeout) => {
                 if !timeout.is_empty() {
+                    if let Some(first) = timeout.chars().next() {
+                        if state.toast_timeout == Some(0) && first != '0' {
+                            timeout.pop();
+                        }
+                    }
                     state.toast_timeout = timeout.parse().ok();
                 } else {
                     state.toast_timeout = Some(0);
@@ -144,6 +157,7 @@ where
             }
             SettingsMessage::ThemeSelected(theme) => {
                 state.selected_theme = theme.clone();
+                state.theme_changed = true;
                 if let Some(on_change) = &self.on_theme_change {
                     Some((on_change)(theme))
                 } else {
