@@ -4,10 +4,7 @@ use iced::{
     Alignment, Element,
 };
 
-use iced_aw::TabLabel;
-
-use super::tabs::{TabBarMessage, TabMessage};
-use super::Viewable;
+use super::{TabLabel, Viewable};
 
 #[derive(Clone, Debug)]
 pub enum CounterMessage {
@@ -18,19 +15,14 @@ pub enum CounterMessage {
 #[derive(Clone, Debug)]
 pub struct CounterTab {
     value: i32,
-    id: usize,
 }
 
 impl Viewable for CounterTab {
     type Message = CounterMessage;
     type Data = ();
 
-    fn new(id: usize, _data: ()) -> Self {
-        Self { id, value: 0 }
-    }
-
-    fn id(&self) -> usize {
-        self.id
+    fn new(_data: ()) -> Self {
+        Self { value: 0 }
     }
 
     fn is_dirty(&self) -> bool {
@@ -48,11 +40,15 @@ impl Viewable for CounterTab {
         }
     }
 
-    fn tab_label(&self) -> TabLabel {
-        TabLabel::Text(format!("Counter {}", self.id))
+    fn label(&self) -> TabLabel {
+        TabLabel::new(char::default(), "Counter")
     }
 
-    fn view(&self) -> iced::Element<'_, TabBarMessage, Theme> {
+    fn view<'a, Message, F>(&'a self, map: F) -> Element<'a, Message, Theme>
+    where
+        F: 'a + Fn(Self::Message) -> Message,
+        Message: 'a,
+    {
         let header = text(format!("Count {}", self.value)).size(32);
 
         let rw = {
@@ -70,7 +66,7 @@ impl Viewable for CounterTab {
 
         let content: Element<'_, CounterMessage, Theme> = container(content).into();
 
-        content.map(|msg| TabBarMessage::UpdateTab((self.id, TabMessage::Counter(msg))))
+        content.map(map)
     }
 
     fn modal_msg(&self) -> String {

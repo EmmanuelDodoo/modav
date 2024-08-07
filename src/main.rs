@@ -54,10 +54,11 @@ fn main() -> Result<(), iced::Error> {
         exit_on_close_request: false,
         ..Default::default()
     };
+
     Modav::run(Settings {
         window,
         antialiasing: true,
-        flags: Flags::Line,
+        flags: Flags::Prod,
         ..Default::default()
     })
 }
@@ -95,7 +96,7 @@ pub struct Modav {
     title: String,
     current_view: ViewType,
     file_path: Option<PathBuf>,
-    tabs: Tabs,
+    tabs: Tabs<Message, Theme>,
     toasts: Vec<Toast>,
     toast_timeout: u64,
     wizard_shown: bool,
@@ -116,7 +117,18 @@ impl Flags {
         let toasts = Vec::default();
         let title = String::from("Modav");
         let error = AppError::None;
-        let mut tabs = Tabs::new().width(Length::FillPortion(5));
+        let mut tabs = Tabs::new()
+            .on_open(Message::SelectFile)
+            .on_new_active_tab(Message::NewActiveTab)
+            .on_save(|path, content, action| Message::SaveFile((path, content, action)))
+            .on_check_exit(Message::CheckExit)
+            .can_exit(Message::CanExit)
+            .width(Length::FillPortion(5))
+            .height(Length::Fill)
+            .tab_bar_height(45.0)
+            .tab_spacing(2.5)
+            .tab_bar_padding(3)
+            .tab_padding([5, 7]);
         let wizard_shown = false;
         let settings_shown = false;
         let toast_timeout = 5;
@@ -252,7 +264,9 @@ impl Modav {
 
         let action = FileIOAction::RefreshTab((
             iden.unwrap(),
-            self.tabs.active_tab(),
+            self.tabs
+                .active_tab_idx()
+                .expect("Save Helper: Attempted to refresh active tab save without an active tab"),
             self.tabs.active_path().unwrap_or(PathBuf::new()),
         ));
 
@@ -398,15 +412,15 @@ impl Modav {
                 }
             }
             FileIOAction::NewTab((View::None, _)) => self.update_tabs(TabsMessage::None),
-            FileIOAction::RefreshTab((ViewType::Counter, tid, _)) => {
-                self.update_tabs(TabsMessage::RefreshTab((tid, Refresh::Counter)))
+            FileIOAction::RefreshTab((ViewType::Counter, tidx, _)) => {
+                self.update_tabs(TabsMessage::RefreshTab(tidx, Refresh::Counter))
             }
-            FileIOAction::RefreshTab((ViewType::Editor, tid, path)) => {
+            FileIOAction::RefreshTab((ViewType::Editor, tidx, path)) => {
                 let data = EditorTabData::new(Some(path), content);
                 let rsh = Refresh::Editor(data);
-                self.update_tabs(TabsMessage::RefreshTab((tid, rsh)))
+                self.update_tabs(TabsMessage::RefreshTab(tidx, rsh))
             }
-            FileIOAction::RefreshTab((ViewType::LineGraph, tid, path)) => {
+            FileIOAction::RefreshTab((ViewType::LineGraph, tidx, path)) => {
                 let data = LineTabData::new(path, LineConfigState::default());
                 match data {
                     Err(err) => {
@@ -415,17 +429,17 @@ impl Modav {
                     }
                     Ok(data) => {
                         let rsh = Refresh::Model(data);
-                        self.update_tabs(TabsMessage::RefreshTab((tid, rsh)))
+                        self.update_tabs(TabsMessage::RefreshTab(tidx, rsh))
                     }
                 }
             }
             FileIOAction::RefreshTab((ViewType::None, _, _)) => self.update_tabs(TabsMessage::None),
-            FileIOAction::CloseTab(id) => {
-                let tsg = TabsMessage::CloseTab((id, true));
+            FileIOAction::CloseTab(idx) => {
+                let tsg = TabsMessage::CloseTab(idx, true);
                 self.update_tabs(tsg)
             }
-            FileIOAction::Exiting(id) => {
-                self.tabs.update(TabsMessage::CloseTab((id, true)));
+            FileIOAction::Exiting(idx) => {
+                self.tabs.update(TabsMessage::CloseTab(idx, true));
                 let tsg = TabsMessage::Exit;
                 self.update_tabs(tsg)
             }
@@ -721,7 +735,7 @@ impl Application for Modav {
         let content = if self.tabs.is_empty() {
             home_view().into()
         } else {
-            self.tabs.content().map(Message::TabsMessage)
+            self.tabs.view(Message::TabsMessage)
         };
 
         let cross_axis = row!(dashboard, content).height(Length::FillPortion(30));

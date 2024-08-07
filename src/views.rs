@@ -6,13 +6,12 @@ use std::{
 use iced::{
     theme::{self, Theme},
     widget::{button, column, container, horizontal_space, row, text, Button, Container, Row},
-    Length, Renderer,
+    Element, Length, Renderer,
 };
-use iced_aw::TabLabel;
 
 pub mod tabs;
 pub use tabs::Refresh;
-use tabs::{TabBarMessage, TabBarState};
+use tabs::{TabBarMessage, TabLabel, TabsState};
 
 mod editor;
 pub use editor::EditorTabData;
@@ -81,15 +80,13 @@ pub trait Viewable {
     type Message: Clone + Debug;
     type Data: Clone + Debug;
 
-    fn new(id: usize, data: Self::Data) -> Self;
-
-    fn id(&self) -> usize;
+    fn new(data: Self::Data) -> Self;
 
     fn is_dirty(&self) -> bool;
 
     fn update(&mut self, message: Self::Message);
 
-    fn tab_label(&self) -> TabLabel;
+    fn label(&self) -> TabLabel;
 
     /// Returns the content of this view if any
     fn content(&self) -> Option<String> {
@@ -104,7 +101,10 @@ pub trait Viewable {
         String::default()
     }
 
-    fn view(&self) -> iced::Element<'_, TabBarMessage, Theme, Renderer>;
+    fn view<'a, Message, F>(&'a self, map: F) -> Element<'a, Message, Theme, Renderer>
+    where
+        F: 'a + Fn(Self::Message) -> Message,
+        Message: 'a;
 
     fn path(&self) -> Option<PathBuf> {
         None
@@ -233,5 +233,5 @@ pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
         .center_y()
 }
 
-pub type Tabs = TabBarState;
+pub type Tabs<Message, Theme> = TabsState<Message, Theme>;
 pub type TabsMessage = TabBarMessage;

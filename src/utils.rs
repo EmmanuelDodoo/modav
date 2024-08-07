@@ -304,7 +304,7 @@ pub mod icons {
         use super::icon_maker;
         use iced::widget::Text;
 
-        const NAME: &'static str = "toast-icons";
+        pub const NAME: &'static str = "toast-icons";
 
         pub const SUCCESS: char = '\u{E802}';
         pub const INFO: char = '\u{F086}';

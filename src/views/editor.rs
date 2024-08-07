@@ -3,11 +3,9 @@ use iced::{
     widget::text_editor,
     Element, Length, Renderer, Theme,
 };
-use iced_aw::TabLabel;
 use std::path::PathBuf;
 
-use super::tabs::TabMessage;
-use super::{TabBarMessage, Viewable};
+use super::{TabLabel, Viewable};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct EditorTabData {
@@ -23,7 +21,6 @@ impl EditorTabData {
 
 #[derive(Debug)]
 pub struct EditorTab {
-    id: usize,
     is_dirty: bool,
     file_path: Option<PathBuf>,
     content: text_editor::Content,
@@ -39,15 +36,10 @@ impl Viewable for EditorTab {
     type Data = EditorTabData;
     type Message = EditorMessage;
 
-    fn id(&self) -> usize {
-        self.id
-    }
-
-    fn new(id: usize, data: Self::Data) -> Self {
+    fn new(data: Self::Data) -> Self {
         let EditorTabData { path, data } = data;
         let content = text_editor::Content::with_text(data.as_str());
         Self {
-            id,
             is_dirty: false,
             content,
             file_path: path,
@@ -58,10 +50,10 @@ impl Viewable for EditorTab {
         self.is_dirty
     }
 
-    fn tab_label(&self) -> TabLabel {
+    fn label(&self) -> TabLabel {
         let path = self.title();
 
-        TabLabel::IconText('\u{F0F6}', path)
+        TabLabel::new('\u{F0F6}', path)
     }
 
     fn title(&self) -> String {
@@ -99,7 +91,11 @@ impl Viewable for EditorTab {
         self.content.text().into()
     }
 
-    fn view(&self) -> Element<'_, TabBarMessage, iced::Theme, iced::Renderer> {
+    fn view<'a, Message, F>(&'a self, map: F) -> Element<'a, Message, iced::Theme, iced::Renderer>
+    where
+        F: 'a + Fn(Self::Message) -> Message,
+        Message: 'a,
+    {
         let extension = self
             .path()
             .as_ref()
@@ -111,14 +107,14 @@ impl Viewable for EditorTab {
             theme: highlighter::Theme::SolarizedDark,
         };
 
-        let content: Element<'_, EditorMessage, Theme, Renderer> = text_editor(&self.content)
+        let content: Element<EditorMessage, Theme, Renderer> = text_editor(&self.content)
             .on_action(EditorMessage::Action)
             .height(Length::Fill)
             .padding([4, 8])
             .highlight::<Highlighter>(highlighter_settings, |hl, _theme| hl.to_format())
             .into();
 
-        content.map(|msg| TabBarMessage::UpdateTab((self.id, TabMessage::Editor(msg))))
+        content.map(map)
     }
 
     fn modal_msg(&self) -> String {

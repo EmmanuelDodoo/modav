@@ -1,16 +1,14 @@
 use std::path::PathBuf;
 
-use iced_aw::TabLabel;
-
 use modav_core::{
     models::line::{Line, LineGraph, Scale},
     repr::csv::{utils::Data, SheetBuilder},
 };
 
-use crate::utils::{coloring, AppError};
+use crate::utils::{coloring, icons, AppError};
 use crate::widgets::wizard::LineConfigState;
 
-use super::{TabBarMessage, Viewable};
+use super::{TabLabel, Viewable};
 
 use super::common::graph::{Axis, Graph, GraphLine};
 
@@ -83,7 +81,6 @@ pub enum ModelMessage {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LineGraphTab {
-    id: usize,
     file: PathBuf,
     title: String,
     x_scale: Scale<String>,
@@ -108,7 +105,7 @@ impl Viewable for LineGraphTab {
     type Message = ModelMessage;
     type Data = LineTabData;
 
-    fn new(id: usize, data: Self::Data) -> Self {
+    fn new(data: Self::Data) -> Self {
         let LineTabData {
             file,
             title,
@@ -142,7 +139,6 @@ impl Viewable for LineGraphTab {
             .collect();
 
         Self {
-            id,
             file,
             title,
             lines,
@@ -154,10 +150,6 @@ impl Viewable for LineGraphTab {
         }
     }
 
-    fn id(&self) -> usize {
-        self.id
-    }
-
     fn is_dirty(&self) -> bool {
         false
     }
@@ -166,14 +158,17 @@ impl Viewable for LineGraphTab {
         self.title.clone()
     }
 
-    fn tab_label(&self) -> TabLabel {
+    fn label(&self) -> TabLabel {
         let file_name = self
             .file
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("New File");
 
-        TabLabel::Text(format!("{} - {}", self.title, file_name))
+        TabLabel::new(
+            icons::dashboard::CHART,
+            format!("{} - {}", self.title, file_name),
+        )
     }
 
     fn content(&self) -> Option<String> {
@@ -233,7 +228,11 @@ impl Viewable for LineGraphTab {
         match message {}
     }
 
-    fn view(&self) -> Element<'_, TabBarMessage, Theme, Renderer> {
+    fn view<'a, Message, F>(&'a self, map: F) -> Element<'a, Message, Theme, Renderer>
+    where
+        F: 'a + Fn(Self::Message) -> Message,
+        Message: 'a,
+    {
         let title = {
             let text = text(format!("{} - Model", self.title));
             row!(horizontal_space(), text, horizontal_space())
@@ -255,11 +254,13 @@ impl Viewable for LineGraphTab {
             .height(Length::Fill)
             .width(Length::Fill);
 
-        container(content)
+        let content: Element<Self::Message, Theme, Renderer> = container(content)
             .padding([10, 30, 30, 15])
             .width(Length::Fill)
             .height(Length::Fill)
-            .into()
+            .into();
+
+        content.map(map)
     }
 }
 
