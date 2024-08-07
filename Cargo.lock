@@ -1358,16 +1358,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "iced_aw"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "129deba9897243dd59c2038e2267a691e392c94e569680066ee63b1164429490"
-dependencies = [
- "cfg-if",
- "iced",
-]
-
-[[package]]
 name = "iced_core"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1421,7 +1411,6 @@ dependencies = [
  "futures",
  "iced_core 0.12.3",
  "log",
- "tokio",
  "wasm-bindgen-futures",
  "wasm-timer",
 ]
@@ -2022,7 +2011,6 @@ name = "modav"
 version = "0.1.0"
 dependencies = [
  "iced",
- "iced_aw",
  "iced_widget 0.1.3",
  "modav_core",
  "rand",
@@ -3480,7 +3468,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb2caba9f80616f438e09748d5acda951967e1ea58508ef53d9c6402485a46df"
 dependencies = [
  "backtrace",
- "num_cpus",
  "pin-project-lite",
 ]
 

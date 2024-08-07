@@ -87,24 +87,6 @@ impl button::StyleSheet for MenuButtonStyle {
     }
 }
 
-pub struct CustomMenuBarStyle;
-impl iced_aw::menu::StyleSheet for CustomMenuBarStyle {
-    type Style = Theme;
-
-    fn appearance(&self, _style: &Self::Style) -> iced_aw::menu::Appearance {
-        let border = Border {
-            radius: [8.0; 4].into(),
-            ..Default::default()
-        };
-        iced_aw::menu::Appearance {
-            bar_border: border,
-            bar_background: Background::Color(Color::TRANSPARENT),
-            path: Background::Color(Color::TRANSPARENT),
-            ..Default::default()
-        }
-    }
-}
-
 pub struct ToolTipContainerStyle;
 
 impl container::StyleSheet for ToolTipContainerStyle {
