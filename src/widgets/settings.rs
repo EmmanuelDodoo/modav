@@ -11,11 +11,13 @@ use iced::{
 
 use super::style::dialog_container;
 
-const THEMES: [Theme; 5] = [
+const THEMES: [Theme; 7] = [
     Theme::TokyoNight,
     Theme::TokyoNightLight,
     Theme::GruvboxDark,
     Theme::GruvboxLight,
+    Theme::SolarizedDark,
+    Theme::SolarizedLight,
     Theme::Nightfly,
 ];
 

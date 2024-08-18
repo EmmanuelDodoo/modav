@@ -113,7 +113,7 @@ pub enum Flags {
 
 impl Flags {
     fn create(&self) -> Modav {
-        let theme = Theme::Nightfly;
+        let theme = Theme::TokyoNight;
         let toasts = Vec::default();
         let title = String::from("Modav");
         let error = AppError::None;
@@ -131,7 +131,7 @@ impl Flags {
             .tab_padding([5, 7]);
         let wizard_shown = false;
         let settings_shown = false;
-        let toast_timeout = 5;
+        let toast_timeout = 2;
         match self {
             Self::Prod => Modav {
                 file_path: None,
