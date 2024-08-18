@@ -349,8 +349,8 @@ impl AppError {
         match self {
             Self::FontLoading(_) => String::from("Error while loading a font"),
             Self::FileDialogClosed => String::from("File Dialog closed prematurely"),
-            Self::FileLoading(_) => String::from("Error while loading file"),
-            Self::FileSaving(_) => String::from("Error while saving file"),
+            Self::FileLoading(err) => err.to_string(),
+            Self::FileSaving(err) => err.to_string(),
             Self::Simple(s) => s.clone(),
             Self::CSVError(err) => err.to_string(),
             Self::None => String::new(),
@@ -372,6 +372,8 @@ impl Display for AppError {
         }
     }
 }
+
+impl std::error::Error for AppError {}
 
 pub mod menus {
 
