@@ -220,8 +220,7 @@ impl Modav {
                         .filter(|name| !name.is_empty())
                         .map(|file| {
                             let text = text(file);
-                            let icon = icons::icon(icons::FILE);
-                            row!(icon, text).spacing(5)
+                            row!(text).spacing(5)
                         })
                 })
             };
@@ -230,8 +229,7 @@ impl Modav {
                 (None, ViewType::None) => row!(),
                 (None, vt) => {
                     let txt = text("Untitled");
-                    let icon = icons::icon(icons::FILE);
-                    let txt = row!(icon, txt).spacing(5);
+                    let txt = txt;
                     row!(vt.display(), vertical_rule(10), txt)
                 }
                 (Some(p), ViewType::None) => row!(p),
