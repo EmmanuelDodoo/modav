@@ -1,4 +1,4 @@
-use crate::utils::icons::dashboard;
+use crate::utils::icons;
 
 use iced::{
     advanced, alignment, theme,
@@ -343,11 +343,11 @@ where
             let icon = if self.options.is_empty() {
                 Space::new(0, 0).into()
             } else if state.is_open {
-                dashboard::icon(dashboard::ANGLE_UP)
+                icons::icon(icons::ANGLE_UP)
                     .horizontal_alignment(alignment::Horizontal::Center)
                     .into()
             } else {
-                dashboard::icon(dashboard::ANGLE_DOWN)
+                icons::icon(icons::ANGLE_DOWN)
                     .horizontal_alignment(alignment::Horizontal::Center)
                     .into()
             };

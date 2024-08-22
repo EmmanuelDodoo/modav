@@ -169,7 +169,7 @@ impl Viewable for LineGraphTab {
             .unwrap_or("New File");
 
         TabLabel::new(
-            icons::dashboard::CHART,
+            icons::CHART,
             format!("{} - {}", self.title, file_name),
         )
     }

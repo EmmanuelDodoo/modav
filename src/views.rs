@@ -25,7 +25,7 @@ pub use line::LineTabData;
 
 mod common;
 
-use crate::utils::icons::{dashboard, status};
+use crate::utils::icons;
 
 #[derive(Debug, Clone, PartialEq, Default, Copy)]
 pub enum FileType {
@@ -145,15 +145,15 @@ impl ViewType {
         let txt = text(self.name());
         match self {
             Self::Editor => {
-                let icon = status::icon(status::EDITOR);
+                let icon = icons::icon(icons::EDITOR);
                 row!(icon, txt).spacing(5)
             }
             Self::Counter => {
-                let icon = status::icon(status::COUNTER);
+                let icon = icons::icon(icons::COUNTER);
                 row!(icon, txt).spacing(5)
             }
             Self::LineGraph => {
-                let icon = dashboard::icon(dashboard::CHART);
+                let icon = icons::icon(icons::CHART);
                 row!(icon, txt).spacing(5)
             }
             Self::None => Row::new(),

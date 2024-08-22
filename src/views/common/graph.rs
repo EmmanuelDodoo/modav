@@ -568,9 +568,9 @@ where
         };
 
         let editor = {
-            let font = Font::with_name(icons::status::NAME);
+            let font = Font::with_name(icons::NAME);
 
-            let btn = button(text(icons::status::EDITOR).font(font))
+            let btn = button(text(icons::EDITOR).font(font))
                 .on_press(GraphMessage::OpenEditor)
                 .style(theme::Button::Custom(Box::new(EditorButtonStyle)))
                 .padding([4, 4]);

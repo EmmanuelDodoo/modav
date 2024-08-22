@@ -1,7 +1,7 @@
 // Code derived from Iced Github repo
 
 use crate::styles::ColoredContainer;
-use crate::utils::icons::toast;
+use crate::utils::icons;
 use std::{
     fmt::Display,
     time::{Duration, Instant},
@@ -48,10 +48,10 @@ impl Status {
     fn icon(&self, is_dark: bool) -> Text<'static> {
         let style = theme::Text::Color(self.color(is_dark));
         match self {
-            Self::Success => toast::icon(toast::SUCCESS).style(style),
-            Self::Info => toast::icon(toast::INFO).style(style),
-            Self::Warn => toast::icon(toast::WARN).style(style),
-            Self::Error => toast::icon(toast::ERROR).style(style),
+            Self::Success => icons::icon(icons::SUCCESS).style(style),
+            Self::Info => icons::icon(icons::INFO).style(style),
+            Self::Warn => icons::icon(icons::WARN).style(style),
+            Self::Error => icons::icon(icons::ERROR).style(style),
         }
     }
 
@@ -124,7 +124,7 @@ where
                 };
 
                 let close = button(
-                    toast::icon(toast::CLOSE)
+                    icons::icon(icons::CLOSE)
                         .size(24)
                         .style(theme::Text::Color(text_color)),
                 )

@@ -1248,11 +1248,11 @@ pub mod bar {
                         let close_bounds = close_layout.bounds();
                         let is_mouse_over = cursor.is_over(close_bounds);
 
-                        let font = Font::with_name(icons::toast::NAME);
+                        let font = Font::with_name(icons::NAME);
 
                         renderer.fill_text(
                             advanced::Text {
-                                content: &icons::toast::CLOSE.to_string(),
+                                content: &icons::CLOSE.to_string(),
                                 bounds: Size::new(close_bounds.width, close_bounds.height),
                                 size: Pixels(
                                     self.close_size * if is_mouse_over { 1.05 } else { 1.0 },

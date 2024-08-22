@@ -17,7 +17,7 @@ mod styles;
 use styles::*;
 
 mod utils;
-use utils::{icons::status, load_file, menus, pick_file, save_file, AppError};
+use utils::{icons, load_file, menus, pick_file, save_file, AppError};
 
 mod views;
 use views::{home_view, EditorTabData, LineTabData, Refresh, Tabs, TabsMessage, View, ViewType};
@@ -220,7 +220,7 @@ impl Modav {
                         .filter(|name| !name.is_empty())
                         .map(|file| {
                             let text = text(file);
-                            let icon = status::icon(status::FILE);
+                            let icon = icons::icon(icons::FILE);
                             row!(icon, text).spacing(5)
                         })
                 })
@@ -230,7 +230,7 @@ impl Modav {
                 (None, ViewType::None) => row!(),
                 (None, vt) => {
                     let txt = text("Untitled");
-                    let icon = status::icon(status::FILE);
+                    let icon = icons::icon(icons::FILE);
                     let txt = row!(icon, txt).spacing(5);
                     row!(vt.display(), vertical_rule(10), txt)
                 }
@@ -482,6 +482,8 @@ impl Application for Modav {
             font::load(include_bytes!("../fonts/legend-icons.ttf").as_slice())
                 .map(Message::IconLoaded),
             font::load(include_bytes!("../fonts/line-type-icons.ttf").as_slice())
+                .map(Message::IconLoaded),
+            font::load(include_bytes!("../fonts/util-icons.ttf").as_slice())
                 .map(Message::IconLoaded),
         ];
         (flags.create(), Command::batch(commands))
