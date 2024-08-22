@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fmt::Debug, path::PathBuf};
 
 use modav_core::{
     models::line::{Line, LineGraph, Scale},
@@ -9,6 +9,7 @@ use crate::utils::{coloring, icons, AppError};
 use crate::widgets::wizard::LineConfigState;
 
 use super::{TabLabel, Viewable};
+use crate::Message;
 
 use super::common::graph::{Axis, Graph, GraphLine};
 
@@ -77,7 +78,9 @@ impl LineTabData {
 }
 
 #[derive(Clone, Debug)]
-pub enum ModelMessage {}
+pub enum ModelMessage {
+    OpenEditor,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LineGraphTab {
@@ -92,17 +95,17 @@ pub struct LineGraphTab {
 }
 
 impl LineGraphTab {
-    fn graph(&self) -> Graph<String, Data> {
+    fn graph(&self) -> Graph<ModelMessage, String, Data> {
         let x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone());
 
         let y_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone());
 
-        Graph::new(x_axis, y_axis, &self.lines)
+        Graph::new(x_axis, y_axis, &self.lines).on_editor(ModelMessage::OpenEditor)
     }
 }
 
 impl Viewable for LineGraphTab {
-    type Message = ModelMessage;
+    type Event = ModelMessage;
     type Data = LineTabData;
 
     fn new(data: Self::Data) -> Self {
@@ -224,14 +227,16 @@ impl Viewable for LineGraphTab {
         self.y_label = Some(y_label);
     }
 
-    fn update(&mut self, message: Self::Message) {
-        match message {}
+    fn update(&mut self, message: Self::Event) -> Option<Message> {
+        match message {
+            ModelMessage::OpenEditor => Some(Message::OpenEditor(Some(self.file.clone()))),
+        }
     }
 
     fn view<'a, Message, F>(&'a self, map: F) -> Element<'a, Message, Theme, Renderer>
     where
-        F: 'a + Fn(Self::Message) -> Message,
-        Message: 'a,
+        F: 'a + Fn(Self::Event) -> Message,
+        Message: 'a + Clone + Debug,
     {
         let title = {
             let text = text(format!("{} - Model", self.title));
@@ -254,7 +259,7 @@ impl Viewable for LineGraphTab {
             .height(Length::Fill)
             .width(Length::Fill);
 
-        let content: Element<Self::Message, Theme, Renderer> = container(content)
+        let content: Element<Self::Event, Theme, Renderer> = container(content)
             .padding([10, 30, 30, 15])
             .width(Length::Fill)
             .height(Length::Fill)

@@ -9,6 +9,8 @@ use iced::{
     Element, Length, Renderer,
 };
 
+use crate::Message;
+
 pub mod tabs;
 pub use tabs::Refresh;
 use tabs::{TabBarMessage, TabLabel, TabsState};
@@ -24,8 +26,6 @@ pub use line::LineTabData;
 mod common;
 
 use crate::utils::icons::{dashboard, status};
-
-use super::Message;
 
 #[derive(Debug, Clone, PartialEq, Default, Copy)]
 pub enum FileType {
@@ -77,14 +77,14 @@ impl View {
 }
 
 pub trait Viewable {
-    type Message: Clone + Debug;
+    type Event: Clone + Debug;
     type Data: Clone + Debug;
 
     fn new(data: Self::Data) -> Self;
 
     fn is_dirty(&self) -> bool;
 
-    fn update(&mut self, message: Self::Message);
+    fn update(&mut self, message: Self::Event) -> Option<Message>;
 
     fn label(&self) -> TabLabel;
 
@@ -103,8 +103,8 @@ pub trait Viewable {
 
     fn view<'a, Message, F>(&'a self, map: F) -> Element<'a, Message, Theme, Renderer>
     where
-        F: 'a + Fn(Self::Message) -> Message,
-        Message: 'a;
+        F: 'a + Fn(Self::Event) -> Message,
+        Message: 'a + Clone + Debug;
 
     fn path(&self) -> Option<PathBuf> {
         None
@@ -233,5 +233,5 @@ pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
         .center_y()
 }
 
-pub type Tabs<Message, Theme> = TabsState<Message, Theme>;
+pub type Tabs<Theme> = TabsState<Theme>;
 pub type TabsMessage = TabBarMessage;

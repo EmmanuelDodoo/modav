@@ -5,6 +5,7 @@ use iced::{
 };
 
 use super::{TabLabel, Viewable};
+use crate::Message;
 
 #[derive(Clone, Debug)]
 pub enum CounterMessage {
@@ -18,7 +19,7 @@ pub struct CounterTab {
 }
 
 impl Viewable for CounterTab {
-    type Message = CounterMessage;
+    type Event = CounterMessage;
     type Data = ();
 
     fn new(_data: ()) -> Self {
@@ -29,7 +30,7 @@ impl Viewable for CounterTab {
         false
     }
 
-    fn update(&mut self, message: CounterMessage) {
+    fn update(&mut self, message: CounterMessage) -> Option<Message> {
         match message {
             CounterMessage::Increase => {
                 self.value += 1;
@@ -37,7 +38,9 @@ impl Viewable for CounterTab {
             CounterMessage::Decrease => {
                 self.value -= 1;
             }
-        }
+        };
+
+        None
     }
 
     fn label(&self) -> TabLabel {
@@ -46,7 +49,7 @@ impl Viewable for CounterTab {
 
     fn view<'a, Message, F>(&'a self, map: F) -> Element<'a, Message, Theme>
     where
-        F: 'a + Fn(Self::Message) -> Message,
+        F: 'a + Fn(Self::Event) -> Message,
         Message: 'a,
     {
         let header = text(format!("Count {}", self.value)).size(32);

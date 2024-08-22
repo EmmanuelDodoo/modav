@@ -15,6 +15,7 @@ use super::temp::{CounterMessage, CounterTab};
 use super::{View, ViewType, Viewable};
 
 use crate::widgets::style::DialogContainer;
+use crate::Message;
 
 use bar::TabBar;
 #[allow(unused_imports)]
@@ -31,14 +32,14 @@ pub enum Tab {
 }
 
 impl Tab {
-    fn update(&mut self, tsg: TabMessage) {
+    fn update(&mut self, tsg: TabMessage) -> Option<Message> {
         match (self, tsg) {
             (Tab::Counter(tab), TabMessage::Counter(tsg)) => tab.update(tsg),
-            (Tab::Counter(_), _) => {}
+            (Tab::Counter(_), _) => None,
             (Tab::Editor(tab), TabMessage::Editor(tsg)) => tab.update(tsg),
-            (Tab::Editor(_), _) => {}
+            (Tab::Editor(_), _) => None,
             (Tab::Model(tab), TabMessage::Model(tsg)) => tab.update(tsg),
-            (Tab::Model(_), _) => {}
+            (Tab::Model(_), _) => None,
         }
     }
 
@@ -169,7 +170,7 @@ pub enum TabBarMessage {
     None,
 }
 
-pub struct TabsState<Message, Theme>
+pub struct TabsState<Theme>
 where
     Theme: StyleSheet,
 {
@@ -196,7 +197,7 @@ where
 }
 
 #[allow(dead_code)]
-impl<Message> TabsState<Message, Theme>
+impl TabsState<Theme>
 where
     Message: Clone + 'static,
 {
@@ -491,10 +492,7 @@ where
             },
 
             TabBarMessage::UpdateTab(idx, tsg) => {
-                if let Some(tab) = self.tabs.get_mut(idx) {
-                    tab.update(tsg)
-                };
-                None
+                self.tabs.get_mut(idx).and_then(|tab| tab.update(tsg))
             }
 
             TabBarMessage::RefreshTab(idx, rsg) => {
@@ -696,7 +694,7 @@ where
     }
 }
 
-impl<Message> Default for TabsState<Message, Theme>
+impl Default for TabsState<Theme>
 where
     Message: Clone + 'static,
 {

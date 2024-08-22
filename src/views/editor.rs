@@ -6,6 +6,7 @@ use iced::{
 use std::path::PathBuf;
 
 use super::{TabLabel, Viewable};
+use crate::Message;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct EditorTabData {
@@ -34,7 +35,7 @@ pub enum EditorMessage {
 
 impl Viewable for EditorTab {
     type Data = EditorTabData;
-    type Message = EditorMessage;
+    type Event = EditorMessage;
 
     fn new(data: Self::Data) -> Self {
         let EditorTabData { path, data } = data;
@@ -71,7 +72,7 @@ impl Viewable for EditorTab {
         }
     }
 
-    fn update(&mut self, message: Self::Message) {
+    fn update(&mut self, message: Self::Event) -> Option<Message> {
         match message {
             EditorMessage::Action(text_editor::Action::Edit(edit)) => {
                 self.is_dirty = true;
@@ -85,6 +86,8 @@ impl Viewable for EditorTab {
                 self.refresh(data);
             }
         }
+
+        None
     }
 
     fn content(&self) -> Option<String> {
@@ -93,7 +96,7 @@ impl Viewable for EditorTab {
 
     fn view<'a, Message, F>(&'a self, map: F) -> Element<'a, Message, iced::Theme, iced::Renderer>
     where
-        F: 'a + Fn(Self::Message) -> Message,
+        F: 'a + Fn(Self::Event) -> Message,
         Message: 'a,
     {
         let extension = self

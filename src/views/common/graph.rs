@@ -10,7 +10,7 @@ use iced::{
     alignment::{Horizontal, Vertical},
     color, mouse, theme,
     widget::{
-        self,
+        self, button,
         canvas::{self, Canvas, Frame, Geometry, Path, Stroke, Text},
         column, component, container, overlay, row, text, Component, Tooltip,
     },
@@ -21,7 +21,7 @@ use iced::{
 pub use modav_core::models::line::Point as GraphPoint;
 
 use crate::widgets::toolbar::{ToolbarMenu, ToolbarOption};
-use crate::ToolTipContainerStyle;
+use crate::{utils::icons, ToolTipContainerStyle};
 
 #[allow(dead_code)]
 const WHITE: Color = color!(255, 255, 255);
@@ -478,6 +478,7 @@ where
 pub enum GraphMessage {
     Legend(LegendPosition),
     GraphType(GraphType),
+    OpenEditor,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -487,7 +488,7 @@ pub struct GraphState {
 }
 
 #[derive(Debug)]
-pub struct Graph<'a, X, Y>
+pub struct Graph<'a, Message, X, Y>
 where
     X: Clone + Display + Hash + Eq + Debug,
     Y: Clone + Display + Hash + Eq + Debug,
@@ -496,9 +497,10 @@ where
     y_axis: Axis<Y>,
     lines: &'a Vec<GraphLine<X, Y>>,
     cache: canvas::Cache,
+    on_open_editor: Option<Message>,
 }
 
-impl<'a, X, Y> Graph<'a, X, Y>
+impl<'a, Message, X, Y> Graph<'a, Message, X, Y>
 where
     X: Clone + Display + Hash + Eq + Debug,
     Y: Clone + Display + Hash + Eq + Debug,
@@ -509,6 +511,7 @@ where
             y_axis,
             lines,
             cache: canvas::Cache::default(),
+            on_open_editor: None,
         }
     }
 
@@ -564,8 +567,29 @@ where
             menu
         };
 
+        let editor = {
+            let font = Font::with_name(icons::status::NAME);
+
+            let btn = button(text(icons::status::EDITOR).font(font))
+                .on_press(GraphMessage::OpenEditor)
+                .style(theme::Button::Custom(Box::new(EditorButtonStyle)))
+                .padding([4, 4]);
+
+            let tooltip = container(text("Open in Editor").size(12.0))
+                .max_width(200.0)
+                .padding([6, 8])
+                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
+                .height(Length::Shrink);
+
+            let menu = Tooltip::new(btn, tooltip, iced::widget::tooltip::Position::Bottom)
+                .gap(2.0)
+                .snap_within_viewport(true);
+
+            menu
+        };
+
         container(
-            column!(legend, kind)
+            column!(legend, kind, editor)
                 .width(Length::Fill)
                 .align_items(Alignment::Center)
                 .spacing(8.0),
@@ -575,12 +599,18 @@ where
         .style(theme::Container::Custom(Box::new(ToolbarContainerStyle)))
         .into()
     }
+
+    pub fn on_editor(mut self, message: Message) -> Self {
+        self.on_open_editor = Some(message);
+        self
+    }
 }
 
-impl<'a, Message, X, Y> Component<Message> for Graph<'a, X, Y>
+impl<'a, Message, X, Y> Component<Message> for Graph<'a, Message, X, Y>
 where
     X: Clone + Display + Hash + Eq + Debug,
     Y: Clone + Display + Hash + Eq + Debug,
+    Message: Clone,
 {
     type Event = GraphMessage;
     type State = GraphState;
@@ -589,10 +619,14 @@ where
         match event {
             GraphMessage::Legend(position) => {
                 state.legend_position = position;
+                None
             }
-            GraphMessage::GraphType(kind) => state.graph_type = kind,
-        };
-        None
+            GraphMessage::GraphType(kind) => {
+                state.graph_type = kind;
+                None
+            }
+            GraphMessage::OpenEditor => self.on_open_editor.clone(),
+        }
     }
 
     fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
@@ -610,13 +644,13 @@ where
     }
 }
 
-impl<'a, Message, X, Y> From<Graph<'a, X, Y>> for Element<'a, Message>
+impl<'a, Message, X, Y> From<Graph<'a, Message, X, Y>> for Element<'a, Message>
 where
     Message: 'a + Clone + Debug,
     X: 'a + Clone + Display + Hash + Eq + Debug,
     Y: 'a + Clone + Display + Hash + Eq + Debug,
 {
-    fn from(value: Graph<'a, X, Y>) -> Self {
+    fn from(value: Graph<'a, Message, X, Y>) -> Self {
         component(value)
     }
 }
@@ -1083,6 +1117,39 @@ impl overlay::menu::StyleSheet for ToolbarMenuStyle {
             background,
             border,
             selected_background,
+        }
+    }
+}
+
+struct EditorButtonStyle;
+impl widget::button::StyleSheet for EditorButtonStyle {
+    type Style = Theme;
+
+    fn active(&self, style: &Self::Style) -> button::Appearance {
+        let palette = style.extended_palette();
+
+        button::Appearance {
+            text_color: palette.background.base.text,
+            background: Some(Background::Color(palette.background.weak.color)),
+            ..Default::default()
+        }
+    }
+
+    fn hovered(&self, style: &Self::Style) -> button::Appearance {
+        let pallete = style.extended_palette();
+        let text_color = pallete.primary.strong.color;
+        let background = Background::Color(pallete.background.weak.color);
+        let border = Border {
+            color: pallete.primary.strong.color,
+            width: 0.5,
+            radius: 3.0.into(),
+        };
+
+        button::Appearance {
+            text_color,
+            border,
+            background: Some(background),
+            ..Default::default()
         }
     }
 }

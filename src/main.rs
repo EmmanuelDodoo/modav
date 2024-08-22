@@ -96,7 +96,7 @@ pub struct Modav {
     title: String,
     current_view: ViewType,
     file_path: Option<PathBuf>,
-    tabs: Tabs<Message, Theme>,
+    tabs: Tabs<Theme>,
     toasts: Vec<Toast>,
     toast_timeout: u64,
     wizard_shown: bool,
@@ -206,6 +206,8 @@ pub enum Message {
     AddToast(Toast),
     CloseToast(usize),
     Error(AppError),
+    /// Open the editor for the current model
+    OpenEditor(Option<PathBuf>),
 }
 
 impl Modav {
@@ -303,20 +305,9 @@ impl Modav {
             .width(Length::Fixed(125.0));
 
         let menus = {
-            let views_closure = |vt| match vt {
-                ViewType::Counter => Message::OpenTab(None, View::Counter),
-                ViewType::Editor => {
-                    let path = self.file_path.clone();
-                    let data = EditorTabData::new(path, String::default());
-                    Message::OpenTab(self.file_path.clone(), View::Editor(data))
-                }
-                ViewType::LineGraph => Message::None,
-                ViewType::None => Message::None,
-            };
             column!(
                 self.file_menu(),
                 menus::models_menu(),
-                menus::views_menu(views_closure),
                 menus::about_menu(),
                 menus::settings_menu()
             )
@@ -700,6 +691,15 @@ impl Application for Modav {
                 self.toasts.remove(index);
                 Command::none()
             }
+            Message::OpenEditor(path) => match path {
+                Some(path) => {
+                    let data = EditorTabData::new(Some(path.clone()), String::default());
+                    let msg = Message::OpenTab(self.file_path.clone(), View::Editor(data));
+
+                    Command::perform(async { msg }, |msg| msg)
+                }
+                None => Command::none(),
+            },
             Message::Event(event) => match event {
                 Event::Window(window::Id::MAIN, window::Event::CloseRequested) => {
                     self.update_tabs(TabsMessage::Exit)

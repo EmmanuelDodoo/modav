@@ -258,7 +258,7 @@ pub mod icons {
         use super::icon_maker;
         use iced::widget::Text;
 
-        const NAME: &'static str = "status-icons";
+        pub const NAME: &'static str = "status-icons";
 
         pub const COUNTER: char = '\u{E800}';
         pub const EDITOR: char = '\u{E801}';
@@ -377,10 +377,7 @@ impl std::error::Error for AppError {}
 
 pub mod menus {
 
-    use crate::{
-        widgets::dashmenu::{DashMenu, DashMenuOption},
-        ViewType,
-    };
+    use crate::widgets::dashmenu::{DashMenu, DashMenuOption};
 
     use super::{icons::dashboard, Message};
 
@@ -398,20 +395,6 @@ pub mod menus {
         let options = vec![DashMenuOption::new("Line Graph", Some(Message::Convert))];
 
         let menu = DashMenu::new(dashboard::CHART, "Models").submenus(options);
-
-        menu_styler(menu)
-    }
-
-    pub fn views_menu<'a, F>(on_select: F) -> DashMenu<Message, Renderer>
-    where
-        F: Fn(ViewType) -> Message,
-    {
-        let options = vec![
-            DashMenuOption::new("Add Counter", Some((on_select)(ViewType::Counter))),
-            DashMenuOption::new("Open Editor", Some((on_select)(ViewType::Editor))),
-        ];
-
-        let menu = DashMenu::new(dashboard::SETTINGS, "Views").submenus(options);
 
         menu_styler(menu)
     }
