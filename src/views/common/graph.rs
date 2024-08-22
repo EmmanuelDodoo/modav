@@ -7,7 +7,7 @@ use std::{
 };
 
 use iced::{
-    alignment::{Horizontal, Vertical},
+    alignment::{self, Horizontal, Vertical},
     color, mouse, theme,
     widget::{
         self, button,
@@ -530,6 +530,7 @@ where
                 .padding([4, 4])
                 .menu_padding([4, 10, 4, 8])
                 .spacing(5.0)
+                .menu_style(theme::Menu::Custom(Rc::new(menu_style)))
                 .style(theme::PickList::Custom(Rc::new(style), Rc::new(menu_style)));
 
             let tooltip = container(text("Legend Position").size(12.0))
@@ -552,6 +553,7 @@ where
                 .padding([4, 4])
                 .menu_padding([4, 10, 4, 8])
                 .spacing(17.0)
+                .menu_style(theme::Menu::Custom(Rc::new(menu_style)))
                 .style(theme::PickList::Custom(Rc::new(style), Rc::new(menu_style)));
 
             let tooltip = container(text("Graph Type").size(12.0))
@@ -570,10 +572,16 @@ where
         let editor = {
             let font = Font::with_name(icons::NAME);
 
-            let btn = button(text(icons::EDITOR).font(font))
-                .on_press(GraphMessage::OpenEditor)
-                .style(theme::Button::Custom(Box::new(EditorButtonStyle)))
-                .padding([4, 4]);
+            let btn = button(
+                text(icons::EDITOR)
+                    .font(font)
+                    .width(18.0)
+                    .vertical_alignment(alignment::Vertical::Center)
+                    .horizontal_alignment(alignment::Horizontal::Center),
+            )
+            .on_press(GraphMessage::OpenEditor)
+            .style(theme::Button::Custom(Box::new(EditorButtonStyle)))
+            .padding([4, 4]);
 
             let tooltip = container(text("Open in Editor").size(12.0))
                 .max_width(200.0)
@@ -1106,14 +1114,18 @@ impl overlay::menu::StyleSheet for ToolbarMenuStyle {
     fn appearance(&self, style: &Self::Style) -> overlay::menu::Appearance {
         let pallete = style.extended_palette();
 
-        let text_color = pallete.primary.base.text;
+        let text_color = pallete.background.base.text;
         let background = Background::Color(pallete.background.weak.color);
-        let border = Border::default();
+        let border = Border {
+            width: 1.0,
+            radius: 3.5.into(),
+            color: pallete.background.strong.color,
+        };
         let selected_background = Background::Color(pallete.primary.base.color);
 
         overlay::menu::Appearance {
             text_color,
-            selected_text_color: text_color,
+            selected_text_color: pallete.primary.base.text,
             background,
             border,
             selected_background,
