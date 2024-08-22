@@ -16,7 +16,7 @@ use super::common::graph::{Axis, Graph, GraphLine};
 use iced::{
     theme,
     widget::{column, container, horizontal_space, row, text},
-    Alignment, Background, Border, Element, Length, Renderer, Theme,
+    Alignment, Background, Border, Element, Font, Length, Renderer, Theme,
 };
 
 use coloring::ColorEngine;
@@ -168,10 +168,9 @@ impl Viewable for LineGraphTab {
             .and_then(|name| name.to_str())
             .unwrap_or("New File");
 
-        TabLabel::new(
-            icons::CHART,
-            format!("{} - {}", self.title, file_name),
-        )
+        let font = Font::with_name(icons::NAME);
+
+        TabLabel::new(icons::CHART, format!("{} - {}", self.title, file_name)).icon_font(font)
     }
 
     fn content(&self) -> Option<String> {

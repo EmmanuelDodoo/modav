@@ -492,7 +492,9 @@ where
             },
 
             TabBarMessage::UpdateTab(idx, tsg) => {
-                self.tabs.get_mut(idx).and_then(|tab| tab.update(tsg))
+                let msg = self.tabs.get_mut(idx).and_then(|tab| tab.update(tsg));
+                self.labels = self.tabs.iter().map(|tab| tab.label()).collect();
+                msg
             }
 
             TabBarMessage::RefreshTab(idx, rsg) => {

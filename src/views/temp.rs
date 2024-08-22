@@ -1,11 +1,11 @@
 use iced::{
     theme::Theme,
     widget::{button, column, container, row, text},
-    Alignment, Element,
+    Alignment, Element, Font,
 };
 
 use super::{TabLabel, Viewable};
-use crate::Message;
+use crate::{utils::icons, Message};
 
 #[derive(Clone, Debug)]
 pub enum CounterMessage {
@@ -44,7 +44,8 @@ impl Viewable for CounterTab {
     }
 
     fn label(&self) -> TabLabel {
-        TabLabel::new(char::default(), "Counter")
+        let font = Font::with_name(icons::NAME);
+        TabLabel::new(icons::COUNTER, "Counter").icon_font(font)
     }
 
     fn view<'a, Message, F>(&'a self, map: F) -> Element<'a, Message, Theme>

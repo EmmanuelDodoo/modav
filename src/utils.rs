@@ -251,7 +251,7 @@ pub mod icons {
     pub const COUNTER: char = '\u{E805}';
     pub const EDITOR: char = '\u{E804}';
     pub const FILE: char = '\u{F0F6}';
-    pub const NEW_FILE: char = '\u{E01}';
+    pub const NEW_FILE: char = '\u{E801}';
     pub const ANGLE_UP: char = '\u{F106}';
     pub const ANGLE_DOWN: char = '\u{F107}';
     pub const CHART: char = '\u{E802}';

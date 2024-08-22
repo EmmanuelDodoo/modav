@@ -289,7 +289,7 @@ impl Modav {
             DashMenuOption::new("Save As", Some(self.save_helper(None))),
         ];
 
-        let menu = DashMenu::new('\u{F0F6}', "File").submenus(options);
+        let menu = DashMenu::new(icons::FILE, "File").submenus(options);
 
         menus::menu_styler(menu)
     }
@@ -471,14 +471,6 @@ impl Application for Modav {
 
     fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
         let commands = [
-            font::load(include_bytes!("../fonts/status-icons.ttf").as_slice())
-                .map(Message::IconLoaded),
-            font::load(include_bytes!("../fonts/dash-icons.ttf").as_slice())
-                .map(Message::IconLoaded),
-            font::load(include_bytes!("../fonts/wizard-icons.ttf").as_slice())
-                .map(Message::IconLoaded),
-            font::load(include_bytes!("../fonts/toast-icons.ttf").as_slice())
-                .map(Message::IconLoaded),
             font::load(include_bytes!("../fonts/legend-icons.ttf").as_slice())
                 .map(Message::IconLoaded),
             font::load(include_bytes!("../fonts/line-type-icons.ttf").as_slice())

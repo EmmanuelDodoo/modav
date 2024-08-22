@@ -1,12 +1,12 @@
 use iced::{
     highlighter::{self, Highlighter},
     widget::text_editor,
-    Element, Length, Renderer, Theme,
+    Element, Font, Length, Renderer, Theme,
 };
 use std::path::PathBuf;
 
 use super::{TabLabel, Viewable};
-use crate::Message;
+use crate::{utils::icons, Message};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct EditorTabData {
@@ -25,6 +25,7 @@ pub struct EditorTab {
     is_dirty: bool,
     file_path: Option<PathBuf>,
     content: text_editor::Content,
+    is_empty: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -39,10 +40,12 @@ impl Viewable for EditorTab {
 
     fn new(data: Self::Data) -> Self {
         let EditorTabData { path, data } = data;
+        let is_empty = data.is_empty();
         let content = text_editor::Content::with_text(data.as_str());
         Self {
-            is_dirty: false,
             content,
+            is_empty,
+            is_dirty: false,
             file_path: path,
         }
     }
@@ -53,8 +56,15 @@ impl Viewable for EditorTab {
 
     fn label(&self) -> TabLabel {
         let path = self.title();
+        let font = Font::with_name(icons::NAME);
 
-        TabLabel::new('\u{F0F6}', path)
+        let icon = if self.is_empty {
+            icons::NEW_FILE
+        } else {
+            icons::FILE
+        };
+
+        TabLabel::new(icon, path).icon_font(font)
     }
 
     fn title(&self) -> String {
@@ -76,6 +86,16 @@ impl Viewable for EditorTab {
         match message {
             EditorMessage::Action(text_editor::Action::Edit(edit)) => {
                 self.is_dirty = true;
+                match &edit {
+                    text_editor::Edit::Insert(_) => {
+                        self.is_empty = false;
+                    }
+                    text_editor::Edit::Paste(_) => {
+                        self.is_empty = false;
+                    }
+                    _ => {}
+                };
+
                 self.content.perform(text_editor::Action::Edit(edit));
             }
             EditorMessage::Action(act) => {
@@ -129,6 +149,7 @@ impl Viewable for EditorTab {
     }
 
     fn refresh(&mut self, data: Self::Data) {
+        self.is_empty = data.data.is_empty();
         self.file_path = data.path;
         self.is_dirty = false;
     }
