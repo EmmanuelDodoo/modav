@@ -646,7 +646,14 @@ where
         .height(Length::Fill)
         .width(Length::FillPortion(24));
 
-        let toolbar = self.toolbar(state.legend_position, state.graph_type);
+        let toolbar = self.toolbar(
+            if self.lines.iter().any(|line| line.label.is_some()) {
+                state.legend_position
+            } else {
+                LegendPosition::None
+            },
+            state.graph_type,
+        );
 
         row!(canvas, toolbar).into()
     }
@@ -933,7 +940,7 @@ where
             .filter(|has_label| *has_label)
             .count();
 
-        if labels_len < 1 {
+        if !self.lines.iter().any(|line| line.label.is_some()) {
             return frame.into_geometry();
         }
 
