@@ -4,7 +4,7 @@ use std::fmt::{Debug, Display};
 use std::io;
 use std::path::PathBuf;
 
-use modav_core::repr::csv::utils::Error;
+use modav_core::repr::sheet::error::Error;
 
 #[allow(dead_code)]
 pub mod coloring {

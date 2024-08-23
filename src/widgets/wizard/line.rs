@@ -15,7 +15,7 @@ use iced::{
     Alignment, Element, Length, Renderer, Theme,
 };
 
-use modav_core::repr::csv::utils::{HeaderLabelStrategy, HeaderTypesStrategy, LineLabelStrategy};
+use modav_core::repr::sheet::utils::{HeaderLabelStrategy, HeaderTypesStrategy, LineLabelStrategy};
 
 #[derive(Debug, Clone)]
 pub enum ConfigMessage {

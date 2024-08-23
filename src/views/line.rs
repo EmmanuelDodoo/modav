@@ -2,7 +2,7 @@ use std::{fmt::Debug, path::PathBuf};
 
 use modav_core::{
     models::line::{Line, LineGraph, Scale},
-    repr::csv::{utils::Data, SheetBuilder},
+    repr::sheet::{builders::SheetBuilder, utils::Data},
 };
 
 use crate::utils::{coloring, icons, AppError};
