@@ -12,10 +12,41 @@ use iced::{
         button, checkbox, column, component, container, horizontal_space, pick_list, row, text,
         text_input, vertical_space, Component,
     },
-    Alignment, Element, Length, Renderer, Theme,
+    Alignment, Element, Renderer, Theme,
 };
 
 use modav_core::repr::sheet::utils::{HeaderLabelStrategy, HeaderTypesStrategy, LineLabelStrategy};
+
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+
+pub enum LineLabelOptions {
+    #[default]
+    None,
+    FromColumn,
+}
+
+impl std::fmt::Display for LineLabelOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::None => "No line labels",
+                Self::FromColumn => "Use labels from a column",
+            }
+        )
+    }
+}
+
+impl From<LineLabelStrategy> for LineLabelOptions {
+    fn from(value: LineLabelStrategy) -> Self {
+        match value {
+            LineLabelStrategy::None => LineLabelOptions::None,
+            LineLabelStrategy::FromCell(_) => LineLabelOptions::FromColumn,
+            LineLabelStrategy::Provided(_) => LineLabelOptions::None,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum ConfigMessage {
@@ -27,6 +58,8 @@ pub enum ConfigMessage {
     HeaderTypeChanged(HeaderTypesStrategy),
     HeaderLabelChanged(HeaderLabelStrategy),
     Error(AppError),
+    LineLabelOption(LineLabelOptions),
+    LineLabelColumn(String),
     Next,
     Cancel,
     Previous,
@@ -54,7 +87,7 @@ impl Default for LineConfigState {
             title: "Untitled".into(),
             x_label: String::default(),
             y_label: String::default(),
-            label_strat: LineLabelStrategy::FromCell(0),
+            label_strat: LineLabelStrategy::None,
             row_exclude: HashSet::default(),
             col_exclude: HashSet::default(),
             is_line_view: false,
@@ -193,8 +226,37 @@ where
                 .align_items(Alignment::Center)
         };
 
-        column!(trim, flexible, header_labels, header_types)
-            .spacing(25.0)
+        let line_labels = {
+            let label = text("Line Labels: ");
+
+            let options = [LineLabelOptions::None, LineLabelOptions::FromColumn];
+
+            let selected: LineLabelOptions = state.label_strat.clone().into();
+
+            let list =
+                pick_list(options, Some(selected), ConfigMessage::LineLabelOption).text_size(13.0);
+
+            let tip = tooltip("How the labels for the lines are determined");
+
+            let input = {
+                let value = match &state.label_strat {
+                    LineLabelStrategy::FromCell(col) => col.to_string(),
+                    _ => "-".to_string(),
+                };
+
+                text_input("", &value)
+                    .on_input(ConfigMessage::LineLabelColumn)
+                    .width(40.0)
+            };
+
+            row!(label, list, input, tip)
+                .spacing(8)
+                .align_items(Alignment::Center)
+        };
+
+        column!(trim, flexible, header_labels, header_types, line_labels,)
+            .align_items(Alignment::Start)
+            .spacing(30.0)
             .into()
     }
 }
@@ -247,6 +309,38 @@ where
                 state.trim = val;
                 None
             }
+
+            ConfigMessage::LineLabelOption(option) => {
+                let strat = match option {
+                    LineLabelOptions::None => LineLabelStrategy::None,
+                    LineLabelOptions::FromColumn => LineLabelStrategy::FromCell(0),
+                };
+                state.label_strat = strat;
+                None
+            }
+            ConfigMessage::LineLabelColumn(input) => {
+                if let LineLabelStrategy::FromCell(col) = state.label_strat {
+                    let input = input.trim().to_string();
+                    let col = if input.is_empty() {
+                        0
+                    } else {
+                        let first = input.chars().next().unwrap();
+
+                        let mut input = input;
+                        if first == '-' {
+                            input = input.replace("-", "");
+                        }
+
+                        if col == 0 && first != '0' {
+                            input.pop();
+                        }
+
+                        input.parse().unwrap_or_default()
+                    };
+                    state.label_strat = LineLabelStrategy::FromCell(col)
+                };
+                None
+            }
             ConfigMessage::Submit => {
                 let data = LineTabData::new(self.file.clone(), state.clone());
                 match data {
@@ -267,9 +361,10 @@ where
         } else {
             self.sheet_config(state)
         };
-        let content = column!(config, vertical_space(), self.actions(state)).spacing(10.0);
+        let content =
+            column!(config, vertical_space().height(50.0), self.actions(state)).spacing(10.0);
 
-        container(content).height(Length::FillPortion(5)).into()
+        container(content).into()
     }
 }
 

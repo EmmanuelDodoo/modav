@@ -254,24 +254,29 @@ where
             .width(Length::Fill)
             .horizontal_alignment(Horizontal::Center);
 
-        let content = if state.config_view {
-            column!(
-                header.height(Length::FillPortion(1)),
+        if state.config_view {
+            let content = column!(
+                header,
+                vertical_space().height(50.0),
                 self.model_config(state),
             )
-            .height(Length::Fill)
-            .spacing(20)
+            .spacing(0);
+
+            dialog_container(content)
+                .width(420.0)
+                .height(Length::Shrink)
+                .into()
         } else {
-            column!(
+            let content = column!(
                 header,
                 vertical_space(),
                 self.default_view(state),
                 vertical_space(),
                 self.actions(state)
-            )
-        };
+            );
 
-        dialog_container(content).into()
+            dialog_container(content).height(250.0).into()
+        }
     }
 }
 
