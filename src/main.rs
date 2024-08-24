@@ -381,8 +381,8 @@ impl Modav {
 
                 self.update_tabs(TabsMessage::AddTab(idr))
             }
-            FileIOAction::NewTab((View::Editor(_), path)) => {
-                let data = EditorTabData::new(Some(path), content);
+            FileIOAction::NewTab((View::Editor(data), path)) => {
+                let data = data.path(path).data(content);
                 let idr = View::Editor(data);
                 self.update_tabs(TabsMessage::AddTab(idr))
             }
@@ -536,7 +536,8 @@ impl Application for Modav {
                 self.info_log("Opening Log file");
 
                 let path = PathBuf::from(LOG_FILE);
-                let data = EditorTabData::new(Some(path.clone()), String::default());
+                let data =
+                    EditorTabData::new(Some(path.clone()), String::default()).read_only(true);
                 let action = FileIOAction::NewTab((View::Editor(data), path.clone()));
 
                 Command::perform(load_file(path), move |(res, _)| {

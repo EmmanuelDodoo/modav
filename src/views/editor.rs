@@ -12,11 +12,31 @@ use crate::{utils::icons, Message};
 pub struct EditorTabData {
     path: Option<PathBuf>,
     data: String,
+    read_only: bool,
 }
 
 impl EditorTabData {
     pub fn new(path: Option<PathBuf>, data: String) -> Self {
-        Self { path, data }
+        Self {
+            path,
+            data,
+            read_only: false,
+        }
+    }
+
+    pub fn path(mut self, path: PathBuf) -> Self {
+        self.path = Some(path);
+        self
+    }
+
+    pub fn data(mut self, data: String) -> Self {
+        self.data = data;
+        self
+    }
+
+    pub fn read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
     }
 }
 
@@ -26,6 +46,7 @@ pub struct EditorTab {
     file_path: Option<PathBuf>,
     content: text_editor::Content,
     is_empty: bool,
+    read_only: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -39,19 +60,28 @@ impl Viewable for EditorTab {
     type Event = EditorMessage;
 
     fn new(data: Self::Data) -> Self {
-        let EditorTabData { path, data } = data;
+        let EditorTabData {
+            path,
+            data,
+            read_only,
+        } = data;
         let is_empty = data.is_empty();
         let content = text_editor::Content::with_text(data.as_str());
         Self {
             content,
             is_empty,
+            read_only,
             is_dirty: false,
             file_path: path,
         }
     }
 
     fn is_dirty(&self) -> bool {
-        self.is_dirty
+        if self.read_only {
+            false
+        } else {
+            self.is_dirty
+        }
     }
 
     fn label(&self) -> TabLabel {
@@ -85,6 +115,10 @@ impl Viewable for EditorTab {
     fn update(&mut self, message: Self::Event) -> Option<Message> {
         match message {
             EditorMessage::Action(text_editor::Action::Edit(edit)) => {
+                if self.read_only {
+                    return None;
+                }
+
                 self.is_dirty = true;
                 match &edit {
                     text_editor::Edit::Insert(_) => {
@@ -159,6 +193,6 @@ impl Viewable for EditorTab {
     }
 
     fn can_save(&self) -> bool {
-        true
+        !self.read_only
     }
 }
