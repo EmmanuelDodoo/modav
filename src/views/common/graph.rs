@@ -18,7 +18,7 @@ use iced::{
     Theme,
 };
 
-pub use modav_core::models::line::Point as GraphPoint;
+pub use modav_core::models::Point as GraphPoint;
 use tracing::warn;
 
 use crate::widgets::toolbar::{ToolbarMenu, ToolbarOption};

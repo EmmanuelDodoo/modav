@@ -1,7 +1,10 @@
 use std::{fmt::Debug, path::PathBuf};
 
 use modav_core::{
-    models::line::{Line, LineGraph, Scale},
+    models::{
+        line::{Line, LineGraph},
+        Scale,
+    },
     repr::sheet::{builders::SheetBuilder, utils::Data},
 };
 
