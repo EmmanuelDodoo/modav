@@ -47,6 +47,7 @@ fn main() -> Result<(), iced::Error> {
 
     tracing_subscriber::fmt()
         .with_writer(non_blocking)
+        .with_ansi(false)
         .with_env_filter(filter)
         .init();
 
