@@ -132,16 +132,16 @@ where
                 .and_then(|name| name.to_str())
                 .unwrap_or("No File");
 
-            let file_name = if file_name.len() > 10 {
-                format!("{}...", &file_name[0..10])
+            let file_name = if file_name.len() > 18 {
+                format!("{}...", &file_name[0..18])
             } else {
                 file_name.to_string()
             };
 
             let file = container(text(file_name))
-                .padding([8, 8])
+                .padding([5, 8])
                 .center_y()
-                .width(Length::FillPortion(8))
+                .width(Length::FillPortion(12))
                 .style(theme::Container::Custom(Box::new(FileBorderContainer)));
 
             let btn = button(
@@ -156,7 +156,7 @@ where
             let temp = row!(label, file)
                 .align_items(Alignment::Center)
                 .spacing(46)
-                .width(Length::FillPortion(5));
+                .width(Length::FillPortion(10));
 
             row!(temp, horizontal_space(), btn)
                 .width(Length::Fill)
