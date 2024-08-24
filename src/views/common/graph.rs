@@ -19,6 +19,7 @@ use iced::{
 };
 
 pub use modav_core::models::line::Point as GraphPoint;
+use tracing::warn;
 
 use crate::widgets::toolbar::{ToolbarMenu, ToolbarOption};
 use crate::{utils::icons, ToolTipContainerStyle};
@@ -391,7 +392,7 @@ where
                 .unwrap_or(-1.0);
 
             if x < 0.0 {
-                println!("X Point {:?} not found", point.x);
+                warn!("X Point {:?} not found", point.x);
                 return prev;
             }
 
@@ -401,7 +402,7 @@ where
                 .unwrap_or(-1.0);
 
             if y < 0.0 {
-                println!("Y Point {:?} not found", point.y);
+                warn!("Y Point {:?} not found", point.y);
                 return prev;
             }
 
