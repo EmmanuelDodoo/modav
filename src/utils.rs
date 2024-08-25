@@ -259,7 +259,7 @@ pub mod coloring {
                 is_dark,
                 stable_h,
                 random: rng,
-                mode: ColoringMode::Gradual,
+                mode: ColoringMode::Normal,
             }
         }
 

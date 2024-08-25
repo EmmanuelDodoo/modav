@@ -81,7 +81,7 @@ impl Default for LineConfigState {
             title: "Untitled".into(),
             x_label: String::default(),
             y_label: String::default(),
-            label_strat: LineLabelStrategy::None,
+            label_strat: LineLabelStrategy::FromCell(0),
             row_exclude: HashSet::default(),
             col_exclude: HashSet::default(),
             trim: true,
