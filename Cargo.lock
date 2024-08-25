@@ -2047,7 +2047,7 @@ dependencies = [
 [[package]]
 name = "modav_core"
 version = "0.1.0"
-source = "git+ssh://github.com/EmmanuelDodoo/modav_core.git#06c466abe830d457ce0ff876e26fd4455cd42cb8"
+source = "git+ssh://github.com/EmmanuelDodoo/modav_core.git#bcc731e46ef480a67b969dab6c304580a5f549f0"
 dependencies = [
  "csv",
 ]

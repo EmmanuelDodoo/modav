@@ -1,21 +1,21 @@
 use std::{collections::HashSet, fmt::Debug, path::PathBuf};
 
-use crate::{
-    utils::AppError,
-    views::{LineTabData, View},
-};
-
-use tip::tooltip;
-
 use iced::{
     widget::{
-        button, checkbox, column, component, container, horizontal_space, pick_list, row, text,
-        text_input, vertical_space, Component,
+        button, column, component, container, horizontal_space, pick_list, row, text, text_input,
+        vertical_space, Component,
     },
     Alignment, Element, Renderer, Theme,
 };
 
 use modav_core::repr::sheet::utils::{HeaderLabelStrategy, HeaderTypesStrategy, LineLabelStrategy};
+
+use crate::{
+    utils::AppError,
+    views::{LineTabData, View},
+};
+
+use super::{shared::tooltip, sheet::SheetConfigState};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 
@@ -53,14 +53,9 @@ pub enum ConfigMessage {
     TitleChanged(String),
     XLabelChanged(String),
     YLabelChanged(String),
-    TrimToggled(bool),
-    FlexibleTogglged(bool),
-    HeaderTypeChanged(HeaderTypesStrategy),
-    HeaderLabelChanged(HeaderLabelStrategy),
     Error(AppError),
     LineLabelOption(LineLabelOptions),
     LineLabelColumn(String),
-    Next,
     Cancel,
     Previous,
     Submit,
@@ -74,7 +69,6 @@ pub struct LineConfigState {
     pub label_strat: LineLabelStrategy,
     pub row_exclude: HashSet<usize>,
     pub col_exclude: HashSet<usize>,
-    is_line_view: bool,
     pub trim: bool,
     pub flexible: bool,
     pub header_types: HeaderTypesStrategy,
@@ -90,7 +84,6 @@ impl Default for LineConfigState {
             label_strat: LineLabelStrategy::None,
             row_exclude: HashSet::default(),
             col_exclude: HashSet::default(),
-            is_line_view: false,
             trim: true,
             flexible: false,
             header_types: HeaderTypesStrategy::Infer,
@@ -99,11 +92,28 @@ impl Default for LineConfigState {
     }
 }
 
+impl LineConfigState {
+    pub fn diff(&mut self, sheet_config: SheetConfigState) {
+        let SheetConfigState {
+            trim,
+            flexible,
+            header_type,
+            header_labels,
+        } = sheet_config;
+
+        self.trim = trim;
+        self.flexible = flexible;
+        self.header_labels = header_labels;
+        self.header_types = header_type;
+    }
+}
+
 pub struct LineGraphConfig<'a, Message>
 where
     Message: Debug + Clone,
 {
     file: &'a PathBuf,
+    sheet_config: SheetConfigState,
     on_submit: Box<dyn Fn(View) -> Message + 'a>,
     on_error: Box<dyn Fn(AppError) -> Message + 'a>,
     on_previous: Message,
@@ -116,6 +126,7 @@ where
 {
     pub fn new<F, E>(
         file: &'a PathBuf,
+        sheet_config: SheetConfigState,
         on_submit: F,
         on_previous: Message,
         on_cancel: Message,
@@ -127,6 +138,7 @@ where
     {
         Self {
             file,
+            sheet_config,
             on_submit: Box::new(on_submit),
             on_error: Box::new(on_error),
             on_previous,
@@ -134,16 +146,12 @@ where
         }
     }
 
-    fn actions(&self, state: &LineConfigState) -> Element<'_, ConfigMessage> {
+    fn actions(&self) -> Element<'_, ConfigMessage> {
         let cancel_btn = button(text("Cancel").size(13.0)).on_press(ConfigMessage::Cancel);
 
         let prev_btn = button(text("Back").size(13.0)).on_press(ConfigMessage::Previous);
 
-        let submit = if state.is_line_view {
-            button(text("Open").size(13.0)).on_press(ConfigMessage::Submit)
-        } else {
-            button(text("Next").size(13.0)).on_press(ConfigMessage::Next)
-        };
+        let submit = button(text("Open").size(13.0)).on_press(ConfigMessage::Submit);
 
         let actions = row!(
             cancel_btn,
@@ -163,68 +171,6 @@ where
 
         let y_label = text_input("Y axis label", state.y_label.as_str())
             .on_input(ConfigMessage::YLabelChanged);
-
-        column!(title, x_label, y_label).spacing(10.0).into()
-    }
-
-    fn sheet_config(&self, state: &LineConfigState) -> Element<'_, ConfigMessage> {
-        let trim = {
-            let check = checkbox("Trim?", state.trim).on_toggle(ConfigMessage::TrimToggled);
-
-            let tip = tooltip("Remove leading and trailing whitespace for each cell");
-
-            row!(check, tip).spacing(25.0)
-        };
-
-        let flexible = {
-            let check =
-                checkbox("Flexible?", state.flexible).on_toggle(ConfigMessage::FlexibleTogglged);
-
-            let tip = tooltip("Handle unequal row lengths");
-
-            row!(check, tip).spacing(25.0)
-        };
-
-        let header_types = {
-            let label = text("Column Types:");
-
-            let options = [HeaderTypesStrategy::None, HeaderTypesStrategy::Infer];
-
-            let list = pick_list(
-                options,
-                Some(state.header_types.clone()),
-                ConfigMessage::HeaderTypeChanged,
-            )
-            .text_size(13.0);
-
-            let tip = tooltip("How the types for each column are handled");
-
-            row!(label, list, tip)
-                .spacing(8)
-                .align_items(Alignment::Center)
-        };
-
-        let header_labels = {
-            let label = text("Header labels: ");
-
-            let options = [
-                HeaderLabelStrategy::NoLabels,
-                HeaderLabelStrategy::ReadLabels,
-            ];
-
-            let list = pick_list(
-                options,
-                Some(state.header_labels.clone()),
-                ConfigMessage::HeaderLabelChanged,
-            )
-            .text_size(13.0);
-
-            let tip = tooltip("How the header labels are handled");
-
-            row!(label, list, tip)
-                .spacing(8)
-                .align_items(Alignment::Center)
-        };
 
         let line_labels = {
             let label = text("Line Labels: ");
@@ -254,9 +200,8 @@ where
                 .align_items(Alignment::Center)
         };
 
-        column!(trim, flexible, header_labels, header_types, line_labels,)
-            .align_items(Alignment::Start)
-            .spacing(30.0)
+        column!(title, x_label, y_label, line_labels)
+            .spacing(20.0)
             .into()
     }
 }
@@ -271,18 +216,6 @@ where
     fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
         match event {
             ConfigMessage::Error(err) => Some((self.on_error)(err)),
-            ConfigMessage::HeaderTypeChanged(ht) => {
-                state.header_types = ht;
-                None
-            }
-            ConfigMessage::HeaderLabelChanged(hl) => {
-                state.header_labels = hl;
-                None
-            }
-            ConfigMessage::FlexibleTogglged(val) => {
-                state.flexible = val;
-                None
-            }
             ConfigMessage::TitleChanged(title) => {
                 state.title = title;
                 None
@@ -296,20 +229,7 @@ where
                 None
             }
             ConfigMessage::Cancel => Some(self.on_cancel.clone()),
-            ConfigMessage::Previous if state.is_line_view => {
-                state.is_line_view = false;
-                None
-            }
             ConfigMessage::Previous => Some(self.on_previous.clone()),
-            ConfigMessage::Next => {
-                state.is_line_view = true;
-                None
-            }
-            ConfigMessage::TrimToggled(val) => {
-                state.trim = val;
-                None
-            }
-
             ConfigMessage::LineLabelOption(option) => {
                 let strat = match option {
                     LineLabelOptions::None => LineLabelStrategy::None,
@@ -342,6 +262,7 @@ where
                 None
             }
             ConfigMessage::Submit => {
+                state.diff(self.sheet_config.clone());
                 let data = LineTabData::new(self.file.clone(), state.clone());
                 match data {
                     Err(err) => Some((self.on_error)(err)),
@@ -356,13 +277,8 @@ where
     }
 
     fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
-        let config = if state.is_line_view {
-            self.line_config(state)
-        } else {
-            self.sheet_config(state)
-        };
-        let content =
-            column!(config, vertical_space().height(50.0), self.actions(state)).spacing(10.0);
+        let config = self.line_config(state);
+        let content = column!(config, vertical_space().height(50.0), self.actions()).spacing(10.0);
 
         container(content).into()
     }
@@ -374,37 +290,5 @@ where
 {
     fn from(value: LineGraphConfig<'a, Message>) -> Self {
         component(value)
-    }
-}
-
-mod tip {
-    use crate::{utils::icons, ToolTipContainerStyle};
-
-    use iced::{
-        alignment, theme,
-        widget::{container, text, tooltip::Tooltip},
-        Length,
-    };
-
-    use iced::widget::tooltip as tt;
-
-    pub fn tooltip<'a, Message>(description: impl ToString) -> Tooltip<'a, Message>
-    where
-        Message: 'a,
-    {
-        let text = text(description).size(13.0);
-        let desc = container(text)
-            .max_width(200.0)
-            .padding([6.0, 8.0])
-            .height(Length::Shrink)
-            .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)));
-
-        let icon = icons::icon(icons::HELP)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center);
-
-        Tooltip::new(icon, desc, tt::Position::Right)
-            .gap(10.0)
-            .snap_within_viewport(true)
     }
 }

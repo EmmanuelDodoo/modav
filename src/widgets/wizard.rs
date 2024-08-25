@@ -1,7 +1,6 @@
-use crate::views::{EditorTabData, FileType, LineTabData, View};
+use std::{fmt::Debug, path::PathBuf};
 
-use crate::utils::{icons, AppError};
-use crate::ViewType;
+use barchart::BarChartConfig;
 use iced::{
     alignment::{Alignment, Horizontal, Vertical},
     theme,
@@ -11,28 +10,49 @@ use iced::{
     },
     Border, Element, Length, Theme,
 };
-use std::{fmt::Debug, path::PathBuf};
+
+use crate::views::{BarChartTabData, EditorTabData, FileType, LineTabData, View};
+
+use crate::utils::{icons, AppError};
+use crate::ViewType;
 
 use super::style::dialog_container;
 
 mod line;
+pub use line::LineConfigState;
 use line::LineGraphConfig;
 
-pub use line::LineConfigState;
+mod barchart;
+pub use barchart::BarChartConfigState;
+
+mod sheet;
+use sheet::{SheetConfig, SheetConfigState};
+
+pub mod shared;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub enum Portal {
+    #[default]
+    FileSelection,
+    SheetConfig,
+    ModelConfig,
+}
 
 #[derive(Debug, Clone)]
 pub struct Hex {
     model: ViewType,
-    config_view: bool,
+    current_view: Portal,
     config: View,
+    sheet_config: SheetConfigState,
 }
 
 impl Default for Hex {
     fn default() -> Self {
         Self {
             model: ViewType::Editor,
-            config_view: false,
+            current_view: Portal::FileSelection,
             config: View::Editor(EditorTabData::default()),
+            sheet_config: SheetConfigState::default(),
         }
     }
 }
@@ -42,9 +62,10 @@ pub enum Charm {
     ReselectFile,
     ModelSelected(ViewType),
     ViewConfig,
-    ViewDefault,
+    ChangeView(Portal),
     Cancel,
     ConfigSubmit(View),
+    SheetSubmit(SheetConfigState),
     Error(AppError),
     Submit,
     #[default]
@@ -96,10 +117,20 @@ where
             ViewType::Counter => Space::new(0, 0).into(),
             ViewType::LineGraph => LineGraphConfig::new(
                 &self.file,
+                state.sheet_config.clone(),
                 Charm::ConfigSubmit,
-                Charm::ViewDefault,
+                Charm::ChangeView(Portal::SheetConfig),
                 Charm::Cancel,
                 Charm::Error,
+            )
+            .into(),
+            ViewType::BarChart => BarChartConfig::new(
+                &self.file,
+                state.sheet_config.clone(),
+                Charm::ConfigSubmit,
+                Charm::Error,
+                Charm::ChangeView(Portal::SheetConfig),
+                Charm::Cancel,
             )
             .into(),
             ViewType::None => Space::new(0, 0).into(),
@@ -107,14 +138,10 @@ where
     }
 
     fn actions(&self, state: &Hex) -> Element<'_, Charm> {
-        if state.model.has_config() && state.config_view {
-            return Space::new(0, 0).into();
-        };
-
         let cancel = button(text("Cancel").size(13.0)).on_press(Charm::Cancel);
 
         let action = if state.model.has_config() {
-            row!(button(text("Next").size(13.0)).on_press(Charm::ViewConfig))
+            row!(button(text("Next").size(13.0)).on_press(Charm::ChangeView(Portal::SheetConfig)))
         } else {
             row!(button(text("Open").size(13.0)).on_press(Charm::Submit))
         };
@@ -195,11 +222,15 @@ where
     fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
         match event {
             Charm::ConfigSubmit(config) => Some((self.on_submit)(self.file.clone(), config)),
+            Charm::SheetSubmit(sheet) => {
+                state.sheet_config = sheet;
+                state.current_view = Portal::ModelConfig;
+                None
+            }
             Charm::Error(err) => Some((self.on_error)(err)),
             Charm::ReselectFile => {
                 // Reselecting file means returning to default state
                 state.model = ViewType::Editor;
-                state.config_view = false;
 
                 let data = EditorTabData::new(Some(self.file.clone()), String::default());
 
@@ -213,6 +244,10 @@ where
                     ViewType::LineGraph => {
                         LineTabData::new(self.file.clone(), LineConfigState::default())
                             .and_then(|data| Ok(View::LineGraph(data)))
+                    }
+                    ViewType::BarChart => {
+                        BarChartTabData::new(self.file.clone(), BarChartConfigState::default())
+                            .and_then(|data| Ok(View::BarChart(data)))
                     }
                     ViewType::Editor => {
                         let data = EditorTabData::new(Some(self.file.clone()), String::default());
@@ -234,12 +269,9 @@ where
                     }
                 }
             }
-            Charm::ViewConfig => {
-                state.config_view = true;
-                None
-            }
-            Charm::ViewDefault => {
-                state.config_view = false;
+            Charm::ViewConfig => None,
+            Charm::ChangeView(portal) => {
+                state.current_view = portal;
                 None
             }
             Charm::Cancel => self.on_cancel.clone(),
@@ -254,28 +286,45 @@ where
             .width(Length::Fill)
             .horizontal_alignment(Horizontal::Center);
 
-        if state.config_view {
-            let content = column!(
-                header,
-                vertical_space().height(50.0),
-                self.model_config(state),
-            )
-            .spacing(0);
+        match state.current_view {
+            Portal::ModelConfig => {
+                let content = column!(
+                    header,
+                    vertical_space().height(50.0),
+                    self.model_config(state),
+                )
+                .spacing(0);
 
-            dialog_container(content)
-                .width(420.0)
-                .height(Length::Shrink)
-                .into()
-        } else {
-            let content = column!(
-                header,
-                vertical_space(),
-                self.default_view(state),
-                vertical_space(),
-                self.actions(state)
-            );
+                dialog_container(content)
+                    .width(420.0)
+                    .height(Length::Shrink)
+                    .into()
+            }
+            Portal::FileSelection => {
+                let content = column!(
+                    header,
+                    vertical_space(),
+                    self.default_view(state),
+                    vertical_space(),
+                    self.actions(state)
+                );
+                dialog_container(content).height(250.0).into()
+            }
 
-            dialog_container(content).height(250.0).into()
+            Portal::SheetConfig => {
+                let view = SheetConfig::new(
+                    Charm::SheetSubmit,
+                    Charm::ChangeView(Portal::FileSelection),
+                    Charm::Cancel,
+                );
+
+                let content = column!(header, vertical_space().height(50.0), view).spacing(0);
+
+                dialog_container(content)
+                    .width(420.0)
+                    .height(Length::Shrink)
+                    .into()
+            }
         }
     }
 }

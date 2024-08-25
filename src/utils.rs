@@ -333,6 +333,12 @@ impl Display for AppError {
 
 impl std::error::Error for AppError {}
 
+impl From<Error> for AppError {
+    fn from(value: Error) -> Self {
+        Self::CSVError(value)
+    }
+}
+
 pub mod menus {
 
     use crate::widgets::dashmenu::{DashMenu, DashMenuOption};

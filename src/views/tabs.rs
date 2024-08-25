@@ -9,9 +9,18 @@ use iced::{
 
 use std::path::PathBuf;
 
-use super::editor::{EditorMessage, EditorTab, EditorTabData};
-use super::line::{LineGraphTab, LineTabData, ModelMessage};
-use super::temp::{CounterMessage, CounterTab};
+use super::{
+    barchart::BarChartMessage,
+    line::{LineGraphTab, LineTabData, ModelMessage},
+};
+use super::{
+    barchart::BarChartTab,
+    editor::{EditorMessage, EditorTab, EditorTabData},
+};
+use super::{
+    barchart::BarChartTabData,
+    temp::{CounterMessage, CounterTab},
+};
 use super::{View, ViewType, Viewable};
 
 use crate::widgets::style::DialogContainer;
@@ -28,7 +37,8 @@ use crate::FileIOAction;
 pub enum Tab {
     Counter(CounterTab),
     Editor(EditorTab),
-    Model(LineGraphTab),
+    LineGraph(LineGraphTab),
+    BarChart(BarChartTab),
 }
 
 impl Tab {
@@ -38,8 +48,10 @@ impl Tab {
             (Tab::Counter(_), _) => None,
             (Tab::Editor(tab), TabMessage::Editor(tsg)) => tab.update(tsg),
             (Tab::Editor(_), _) => None,
-            (Tab::Model(tab), TabMessage::Model(tsg)) => tab.update(tsg),
-            (Tab::Model(_), _) => None,
+            (Tab::LineGraph(tab), TabMessage::LineGraph(tsg)) => tab.update(tsg),
+            (Tab::LineGraph(_), _) => None,
+            (Tab::BarChart(tab), TabMessage::BarChart(tsg)) => tab.update(tsg),
+            (Tab::BarChart(_), _) => None,
         }
     }
 
@@ -47,7 +59,8 @@ impl Tab {
         match self {
             Tab::Counter(tab) => tab.is_dirty(),
             Tab::Editor(tab) => tab.is_dirty(),
-            Tab::Model(tab) => tab.is_dirty(),
+            Tab::LineGraph(tab) => tab.is_dirty(),
+            Tab::BarChart(tab) => tab.is_dirty(),
         }
     }
 
@@ -55,7 +68,8 @@ impl Tab {
         match self {
             Tab::Counter(tab) => tab.label(),
             Tab::Editor(tab) => tab.label(),
-            Tab::Model(tab) => tab.label(),
+            Tab::LineGraph(tab) => tab.label(),
+            Tab::BarChart(tab) => tab.label(),
         }
     }
 
@@ -63,7 +77,8 @@ impl Tab {
         match self {
             Tab::Editor(tab) => tab.content(),
             Tab::Counter(tab) => tab.content(),
-            Tab::Model(tab) => tab.content(),
+            Tab::LineGraph(tab) => tab.content(),
+            Tab::BarChart(tab) => tab.content(),
         }
     }
 
@@ -75,8 +90,11 @@ impl Tab {
             Tab::Editor(tab) => {
                 tab.view(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::Editor(msg)))
             }
-            Tab::Model(tab) => {
-                tab.view(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::Model(msg)))
+            Tab::LineGraph(tab) => {
+                tab.view(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::LineGraph(msg)))
+            }
+            Tab::BarChart(tab) => {
+                tab.view(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::BarChart(msg)))
             }
         }
     }
@@ -89,8 +107,10 @@ impl Tab {
             (Tab::Counter(_), _) => {}
             (Tab::Editor(tab), Refresh::Editor(data)) => tab.refresh(data),
             (Tab::Editor(_), _) => {}
-            (Tab::Model(tab), Refresh::Model(data)) => tab.refresh(data),
-            (Tab::Model(_), _) => {}
+            (Tab::LineGraph(tab), Refresh::LineGraph(data)) => tab.refresh(data),
+            (Tab::LineGraph(_), _) => {}
+            (Tab::BarChart(tab), Refresh::BarChart(data)) => tab.refresh(data),
+            (Tab::BarChart(_), _) => {}
         }
     }
 
@@ -99,7 +119,8 @@ impl Tab {
         match self {
             Tab::Editor(_) => ViewType::Editor,
             Tab::Counter(_) => ViewType::Counter,
-            Tab::Model(_) => ViewType::LineGraph,
+            Tab::LineGraph(_) => ViewType::LineGraph,
+            Tab::BarChart(_) => ViewType::BarChart,
         }
     }
 
@@ -107,7 +128,8 @@ impl Tab {
         match self {
             Tab::Counter(tab) => tab.modal_msg(),
             Tab::Editor(tab) => tab.modal_msg(),
-            Tab::Model(tab) => tab.modal_msg(),
+            Tab::LineGraph(tab) => tab.modal_msg(),
+            Tab::BarChart(tab) => tab.modal_msg(),
         }
     }
 
@@ -115,7 +137,8 @@ impl Tab {
         match self {
             Tab::Counter(tab) => tab.path(),
             Tab::Editor(tab) => tab.path(),
-            Tab::Model(tab) => tab.path(),
+            Tab::LineGraph(tab) => tab.path(),
+            Tab::BarChart(tab) => tab.path(),
         }
     }
 
@@ -123,7 +146,8 @@ impl Tab {
         match self {
             Tab::Editor(tab) => tab.can_save(),
             Tab::Counter(tab) => tab.can_save(),
-            Tab::Model(tab) => tab.can_save(),
+            Tab::LineGraph(tab) => tab.can_save(),
+            Tab::BarChart(tab) => tab.can_save(),
         }
     }
 }
@@ -132,7 +156,8 @@ impl Tab {
 pub enum TabMessage {
     Counter(CounterMessage),
     Editor(EditorMessage),
-    Model(ModelMessage),
+    LineGraph(ModelMessage),
+    BarChart(BarChartMessage),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -145,7 +170,8 @@ pub enum DirtyTabModalAction {
 #[derive(Debug, Clone)]
 pub enum Refresh {
     Editor(EditorTabData),
-    Model(LineTabData),
+    LineGraph(LineTabData),
+    BarChart(BarChartTabData),
     Counter,
 }
 
@@ -338,9 +364,15 @@ where
             }
             View::LineGraph(data) => {
                 let graph = LineGraphTab::new(data);
-                let tab = Tab::Model(graph);
+                let tab = Tab::LineGraph(graph);
                 self.push_tab(tab);
             }
+            View::BarChart(data) => {
+                let chart = BarChartTab::new(data);
+                let tab = Tab::BarChart(chart);
+                self.push_tab(tab)
+            }
+
             View::None => {}
         }
     }

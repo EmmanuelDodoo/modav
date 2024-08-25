@@ -133,3 +133,27 @@ impl button::StyleSheet for EditorButtonStyle {
         }
     }
 }
+
+pub struct ContentAreaContainer;
+impl container::StyleSheet for ContentAreaContainer {
+    type Style = Theme;
+
+    fn appearance(&self, style: &Self::Style) -> container::Appearance {
+        let border_color = style.extended_palette().primary.weak.color;
+        let background_color = style.extended_palette().background.strong.color;
+
+        let border = Border {
+            color: border_color,
+            width: 1.5,
+            ..Default::default()
+        };
+
+        let background = Background::Color(background_color);
+
+        container::Appearance {
+            border,
+            background: Some(background),
+            ..Default::default()
+        }
+    }
+}

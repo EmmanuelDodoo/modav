@@ -20,7 +20,10 @@ mod utils;
 use utils::{icons, load_file, menus, pick_file, save_file, AppError};
 
 mod views;
-use views::{home_view, EditorTabData, LineTabData, Refresh, Tabs, TabsMessage, View, ViewType};
+use views::{
+    home_view, BarChartTabData, EditorTabData, LineTabData, Refresh, Tabs, TabsMessage, View,
+    ViewType,
+};
 
 pub mod widgets;
 use widgets::{
@@ -28,7 +31,7 @@ use widgets::{
     modal::Modal,
     settings::SettingsDialog,
     toast::{self, Status, Toast},
-    wizard::{LineConfigState, Wizard},
+    wizard::{BarChartConfigState, LineConfigState, Wizard},
 };
 
 pub const LOG_FILE: &'static str = "modav.log";
@@ -401,6 +404,21 @@ impl Modav {
                     }
                 }
             }
+            FileIOAction::NewTab((View::BarChart(_), path)) => {
+                let data = BarChartTabData::new(path, BarChartConfigState::default());
+                match data {
+                    Err(err) => {
+                        let msg = Message::Error(err);
+                        Command::perform(async { msg }, |msg| msg)
+                    }
+
+                    Ok(data) => {
+                        let data = data.theme(self.theme.clone());
+                        let idr = View::BarChart(data);
+                        self.update_tabs(TabsMessage::AddTab(idr))
+                    }
+                }
+            }
             FileIOAction::NewTab((View::None, _)) => self.update_tabs(TabsMessage::None),
             FileIOAction::RefreshTab((ViewType::Counter, tidx, _)) => {
                 self.update_tabs(TabsMessage::RefreshTab(tidx, Refresh::Counter))
@@ -418,7 +436,20 @@ impl Modav {
                         Command::perform(async { msg }, |msg| msg)
                     }
                     Ok(data) => {
-                        let rsh = Refresh::Model(data);
+                        let rsh = Refresh::LineGraph(data);
+                        self.update_tabs(TabsMessage::RefreshTab(tidx, rsh))
+                    }
+                }
+            }
+            FileIOAction::RefreshTab((ViewType::BarChart, tidx, path)) => {
+                let data = BarChartTabData::new(path, BarChartConfigState::default());
+                match data {
+                    Err(err) => {
+                        let msg = Message::Error(err);
+                        Command::perform(async { msg }, |msg| msg)
+                    }
+                    Ok(data) => {
+                        let rsh = Refresh::BarChart(data);
                         self.update_tabs(TabsMessage::RefreshTab(tidx, rsh))
                     }
                 }
@@ -564,6 +595,10 @@ impl Application for Modav {
                                 let data = data.theme(self.theme.clone());
                                 View::LineGraph(data)
                             }
+                            View::BarChart(data) => {
+                                let data = data.theme(self.theme.clone());
+                                View::BarChart(data)
+                            }
                             View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
@@ -575,6 +610,7 @@ impl Application for Modav {
                             View::Counter => View::Counter,
                             View::Editor(_) => View::None,
                             View::LineGraph(_) => View::None,
+                            View::BarChart(_) => View::None,
                             View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))

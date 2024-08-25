@@ -23,6 +23,9 @@ mod temp;
 mod line;
 pub use line::LineTabData;
 
+mod barchart;
+pub use barchart::BarChartTabData;
+
 mod shared;
 
 use crate::utils::icons;
@@ -60,6 +63,7 @@ pub enum View {
     Counter,
     Editor(EditorTabData),
     LineGraph(LineTabData),
+    BarChart(BarChartTabData),
     #[default]
     None,
 }
@@ -71,6 +75,7 @@ impl View {
             Self::Counter => false,
             Self::Editor(_) => true,
             Self::LineGraph(_) => false,
+            Self::BarChart(_) => false,
             Self::None => false,
         }
     }
@@ -122,22 +127,31 @@ pub enum ViewType {
     Counter,
     Editor,
     LineGraph,
+    BarChart,
     #[default]
     None,
 }
 
 impl ViewType {
-    pub const ALL: &'static [Self] = &[Self::Counter, Self::Editor, Self::LineGraph, Self::None];
+    pub const ALL: &'static [Self] = &[
+        Self::Counter,
+        Self::Editor,
+        Self::LineGraph,
+        Self::BarChart,
+        Self::None,
+    ];
 
     /// Options for the setup wizard
-    pub const WIZARD: &'static [Self] = &[Self::Counter, Self::Editor, Self::LineGraph];
+    pub const WIZARD: &'static [Self] =
+        &[Self::Counter, Self::Editor, Self::LineGraph, Self::BarChart];
 
     pub fn name(&self) -> String {
         match self {
             Self::None => String::default(),
             Self::Counter => "Counter".into(),
             Self::Editor => "Editor".into(),
-            Self::LineGraph => "Model".into(),
+            Self::LineGraph => "Line Graph".into(),
+            Self::BarChart => "Bar Chart".into(),
         }
     }
 
@@ -156,6 +170,10 @@ impl ViewType {
                 let icon = icons::icon(icons::CHART);
                 row!(icon, txt).spacing(5)
             }
+            Self::BarChart => {
+                let icon = icons::icon(icons::CHART);
+                row!(icon, txt).spacing(5)
+            }
             Self::None => Row::new(),
         }
     }
@@ -166,6 +184,7 @@ impl ViewType {
             Self::Editor => false,
             Self::Counter => false,
             Self::LineGraph => true,
+            Self::BarChart => true,
             Self::None => false,
         }
     }
@@ -173,6 +192,10 @@ impl ViewType {
     pub fn is_supported_filetype(&self, extn: &FileType) -> bool {
         match self {
             Self::LineGraph => match extn {
+                FileType::CSV => true,
+                _ => false,
+            },
+            Self::BarChart => match extn {
                 FileType::CSV => true,
                 _ => false,
             },
@@ -193,6 +216,7 @@ impl fmt::Display for ViewType {
                 ViewType::Editor => "Editor",
                 ViewType::None => "None",
                 ViewType::LineGraph => "Line Graph",
+                ViewType::BarChart => "Bar Chart",
             }
         )
     }

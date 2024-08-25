@@ -14,7 +14,7 @@ use iced::{
         canvas::{self, Canvas, Frame, Path, Stroke, Text},
         column, component, container, horizontal_space, row, text, Component, Tooltip,
     },
-    Alignment, Background, Border, Color, Element, Font, Length, Point, Renderer, Size, Theme,
+    Alignment, Color, Element, Font, Length, Point, Renderer, Size, Theme,
 };
 
 use modav_core::{
@@ -34,7 +34,7 @@ use crate::{
     Message, ToolTipContainerStyle,
 };
 
-use super::{TabLabel, Viewable};
+use super::{shared::ContentAreaContainer, TabLabel, Viewable};
 
 use super::shared::{
     Axis, EditorButtonStyle, GraphCanvas, Graphable, LegendPosition, ToolbarContainerStyle,
@@ -675,29 +675,5 @@ impl Viewable for LineGraphTab {
             .into();
 
         content.map(map)
-    }
-}
-
-pub struct ContentAreaContainer;
-impl container::StyleSheet for ContentAreaContainer {
-    type Style = Theme;
-
-    fn appearance(&self, style: &Self::Style) -> container::Appearance {
-        let border_color = style.extended_palette().primary.weak.color;
-        let background_color = style.extended_palette().background.strong.color;
-
-        let border = Border {
-            color: border_color,
-            width: 1.5,
-            ..Default::default()
-        };
-
-        let background = Background::Color(background_color);
-
-        container::Appearance {
-            border,
-            background: Some(background),
-            ..Default::default()
-        }
     }
 }
