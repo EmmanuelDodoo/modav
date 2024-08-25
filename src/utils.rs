@@ -31,10 +31,7 @@ pub mod coloring {
 
     impl From<f32> for F2 {
         fn from(value: f32) -> Self {
-            match F2::new(value) {
-                Some(res) => res,
-                None => F2::default(),
-            }
+            F2::new(value)
         }
     }
 
@@ -44,14 +41,45 @@ pub mod coloring {
         }
     }
 
+    impl std::ops::Mul<f32> for F2 {
+        type Output = Self;
+
+        fn mul(self, rhs: f32) -> Self::Output {
+            let temp: f32 = self.into();
+            (temp * rhs).into()
+        }
+    }
+
+    impl std::ops::Add<f32> for F2 {
+        type Output = Self;
+
+        fn add(self, rhs: f32) -> Self::Output {
+            let temp: f32 = self.into();
+
+            (temp + rhs).into()
+        }
+    }
+
+    impl std::ops::Sub<f32> for F2 {
+        type Output = Self;
+
+        fn sub(self, rhs: f32) -> Self::Output {
+            let temp: f32 = self.into();
+
+            (temp - rhs).into()
+        }
+    }
+
     impl F2 {
-        /// Returns a new F2 value if value is between the expected range.
-        /// Else returns None
-        fn new(value: f32) -> Option<Self> {
-            if value >= 0.0 && value <= 1.0 {
-                return Some(Self(value));
+        /// Hard clamps to 0.0 or 1.0 if [`value`] is below or above range.
+        fn new(value: f32) -> Self {
+            if value <= 0.0 {
+                Self(value)
+            } else if value >= 1.0 {
+                Self(value)
+            } else {
+                Self(value)
             }
-            None
         }
     }
 
@@ -194,11 +222,23 @@ pub mod coloring {
         assert_eq!(rbg.b, 0.375);
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Debug, Default, Clone, Copy)]
+    pub enum ColoringMode {
+        /// Generated colors can vary wildly from each other
+        #[default]
+        Normal,
+        /// Generated colors grow gradually darker or lighter depending on the
+        /// theme
+        Gradual,
+    }
+
+    #[derive(Clone, Copy, Debug)]
     pub struct ColorEngine {
         seed: HSV,
         is_dark: bool,
         random: f32,
+        mode: ColoringMode,
+        stable_h: f32,
     }
 
     impl ColorEngine {
@@ -206,11 +246,31 @@ pub mod coloring {
 
         pub fn new<'a>(seed: &'a Theme) -> Self {
             let rng: f32 = thread_rng().gen();
+            let is_dark = seed.extended_palette().is_dark;
+            let seed: HSV = seed.extended_palette().secondary.base.color.into();
+
+            let stable_h = {
+                let seed: f32 = seed.h.into();
+                (rng + Self::RATIO + seed) % 1.0
+            };
+
             Self {
-                seed: seed.extended_palette().secondary.base.color.into(),
-                is_dark: seed.extended_palette().is_dark,
+                seed,
+                is_dark,
+                stable_h,
                 random: rng,
+                mode: ColoringMode::Gradual,
             }
+        }
+
+        fn gradual(mut self, gradual: bool) -> Self {
+            if gradual {
+                self.mode = ColoringMode::Gradual;
+            } else {
+                self.mode = ColoringMode::Normal;
+            }
+
+            self
         }
 
         /// Generates a Color taking into consideration previously generated colors
@@ -218,15 +278,34 @@ pub mod coloring {
             let seed: f32 = self.seed.h.into();
             let h = (self.random + Self::RATIO + seed) % 1.0;
 
-            let generated = if self.is_dark {
-                HSV::new(h, 0.8, 0.5)
-            } else {
-                HSV::new(h, 0.69, 0.85)
-            };
+            match self.mode {
+                ColoringMode::Normal => {
+                    let generated = if self.is_dark {
+                        HSV::new(h, 0.8, 0.5)
+                    } else {
+                        HSV::new(h, 0.69, 0.85)
+                    };
 
-            self.seed = generated;
+                    self.seed = generated;
 
-            generated.into()
+                    generated.into()
+                }
+                ColoringMode::Gradual => {
+                    let diff = 0.10;
+
+                    let generated = if self.is_dark {
+                        let v = { self.seed.v - diff };
+                        HSV::new(self.stable_h, 0.8, v)
+                    } else {
+                        let v = { self.seed.v + diff };
+                        HSV::new(self.stable_h, 0.69, v)
+                    };
+
+                    self.seed = generated;
+
+                    generated.into()
+                }
+            }
         }
     }
 
