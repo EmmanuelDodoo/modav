@@ -434,7 +434,7 @@ impl Viewable for BarChartTab {
 
         let font = Font::with_name(icons::NAME);
 
-        TabLabel::new(icons::CHART, format!("{} - {}", self.title, file_name)).icon_font(font)
+        TabLabel::new(icons::BARCHART, format!("{} - {}", self.title, file_name)).icon_font(font)
     }
 
     fn content(&self) -> Option<String> {

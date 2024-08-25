@@ -171,7 +171,7 @@ impl ViewType {
                 row!(icon, txt).spacing(5)
             }
             Self::BarChart => {
-                let icon = icons::icon(icons::CHART);
+                let icon = icons::icon(icons::BARCHART);
                 row!(icon, txt).spacing(5)
             }
             Self::None => Row::new(),

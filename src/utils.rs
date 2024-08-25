@@ -255,6 +255,7 @@ pub mod icons {
     pub const ANGLE_UP: char = '\u{F106}';
     pub const ANGLE_DOWN: char = '\u{F107}';
     pub const CHART: char = '\u{E802}';
+    pub const BARCHART: char = '\u{E80C}';
     pub const SETTINGS: char = '\u{E800}';
     pub const INFO: char = '\u{E80A}';
     pub const HELP: char = '\u{E807}';
