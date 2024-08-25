@@ -11,10 +11,10 @@ use iced::{
     alignment, mouse, theme,
     widget::{
         button,
-        canvas::{self, Canvas, Frame, Path, Stroke, Text},
+        canvas::{self, Canvas, Frame, Path, Stroke},
         column, component, container, horizontal_space, row, text, Component, Tooltip,
     },
-    Alignment, Color, Element, Font, Length, Point, Renderer, Size, Theme,
+    Alignment, Color, Element, Font, Length, Point, Renderer, Theme,
 };
 
 use modav_core::{
@@ -177,30 +177,6 @@ where
             return Some(point);
         });
     }
-
-    fn draw_legend(&self, frame: &mut Frame, position: Point, size: Size, color: Color) {
-        let x = position.x;
-        let y = position.y;
-
-        let width = size.width;
-        let height = size.height;
-
-        frame.fill(
-            &Path::rectangle([x, y].into(), Size::new(width, height)),
-            self.color,
-        );
-
-        let label = Text {
-            content: self.label.clone().unwrap_or(String::default()),
-            position: Point::new(x + 1.25 * width, y + 0.5 * height),
-            color,
-            size: 12.0.into(),
-            vertical_alignment: alignment::Vertical::Center,
-            ..Default::default()
-        };
-
-        frame.fill_text(label);
-    }
 }
 
 impl<X, Y> Graphable<X, Y> for GraphLine<X, Y>
@@ -225,8 +201,8 @@ where
         self.label.as_ref()
     }
 
-    fn draw_legend(&self, frame: &mut Frame, position: Point, size: Size, color: Color) {
-        self.draw_legend(frame, position, size, color)
+    fn color(&self) -> Color {
+        self.color
     }
 }
 

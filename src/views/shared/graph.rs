@@ -6,7 +6,7 @@ use std::{
 };
 
 use iced::{
-    alignment::{Horizontal, Vertical},
+    alignment::{self, Horizontal, Vertical},
     color, mouse,
     widget::canvas::{self, Frame, Geometry, Path, Stroke, Text},
     Color, Point, Rectangle, Renderer, Size, Theme,
@@ -19,7 +19,31 @@ pub trait Graphable<X, Y> {
 
     fn label(&self) -> Option<&String>;
 
-    fn draw_legend(&self, frame: &mut Frame, position: Point, size: Size, color: Color);
+    fn color(&self) -> Color;
+
+    fn draw_legend(&self, frame: &mut Frame, position: Point, size: Size, color: Color) {
+        let x = position.x;
+        let y = position.y;
+
+        let width = size.width;
+        let height = size.height;
+
+        frame.fill(
+            &Path::rectangle([x, y].into(), Size::new(width, height)),
+            self.color(),
+        );
+
+        let label = Text {
+            content: self.label().cloned().unwrap_or(String::default()),
+            position: Point::new(x + 1.25 * width, y + 0.5 * height),
+            color,
+            size: 12.0.into(),
+            vertical_alignment: alignment::Vertical::Center,
+            ..Default::default()
+        };
+
+        frame.fill_text(label);
+    }
 
     fn draw(
         &self,

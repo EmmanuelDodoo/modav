@@ -69,6 +69,10 @@ impl Graphable<Data, Data> for GraphBar {
         self.label.as_ref()
     }
 
+    fn color(&self) -> Color {
+        self.color
+    }
+
     fn draw(
         &self,
         _frame: &mut canvas::Frame,
@@ -76,15 +80,6 @@ impl Graphable<Data, Data> for GraphBar {
         _x_points: &HashMap<Data, f32>,
         _y_points: &HashMap<Data, f32>,
         _data: &Self::Data,
-    ) {
-    }
-
-    fn draw_legend(
-        &self,
-        _frame: &mut canvas::Frame,
-        _position: iced::Point,
-        _size: iced::Size,
-        _color: Color,
     ) {
     }
 }
