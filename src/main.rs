@@ -62,7 +62,7 @@ fn main() -> Result<(), iced::Error> {
     Modav::run(Settings {
         window,
         antialiasing: true,
-        flags: Flags::Prod,
+        flags: Flags::Bar,
         ..Default::default()
     })
 }
@@ -110,6 +110,7 @@ pub struct Modav {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub enum Flags {
+    Bar,
     Line,
     #[default]
     Prod,
@@ -159,6 +160,43 @@ impl Flags {
                         .expect("Line Graph Panic when running dev flag");
                     let view = View::LineGraph(data);
 
+                    tabs.update(TabsMessage::AddTab(view));
+                }
+
+                Modav {
+                    file_path: Some(file_path),
+                    theme_shadow: theme.clone(),
+                    wizard_shown,
+                    settings_shown,
+                    current_view,
+                    title,
+                    theme,
+                    toasts,
+                    toast_timeout,
+                    error,
+                    tabs,
+                }
+            }
+            Self::Bar => {
+                use modav_core::repr::sheet::utils::{
+                    BarChartAxisLabelStrategy, BarChartBarLabels,
+                };
+
+                let file_path = PathBuf::from("../../../bar.csv");
+                let current_view = ViewType::BarChart;
+
+                {
+                    let config = BarChartConfigState {
+                        x_col: 1,
+                        y_col: 2,
+                        axis_label: BarChartAxisLabelStrategy::Headers,
+                        bar_label: BarChartBarLabels::FromColumn(0),
+                        ..Default::default()
+                    };
+
+                    let data = BarChartTabData::new(file_path.clone(), config)
+                        .expect("Bar Chart panic with dev flag");
+                    let view = View::BarChart(data);
                     tabs.update(TabsMessage::AddTab(view));
                 }
 
