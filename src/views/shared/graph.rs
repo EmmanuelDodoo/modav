@@ -50,7 +50,9 @@ pub trait Graphable<X, Y> {
         frame: &mut Frame,
         cursor: mouse::Cursor,
         x_points: &HashMap<X, f32>,
+        x_axis: f32,
         y_points: &HashMap<Y, f32>,
+        y_axis: f32,
         data: &Self::Data,
     );
 }
@@ -80,8 +82,8 @@ where
         self
     }
 
-    #[allow(unused_variables)]
-    fn draw(&self, frame: &mut Frame, is_x_axis: bool, theme: &Theme) -> HashMap<T, f32> {
+    #[allow(unused_variables, unused_assignments)]
+    fn draw(&self, frame: &mut Frame, is_x_axis: bool, theme: &Theme) -> (f32, HashMap<T, f32>) {
         let mut record = HashMap::new();
 
         let axis_color = color!(205, 0, 150);
@@ -106,9 +108,12 @@ where
         let y_offset_top = 0.5 * y_offset_bottom;
         let y_offset_length = true_y_length - y_offset_bottom - y_offset_top;
 
+        let mut axis = 0.0;
+
         if is_x_axis {
             let x = x_padding_left;
             let y = y_padding_top + y_offset_length + y_offset_top;
+            axis = y;
 
             let axis_start = Point::new(x, y);
 
@@ -236,6 +241,7 @@ where
             }
         } else {
             let x = x_padding_left + x_offset_left;
+            axis = x;
             let y = y_padding_top;
 
             let axis_start = Point::new(x, y);
@@ -363,7 +369,7 @@ where
             }
         }
 
-        return record;
+        return (axis, record);
     }
 }
 
@@ -687,12 +693,14 @@ where
         cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
         let content = self.cache.draw(renderer, bounds.size(), |frame| {
-            let x_record = Axis::draw(&self.x_axis, frame, true, theme);
+            let (x_axis, x_record) = Axis::draw(&self.x_axis, frame, true, theme);
 
-            let y_record = Axis::draw(&self.y_axis, frame, false, theme);
+            let (y_axis, y_record) = Axis::draw(&self.y_axis, frame, false, theme);
 
             self.graphables.iter().for_each(|graphable| {
-                Graphable::draw(graphable, frame, cursor, &x_record, &y_record, &self.data)
+                Graphable::draw(
+                    graphable, frame, cursor, &x_record, x_axis, &y_record, y_axis, &self.data,
+                )
             });
         });
 

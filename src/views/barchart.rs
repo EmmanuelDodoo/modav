@@ -1,3 +1,4 @@
+#![allow(unused_imports, dead_code)]
 use std::{collections::HashMap, fmt::Debug, path::PathBuf, rc::Rc};
 
 use iced::{
@@ -6,7 +7,7 @@ use iced::{
         button, canvas, column, component, container, horizontal_space, row, text, Canvas,
         Component, Tooltip,
     },
-    Alignment, Color, Element, Font, Length, Renderer, Theme,
+    Alignment, Color, Element, Font, Length, Point, Renderer, Size, Theme,
 };
 
 use modav_core::{
@@ -16,6 +17,7 @@ use modav_core::{
     },
     repr::sheet::{builders::SheetBuilder, utils::Data},
 };
+use tracing::warn;
 
 use crate::{
     utils::{coloring::ColorEngine, icons, AppError},
@@ -31,6 +33,8 @@ use super::{
     tabs::TabLabel,
     Viewable,
 };
+
+const DEFAULT_WIDTH: f32 = 50.0;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GraphBar {
@@ -75,12 +79,68 @@ impl Graphable<Data, Data> for GraphBar {
 
     fn draw(
         &self,
-        _frame: &mut canvas::Frame,
+        frame: &mut canvas::Frame,
         _cursor: iced::mouse::Cursor,
-        _x_points: &HashMap<Data, f32>,
-        _y_points: &HashMap<Data, f32>,
+        x_points: &HashMap<Data, f32>,
+        x_axis: f32,
+        y_points: &HashMap<Data, f32>,
+        _y_axis: f32,
         _data: &Self::Data,
     ) {
+        let width = {
+            let (x, y) = x_points
+                .values()
+                .into_iter()
+                .fold((None, None), |acc, curr| match acc {
+                    (None, None) => (Some(curr), None),
+                    (Some(pp), None) | (None, Some(pp)) => {
+                        if pp < curr {
+                            (Some(pp), Some(curr))
+                        } else {
+                            (Some(curr), Some(pp))
+                        }
+                    }
+                    (Some(pp), Some(p)) => {
+                        if pp < curr && curr < p {
+                            (Some(pp), Some(curr))
+                        } else if curr < pp {
+                            (Some(curr), Some(pp))
+                        } else {
+                            (Some(pp), Some(p))
+                        }
+                    }
+                });
+
+            match y {
+                Some(y) => {
+                    let width = f32::abs(
+                        x.expect("BarChart draw: Empty Bar charts should not be possible") - y,
+                    ) / 2.0;
+
+                    width.min(DEFAULT_WIDTH)
+                }
+                None => DEFAULT_WIDTH,
+            }
+        };
+
+        let x = *x_points.get(&self.point.x).unwrap_or(&-1.0);
+
+        if x < 0.0 {
+            warn!("Bar char x point, {} not found", &self.point.x);
+            return;
+        }
+
+        let y = *y_points.get(&self.point.y).unwrap_or(&-1.0);
+
+        if y < 0.0 {
+            warn!("Bar char x point, {} not found", &self.point.y);
+            return;
+        }
+
+        let top_left = Point::new(x - (width / 2.0), y);
+        let size = Size::new(width, x_axis - y);
+
+        frame.fill_rectangle(top_left, size, self.color);
     }
 }
 

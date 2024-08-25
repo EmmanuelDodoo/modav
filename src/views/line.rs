@@ -191,7 +191,9 @@ where
         frame: &mut Frame,
         _cursor: mouse::Cursor,
         x_points: &HashMap<X, f32>,
+        _x_axis: f32,
         y_points: &HashMap<Y, f32>,
+        _y_axis: f32,
         data: &Self::Data,
     ) {
         Self::draw(self, frame, x_points, y_points, *data)
