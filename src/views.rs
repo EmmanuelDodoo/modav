@@ -23,7 +23,7 @@ mod temp;
 mod line;
 pub use line::LineTabData;
 
-mod common;
+mod shared;
 
 use crate::utils::icons;
 

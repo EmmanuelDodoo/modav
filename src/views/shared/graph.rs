@@ -3,39 +3,33 @@ use std::{
     collections::HashMap,
     fmt::{self, Debug, Display},
     hash::Hash,
-    rc::Rc,
 };
 
 use iced::{
-    alignment::{self, Horizontal, Vertical},
-    color, mouse, theme,
-    widget::{
-        self, button,
-        canvas::{self, Canvas, Frame, Geometry, Path, Stroke, Text},
-        column, component, container, overlay, row, text, Component, Tooltip,
-    },
-    Alignment, Background, Border, Color, Element, Font, Length, Point, Rectangle, Renderer, Size,
-    Theme,
+    alignment::{Horizontal, Vertical},
+    color, mouse,
+    widget::canvas::{self, Frame, Geometry, Path, Stroke, Text},
+    Color, Point, Rectangle, Renderer, Size, Theme,
 };
 
-pub use modav_core::models::Point as GraphPoint;
-use tracing::warn;
+use crate::widgets::toolbar::ToolbarOption;
 
-use crate::widgets::toolbar::{ToolbarMenu, ToolbarOption};
-use crate::{utils::icons, ToolTipContainerStyle};
+pub trait Graphable<X, Y> {
+    type Data: Default + Debug;
 
-#[allow(dead_code)]
-const WHITE: Color = color!(255, 255, 255);
-#[allow(dead_code)]
-const BLACK: Color = color!(0, 0, 0);
-#[allow(dead_code)]
-const BLUE: Color = color!(0, 0, 255);
-#[allow(dead_code)]
-const RED: Color = color!(255, 0, 0);
-#[allow(dead_code)]
-const GREEN: Color = color!(0, 255, 0);
-#[allow(dead_code)]
-const MAGENTA: Color = color!(205, 0, 150);
+    fn label(&self) -> Option<&String>;
+
+    fn draw_legend(&self, frame: &mut Frame, position: Point, size: Size, color: Color);
+
+    fn draw(
+        &self,
+        frame: &mut Frame,
+        cursor: mouse::Cursor,
+        x_points: &HashMap<X, f32>,
+        y_points: &HashMap<Y, f32>,
+        data: &Self::Data,
+    );
+}
 
 #[derive(Debug, Clone)]
 pub struct Axis<T>
@@ -349,328 +343,6 @@ where
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct GraphLine<X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    points: Vec<GraphPoint<X, Y>>,
-    label: Option<String>,
-    color: Color,
-}
-
-impl<X, Y> GraphLine<X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    pub fn new(points: Vec<GraphPoint<X, Y>>, label: Option<String>, color: Color) -> Self {
-        Self {
-            points,
-            color,
-            label,
-        }
-    }
-
-    pub fn color(mut self, color: Color) -> Self {
-        self.color = color;
-        self
-    }
-
-    fn draw(
-        line: &Self,
-        frame: &mut Frame,
-        x_record: &HashMap<X, f32>,
-        y_record: &HashMap<Y, f32>,
-        kind: GraphType,
-    ) {
-        line.points.iter().fold(None, |prev, point| {
-            let x = x_record
-                .get(&point.x)
-                .and_then(|x| Some(x.to_owned()))
-                .unwrap_or(-1.0);
-
-            if x < 0.0 {
-                warn!("X Point {:?} not found", point.x);
-                return prev;
-            }
-
-            let y = y_record
-                .get(&point.y)
-                .and_then(|x| Some(x.to_owned()))
-                .unwrap_or(-1.0);
-
-            if y < 0.0 {
-                warn!("Y Point {:?} not found", point.y);
-                return prev;
-            }
-
-            let point = Point { x, y };
-
-            match kind {
-                GraphType::Point => {
-                    let path = Path::circle(point.clone(), 4.5);
-
-                    frame.fill(&path, line.color);
-                }
-
-                GraphType::Line => {
-                    if let Some(prev) = prev {
-                        let path = Path::new(|bdr| {
-                            bdr.move_to(prev);
-                            bdr.line_to(point);
-                        });
-                        frame.stroke(
-                            &path,
-                            Stroke::default().with_width(3.0).with_color(line.color),
-                        );
-                    };
-                }
-
-                GraphType::LinePoint => {
-                    let path = Path::circle(point.clone(), 3.5);
-
-                    frame.fill(&path, line.color);
-
-                    if let Some(prev) = prev {
-                        let path = Path::new(|bdr| {
-                            bdr.move_to(prev);
-                            bdr.line_to(point);
-                        });
-                        frame.stroke(
-                            &path,
-                            Stroke::default().with_width(3.0).with_color(line.color),
-                        );
-                    };
-                }
-            };
-
-            return Some(point);
-        });
-    }
-
-    fn draw_legend(&self, frame: &mut Frame, position: Point, size: Size, color: Color) {
-        let x = position.x;
-        let y = position.y;
-
-        let width = size.width;
-        let height = size.height;
-
-        frame.fill(
-            &Path::rectangle([x, y].into(), Size::new(width, height)),
-            self.color,
-        );
-
-        let label = Text {
-            content: self.label.clone().unwrap_or(String::default()),
-            position: Point::new(x + 1.25 * width, y + 0.5 * height),
-            color,
-            size: 12.0.into(),
-            vertical_alignment: Vertical::Center,
-            ..Default::default()
-        };
-
-        frame.fill_text(label);
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum GraphMessage {
-    Legend(LegendPosition),
-    GraphType(GraphType),
-    OpenEditor,
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct GraphState {
-    legend_position: LegendPosition,
-    graph_type: GraphType,
-}
-
-#[derive(Debug)]
-pub struct Graph<'a, Message, X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    x_axis: Axis<X>,
-    y_axis: Axis<Y>,
-    lines: &'a Vec<GraphLine<X, Y>>,
-    cache: canvas::Cache,
-    on_open_editor: Option<Message>,
-}
-
-impl<'a, Message, X, Y> Graph<'a, Message, X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    pub fn new(x_axis: Axis<X>, y_axis: Axis<Y>, lines: &'a Vec<GraphLine<X, Y>>) -> Self {
-        Self {
-            x_axis,
-            y_axis,
-            lines,
-            cache: canvas::Cache::default(),
-            on_open_editor: None,
-        }
-    }
-
-    fn toolbar(
-        &self,
-        legend: LegendPosition,
-        kind: GraphType,
-    ) -> Element<'_, GraphMessage, Theme, Renderer> {
-        let style = ToolbarStyle;
-        let menu_style = ToolbarMenuStyle;
-
-        let legend = {
-            let icons = Font::with_name("legend-icons");
-
-            let menu = ToolbarMenu::new(LegendPosition::ALL, legend, GraphMessage::Legend, icons)
-                .padding([4, 4])
-                .menu_padding([4, 10, 4, 8])
-                .spacing(5.0)
-                .menu_style(theme::Menu::Custom(Rc::new(menu_style)))
-                .style(theme::PickList::Custom(Rc::new(style), Rc::new(menu_style)));
-
-            let tooltip = container(text("Legend Position").size(12.0))
-                .max_width(200.0)
-                .padding([6, 8])
-                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
-                .height(Length::Shrink);
-
-            let menu = Tooltip::new(menu, tooltip, iced::widget::tooltip::Position::Bottom)
-                .gap(2.0)
-                .snap_within_viewport(true);
-
-            menu
-        };
-
-        let kind = {
-            let icons = Font::with_name("line-type-icons");
-
-            let menu = ToolbarMenu::new(GraphType::ALL, kind, GraphMessage::GraphType, icons)
-                .padding([4, 4])
-                .menu_padding([4, 10, 4, 8])
-                .spacing(17.0)
-                .menu_style(theme::Menu::Custom(Rc::new(menu_style)))
-                .style(theme::PickList::Custom(Rc::new(style), Rc::new(menu_style)));
-
-            let tooltip = container(text("Graph Type").size(12.0))
-                .max_width(200.0)
-                .padding([6, 8])
-                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
-                .height(Length::Shrink);
-
-            let menu = Tooltip::new(menu, tooltip, iced::widget::tooltip::Position::Bottom)
-                .gap(2.0)
-                .snap_within_viewport(true);
-
-            menu
-        };
-
-        let editor = {
-            let font = Font::with_name(icons::NAME);
-
-            let btn = button(
-                text(icons::EDITOR)
-                    .font(font)
-                    .width(18.0)
-                    .vertical_alignment(alignment::Vertical::Center)
-                    .horizontal_alignment(alignment::Horizontal::Center),
-            )
-            .on_press(GraphMessage::OpenEditor)
-            .style(theme::Button::Custom(Box::new(EditorButtonStyle)))
-            .padding([4, 4]);
-
-            let tooltip = container(text("Open in Editor").size(12.0))
-                .max_width(200.0)
-                .padding([6, 8])
-                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
-                .height(Length::Shrink);
-
-            let menu = Tooltip::new(btn, tooltip, iced::widget::tooltip::Position::Bottom)
-                .gap(2.0)
-                .snap_within_viewport(true);
-
-            menu
-        };
-
-        container(
-            column!(legend, kind, editor)
-                .width(Length::Fill)
-                .align_items(Alignment::Center)
-                .spacing(8.0),
-        )
-        .width(Length::Fixed(40.0))
-        .padding([6.0, 2.0])
-        .style(theme::Container::Custom(Box::new(ToolbarContainerStyle)))
-        .into()
-    }
-
-    pub fn on_editor(mut self, message: Message) -> Self {
-        self.on_open_editor = Some(message);
-        self
-    }
-}
-
-impl<'a, Message, X, Y> Component<Message> for Graph<'a, Message, X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-    Message: Clone,
-{
-    type Event = GraphMessage;
-    type State = GraphState;
-
-    fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
-        match event {
-            GraphMessage::Legend(position) => {
-                state.legend_position = position;
-                None
-            }
-            GraphMessage::GraphType(kind) => {
-                state.graph_type = kind;
-                None
-            }
-            GraphMessage::OpenEditor => self.on_open_editor.clone(),
-        }
-    }
-
-    fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
-        let canvas = Canvas::new(
-            GraphCanvas::new(&self.x_axis, &self.y_axis, &self.lines, &self.cache)
-                .legend_position(state.legend_position)
-                .graph_type(state.graph_type),
-        )
-        .height(Length::Fill)
-        .width(Length::FillPortion(24));
-
-        let toolbar = self.toolbar(
-            if self.lines.iter().any(|line| line.label.is_some()) {
-                state.legend_position
-            } else {
-                LegendPosition::None
-            },
-            state.graph_type,
-        );
-
-        row!(canvas, toolbar).into()
-    }
-}
-
-impl<'a, Message, X, Y> From<Graph<'a, Message, X, Y>> for Element<'a, Message>
-where
-    Message: 'a + Clone + Debug,
-    X: 'a + Clone + Display + Hash + Eq + Debug,
-    Y: 'a + Clone + Display + Hash + Eq + Debug,
-{
-    fn from(value: Graph<'a, Message, X, Y>) -> Self {
-        component(value)
-    }
-}
-
 #[derive(Debug, Clone, Default, Copy, PartialEq)]
 #[allow(dead_code)]
 pub enum LegendPosition {
@@ -689,7 +361,7 @@ pub enum LegendPosition {
 
 #[allow(dead_code)]
 impl LegendPosition {
-    const ALL: [Self; 10] = [
+    pub const ALL: [Self; 10] = [
         Self::TopLeft,
         Self::TopCenter,
         Self::TopRight,
@@ -840,84 +512,50 @@ impl ToolbarOption for LegendPosition {
     }
 }
 
-#[derive(Debug, Clone, Default, Copy, PartialEq)]
-pub enum GraphType {
-    Line,
-    Point,
-    #[default]
-    LinePoint,
-}
-
-impl GraphType {
-    const ALL: [Self; 3] = [Self::LinePoint, Self::Line, Self::Point];
-}
-
-impl fmt::Display for GraphType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Line => "Line Graph",
-                Self::Point => "Points Graph",
-                Self::LinePoint => "Line Graph with Points",
-            }
-        )
-    }
-}
-
-impl ToolbarOption for GraphType {
-    fn icon(&self) -> char {
-        match self {
-            Self::Line => '\u{E800}',
-            Self::Point => '\u{E801}',
-            Self::LinePoint => '\u{E802}',
-        }
-    }
-}
-
 #[derive(Debug)]
-pub struct GraphCanvas<'a, X, Y>
+pub struct GraphCanvas<'a, G, X, Y>
 where
     X: Clone + Display + Hash + Eq + Debug,
     Y: Clone + Display + Hash + Eq + Debug,
+    G: Graphable<X, Y>,
 {
     x_axis: &'a Axis<X>,
     y_axis: &'a Axis<Y>,
-    lines: &'a Vec<GraphLine<X, Y>>,
+    graphables: &'a Vec<G>,
     cache: &'a canvas::Cache,
     legend: LegendPosition,
-    graph_type: GraphType,
+    data: <G as Graphable<X, Y>>::Data,
 }
 
-impl<'a, X, Y> GraphCanvas<'a, X, Y>
+impl<'a, G, X, Y> GraphCanvas<'a, G, X, Y>
 where
     X: Clone + Display + Hash + Eq + Debug,
     Y: Clone + Display + Hash + Eq + Debug,
+    G: Graphable<X, Y>,
 {
-    fn new(
+    pub fn new(
         x_axis: &'a Axis<X>,
         y_axis: &'a Axis<Y>,
-        lines: &'a Vec<GraphLine<X, Y>>,
+        graphables: &'a Vec<G>,
         cache: &'a canvas::Cache,
     ) -> Self {
         Self {
             x_axis,
             y_axis,
-            lines,
+            graphables,
             cache,
             legend: LegendPosition::default(),
-            graph_type: GraphType::default(),
+            data: <G as Graphable<X, Y>>::Data::default(),
         }
     }
 
-    fn legend_position(mut self, position: LegendPosition) -> Self {
+    pub fn legend_position(mut self, position: LegendPosition) -> Self {
         self.legend = position;
         self
     }
 
-    fn graph_type(mut self, kind: GraphType) -> Self {
-        self.graph_type = kind;
+    pub fn graph_data(mut self, data: <G as Graphable<X, Y>>::Data) -> Self {
+        self.data = data;
         self
     }
 
@@ -935,13 +573,13 @@ where
         }
 
         let labels_len = self
-            .lines
+            .graphables
             .iter()
-            .map(|line| line.label.is_some())
+            .map(|graphable| graphable.label().is_some())
             .filter(|has_label| *has_label)
             .count();
 
-        if !self.lines.iter().any(|line| line.label.is_some()) {
+        if !self.graphables.iter().any(|line| line.label().is_some()) {
             return frame.into_geometry();
         }
 
@@ -981,10 +619,10 @@ where
 
         frame.fill_text(header);
 
-        for (i, line) in self
-            .lines
+        for (i, graphable) in self
+            .graphables
             .iter()
-            .filter(|line| line.label.is_some())
+            .filter(|graphable| graphable.label().is_some())
             .enumerate()
         {
             if i > 5 {
@@ -1001,17 +639,18 @@ where
 
             let start_point = Point::new(x, y);
 
-            line.draw_legend(&mut frame, start_point, size, text_color)
+            graphable.draw_legend(&mut frame, start_point, size, text_color)
         }
 
         frame.into_geometry()
     }
 }
 
-impl<'a, X, Y> canvas::Program<GraphMessage> for GraphCanvas<'a, X, Y>
+impl<'a, G, X, Y, Message> canvas::Program<Message> for GraphCanvas<'a, G, X, Y>
 where
     X: Clone + Display + Hash + Eq + Debug,
     Y: Clone + Display + Hash + Eq + Debug,
+    G: Graphable<X, Y>,
 {
     type State = ();
 
@@ -1021,155 +660,18 @@ where
         renderer: &Renderer,
         theme: &Theme,
         bounds: Rectangle,
-        _cursor: mouse::Cursor,
+        cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
         let content = self.cache.draw(renderer, bounds.size(), |frame| {
             let x_record = Axis::draw(&self.x_axis, frame, true, theme);
 
             let y_record = Axis::draw(&self.y_axis, frame, false, theme);
 
-            self.lines.iter().for_each(|line| {
-                GraphLine::draw(line, frame, &x_record, &y_record, self.graph_type)
+            self.graphables.iter().for_each(|graphable| {
+                Graphable::draw(graphable, frame, cursor, &x_record, &y_record, &self.data)
             });
         });
 
         vec![content, self.legend(renderer, bounds, self.legend, theme)]
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct ToolbarContainerStyle;
-
-impl widget::container::StyleSheet for ToolbarContainerStyle {
-    type Style = Theme;
-
-    fn appearance(&self, style: &Self::Style) -> container::Appearance {
-        let pallete = style.extended_palette();
-
-        let background = Background::Color(pallete.background.weak.color);
-
-        let border = Border {
-            color: pallete.primary.base.color,
-            width: 0.5,
-            radius: 5.0.into(),
-        };
-
-        container::Appearance {
-            background: Some(background),
-            border,
-            ..Default::default()
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct ToolbarStyle;
-
-impl widget::pick_list::StyleSheet for ToolbarStyle {
-    type Style = Theme;
-
-    fn active(
-        &self,
-        style: &<Self as widget::pick_list::StyleSheet>::Style,
-    ) -> widget::pick_list::Appearance {
-        let pallete = style.extended_palette();
-        let text_color = pallete.background.base.text;
-        let background = Background::Color(pallete.background.weak.color);
-        let border = Border {
-            color: pallete.background.weak.color,
-            width: 0.25,
-            radius: 3.0.into(),
-        };
-
-        widget::pick_list::Appearance {
-            text_color,
-            placeholder_color: text_color,
-            handle_color: text_color,
-            background,
-            border,
-        }
-    }
-
-    fn hovered(
-        &self,
-        style: &<Self as widget::pick_list::StyleSheet>::Style,
-    ) -> widget::pick_list::Appearance {
-        let pallete = style.extended_palette();
-        let text_color = pallete.primary.strong.color;
-        let background = Background::Color(pallete.background.weak.color);
-        let border = Border {
-            color: pallete.primary.strong.color,
-            width: 0.5,
-            radius: 3.0.into(),
-        };
-
-        widget::pick_list::Appearance {
-            text_color,
-            placeholder_color: text_color,
-            handle_color: text_color,
-            background,
-            border,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct ToolbarMenuStyle;
-
-impl overlay::menu::StyleSheet for ToolbarMenuStyle {
-    type Style = Theme;
-
-    fn appearance(&self, style: &Self::Style) -> overlay::menu::Appearance {
-        let pallete = style.extended_palette();
-
-        let text_color = pallete.background.base.text;
-        let background = Background::Color(pallete.background.weak.color);
-        let border = Border {
-            width: 1.0,
-            radius: 3.5.into(),
-            color: pallete.background.strong.color,
-        };
-        let selected_background = Background::Color(pallete.primary.base.color);
-
-        overlay::menu::Appearance {
-            text_color,
-            selected_text_color: pallete.primary.base.text,
-            background,
-            border,
-            selected_background,
-        }
-    }
-}
-
-struct EditorButtonStyle;
-impl widget::button::StyleSheet for EditorButtonStyle {
-    type Style = Theme;
-
-    fn active(&self, style: &Self::Style) -> button::Appearance {
-        let palette = style.extended_palette();
-
-        button::Appearance {
-            text_color: palette.background.base.text,
-            background: Some(Background::Color(palette.background.weak.color)),
-            ..Default::default()
-        }
-    }
-
-    fn hovered(&self, style: &Self::Style) -> button::Appearance {
-        let pallete = style.extended_palette();
-        let text_color = pallete.primary.strong.color;
-        let background = Background::Color(pallete.background.weak.color);
-        let border = Border {
-            color: pallete.primary.strong.color,
-            width: 0.5,
-            radius: 3.0.into(),
-        };
-
-        button::Appearance {
-            text_color,
-            border,
-            background: Some(background),
-            ..Default::default()
-        }
     }
 }
