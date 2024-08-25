@@ -64,6 +64,7 @@ where
 {
     points: Vec<T>,
     label: Option<String>,
+    clean: bool,
 }
 
 impl<T> Axis<T>
@@ -73,8 +74,16 @@ where
     const AXIS_THICKNESS: f32 = 2.0;
     const OUTLINES_THICKNESS: f32 = 0.5;
 
-    pub fn new(label: Option<String>, points: Vec<T>) -> Self {
-        Self { label, points }
+    pub fn new(label: Option<String>, points: Vec<T>, clean: bool) -> Self {
+        Self {
+            label,
+            points,
+            clean,
+        }
+    }
+
+    pub fn clean(&mut self, clean: bool) {
+        self.clean = clean;
     }
 
     pub fn set_label(mut self, label: String) -> Self {
@@ -179,26 +188,29 @@ where
 
                     let outlines = Path::line([x, y].into(), [x, y_padding_top].into());
 
-                    frame.stroke(
-                        &outlines,
-                        Stroke::default()
-                            .with_width(Self::OUTLINES_THICKNESS)
-                            .with_color(outlines_color),
-                    );
+                    if !self.clean {
+                        frame.stroke(
+                            &outlines,
+                            Stroke::default()
+                                .with_width(Self::OUTLINES_THICKNESS)
+                                .with_color(outlines_color),
+                        );
+                    }
                 } else {
                     let outlines = Path::line([x, y].into(), [x, y_padding_top].into());
 
-                    frame.stroke(
-                        &outlines,
-                        Stroke::default()
-                            .with_width(Self::OUTLINES_THICKNESS)
-                            .with_color(outlines_color),
-                    );
+                    if !self.clean {
+                        frame.stroke(
+                            &outlines,
+                            Stroke::default()
+                                .with_width(Self::OUTLINES_THICKNESS)
+                                .with_color(outlines_color),
+                        );
+                    }
                 }
 
                 outlines_count += 1;
             }
-
             // Axis end arrows
             {
                 let diff_x = 0.75 * x_offset_right;
@@ -306,24 +318,28 @@ where
                         [x + x_offset_length + x_offset_right, y].into(),
                     );
 
-                    frame.stroke(
-                        &outlines,
-                        Stroke::default()
-                            .with_width(Self::OUTLINES_THICKNESS)
-                            .with_color(outlines_color),
-                    );
+                    if !self.clean {
+                        frame.stroke(
+                            &outlines,
+                            Stroke::default()
+                                .with_width(Self::OUTLINES_THICKNESS)
+                                .with_color(outlines_color),
+                        );
+                    }
                 } else {
                     let outlines = Path::line(
                         [x, y].into(),
                         [x + x_offset_length + x_offset_right, y].into(),
                     );
 
-                    frame.stroke(
-                        &outlines,
-                        Stroke::default()
-                            .with_width(Self::OUTLINES_THICKNESS)
-                            .with_color(outlines_color),
-                    );
+                    if !self.clean {
+                        frame.stroke(
+                            &outlines,
+                            Stroke::default()
+                                .with_width(Self::OUTLINES_THICKNESS)
+                                .with_color(outlines_color),
+                        );
+                    }
                 }
 
                 outlines_count += 1;

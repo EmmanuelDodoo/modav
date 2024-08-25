@@ -370,9 +370,9 @@ pub struct BarChartTab {
 
 impl BarChartTab {
     fn graph(&self) -> BarChartGraph<'_, BarChartMessage> {
-        let x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone());
+        let x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
 
-        let y_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone());
+        let y_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone(), false);
 
         BarChartGraph::new(x_axis, y_axis, &self.bars).on_editor(BarChartMessage::OpenEditor)
     }

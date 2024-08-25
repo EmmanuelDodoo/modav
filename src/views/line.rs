@@ -484,9 +484,9 @@ pub struct LineGraphTab {
 
 impl LineGraphTab {
     fn graph(&self) -> LineGraph<ModelMessage, String, Data> {
-        let x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone());
+        let x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
 
-        let y_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone());
+        let y_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone(), false);
 
         LineGraph::new(x_axis, y_axis, &self.lines).on_editor(ModelMessage::OpenEditor)
     }
