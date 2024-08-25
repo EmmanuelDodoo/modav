@@ -223,7 +223,7 @@ pub mod coloring {
     }
 
     #[derive(Debug, Default, Clone, Copy)]
-    pub enum ColoringMode {
+    enum ColoringMode {
         /// Generated colors can vary wildly from each other
         #[default]
         Normal,
@@ -263,7 +263,7 @@ pub mod coloring {
             }
         }
 
-        fn gradual(mut self, gradual: bool) -> Self {
+        pub fn gradual(mut self, gradual: bool) -> Self {
             if gradual {
                 self.mode = ColoringMode::Gradual;
             } else {

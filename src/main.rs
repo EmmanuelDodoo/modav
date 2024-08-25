@@ -191,6 +191,7 @@ impl Flags {
                         y_col: 2,
                         axis_label: BarChartAxisLabelStrategy::Headers,
                         bar_label: BarChartBarLabels::FromColumn(0),
+                        order: true,
                         ..Default::default()
                     };
 

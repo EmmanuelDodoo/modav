@@ -1,4 +1,3 @@
-#![allow(unused_imports, dead_code)]
 use std::{collections::HashMap, fmt::Debug, path::PathBuf, rc::Rc};
 
 use iced::{
@@ -309,6 +308,7 @@ pub struct BarChartTabData {
     title: String,
     barchart: BarChart<Data, Data>,
     theme: Theme,
+    order: bool,
 }
 
 impl BarChartTabData {
@@ -324,6 +324,7 @@ impl BarChartTabData {
             axis_label,
             x_col,
             y_col,
+            order,
         } = config;
 
         let sht = SheetBuilder::new(file.clone().into())
@@ -342,6 +343,7 @@ impl BarChartTabData {
             file,
             title,
             barchart,
+            order,
             theme: Theme::default(),
         })
     }
@@ -388,6 +390,7 @@ impl Viewable for BarChartTab {
             title,
             barchart,
             theme,
+            order,
         } = data;
 
         let BarChart {
@@ -395,10 +398,14 @@ impl Viewable for BarChartTab {
             x_scale,
             y_label,
             y_scale,
-            bars,
+            mut bars,
         } = barchart;
 
-        let colors = ColorEngine::new(&theme);
+        if order {
+            bars.sort_by(|one, two| one.point.x.cmp(&two.point.x))
+        };
+
+        let colors = ColorEngine::new(&theme).gradual(order);
 
         let bars = bars
             .into_iter()

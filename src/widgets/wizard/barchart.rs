@@ -6,8 +6,8 @@ use std::{
 
 use iced::{
     widget::{
-        button, column, component, container, horizontal_space, pick_list, row, text, text_input,
-        vertical_space, Component, Space,
+        button, checkbox, column, component, container, horizontal_space, pick_list, row, text,
+        text_input, vertical_space, Component, Space,
     },
     Alignment, Element, Renderer, Theme,
 };
@@ -96,6 +96,7 @@ pub enum BarChartConfigMessage {
     YCol(String),
     XLabelChanged(String),
     YLabelChanged(String),
+    Order(bool),
     Previous,
     Cancel,
     Submit,
@@ -113,6 +114,7 @@ pub struct BarChartConfigState {
     pub flexible: bool,
     pub header_types: HeaderTypesStrategy,
     pub header_labels: HeaderLabelStrategy,
+    pub order: bool,
 }
 
 impl Default for BarChartConfigState {
@@ -128,6 +130,7 @@ impl Default for BarChartConfigState {
             flexible: false,
             header_types: HeaderTypesStrategy::Infer,
             header_labels: HeaderLabelStrategy::ReadLabels,
+            order: false,
         }
     }
 }
@@ -304,7 +307,15 @@ impl<'a, Message> BarChartConfig<'a, Message> {
                 .align_items(Alignment::Center)
         };
 
-        column!(title, x_col, y_col, axis_label, bar_labels)
+        let order = {
+            let check = checkbox("Order", state.order).on_toggle(BarChartConfigMessage::Order);
+
+            let tip = tooltip("Order the bars?");
+
+            row!(check, tip).spacing(25.0)
+        };
+
+        column!(title, x_col, y_col, axis_label, bar_labels, order)
             .spacing(20.0)
             .into()
     }
@@ -432,6 +443,10 @@ where
                 };
 
                 state.y_col = col;
+                None
+            }
+            BarChartConfigMessage::Order(order) => {
+                state.order = order;
                 None
             }
         }
