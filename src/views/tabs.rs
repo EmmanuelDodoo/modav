@@ -9,6 +9,7 @@ use iced::{
 
 use std::path::PathBuf;
 
+use super::barchart::BarChartTabData;
 use super::{
     barchart::BarChartMessage,
     line::{LineGraphTab, LineTabData, ModelMessage},
@@ -16,10 +17,6 @@ use super::{
 use super::{
     barchart::BarChartTab,
     editor::{EditorMessage, EditorTab, EditorTabData},
-};
-use super::{
-    barchart::BarChartTabData,
-    temp::{CounterMessage, CounterTab},
 };
 use super::{View, ViewType, Viewable};
 
@@ -35,7 +32,6 @@ use crate::FileIOAction;
 
 #[derive(Debug)]
 pub enum Tab {
-    Counter(CounterTab),
     Editor(EditorTab),
     LineGraph(LineGraphTab),
     BarChart(BarChartTab),
@@ -44,8 +40,6 @@ pub enum Tab {
 impl Tab {
     fn update(&mut self, tsg: TabMessage) -> Option<Message> {
         match (self, tsg) {
-            (Tab::Counter(tab), TabMessage::Counter(tsg)) => tab.update(tsg),
-            (Tab::Counter(_), _) => None,
             (Tab::Editor(tab), TabMessage::Editor(tsg)) => tab.update(tsg),
             (Tab::Editor(_), _) => None,
             (Tab::LineGraph(tab), TabMessage::LineGraph(tsg)) => tab.update(tsg),
@@ -57,7 +51,6 @@ impl Tab {
 
     fn is_dirty(&self) -> bool {
         match self {
-            Tab::Counter(tab) => tab.is_dirty(),
             Tab::Editor(tab) => tab.is_dirty(),
             Tab::LineGraph(tab) => tab.is_dirty(),
             Tab::BarChart(tab) => tab.is_dirty(),
@@ -66,7 +59,6 @@ impl Tab {
 
     fn label(&self) -> TabLabel {
         match self {
-            Tab::Counter(tab) => tab.label(),
             Tab::Editor(tab) => tab.label(),
             Tab::LineGraph(tab) => tab.label(),
             Tab::BarChart(tab) => tab.label(),
@@ -76,7 +68,6 @@ impl Tab {
     fn content(&self) -> Option<String> {
         match self {
             Tab::Editor(tab) => tab.content(),
-            Tab::Counter(tab) => tab.content(),
             Tab::LineGraph(tab) => tab.content(),
             Tab::BarChart(tab) => tab.content(),
         }
@@ -84,9 +75,6 @@ impl Tab {
 
     fn view(&self, idx: usize) -> Element<'_, TabBarMessage, Theme, Renderer> {
         match self {
-            Tab::Counter(tab) => {
-                tab.view(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::Counter(msg)))
-            }
             Tab::Editor(tab) => {
                 tab.view(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::Editor(msg)))
             }
@@ -103,8 +91,6 @@ impl Tab {
     /// Assumes the self.id matches Refresh's id
     fn refresh(&mut self, rsh: Refresh) {
         match (self, rsh) {
-            (Tab::Counter(tab), Refresh::Counter) => tab.refresh(()),
-            (Tab::Counter(_), _) => {}
             (Tab::Editor(tab), Refresh::Editor(data)) => tab.refresh(data),
             (Tab::Editor(_), _) => {}
             (Tab::LineGraph(tab), Refresh::LineGraph(data)) => tab.refresh(data),
@@ -118,7 +104,6 @@ impl Tab {
     fn kind(&self) -> ViewType {
         match self {
             Tab::Editor(_) => ViewType::Editor,
-            Tab::Counter(_) => ViewType::Counter,
             Tab::LineGraph(_) => ViewType::LineGraph,
             Tab::BarChart(_) => ViewType::BarChart,
         }
@@ -126,7 +111,6 @@ impl Tab {
 
     fn modal_msg(&self) -> String {
         match self {
-            Tab::Counter(tab) => tab.modal_msg(),
             Tab::Editor(tab) => tab.modal_msg(),
             Tab::LineGraph(tab) => tab.modal_msg(),
             Tab::BarChart(tab) => tab.modal_msg(),
@@ -135,7 +119,6 @@ impl Tab {
 
     fn path(&self) -> Option<PathBuf> {
         match self {
-            Tab::Counter(tab) => tab.path(),
             Tab::Editor(tab) => tab.path(),
             Tab::LineGraph(tab) => tab.path(),
             Tab::BarChart(tab) => tab.path(),
@@ -145,7 +128,6 @@ impl Tab {
     fn can_save(&self) -> bool {
         match self {
             Tab::Editor(tab) => tab.can_save(),
-            Tab::Counter(tab) => tab.can_save(),
             Tab::LineGraph(tab) => tab.can_save(),
             Tab::BarChart(tab) => tab.can_save(),
         }
@@ -154,7 +136,6 @@ impl Tab {
 
 #[derive(Debug, Clone)]
 pub enum TabMessage {
-    Counter(CounterMessage),
     Editor(EditorMessage),
     LineGraph(ModelMessage),
     BarChart(BarChartMessage),
@@ -172,7 +153,6 @@ pub enum Refresh {
     Editor(EditorTabData),
     LineGraph(LineTabData),
     BarChart(BarChartTabData),
-    Counter,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -352,11 +332,6 @@ where
 
     pub fn push_view(&mut self, view: View) {
         match view {
-            View::Counter => {
-                let counter = CounterTab::new(());
-                let tab = Tab::Counter(counter);
-                self.push_tab(tab);
-            }
             View::Editor(data) => {
                 let editor = EditorTab::new(data);
                 let tab = Tab::Editor(editor);

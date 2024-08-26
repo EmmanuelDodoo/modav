@@ -18,8 +18,6 @@ use tabs::{TabBarMessage, TabLabel, TabsState};
 mod editor;
 pub use editor::EditorTabData;
 
-mod temp;
-
 mod line;
 pub use line::LineTabData;
 
@@ -60,7 +58,6 @@ impl FileType {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum View {
-    Counter,
     Editor(EditorTabData),
     LineGraph(LineTabData),
     BarChart(BarChartTabData),
@@ -72,7 +69,6 @@ impl View {
     /// Returns true if this tab requires the contents of a file to be loaded
     pub fn should_load(&self) -> bool {
         match self {
-            Self::Counter => false,
             Self::Editor(_) => true,
             Self::LineGraph(_) => false,
             Self::BarChart(_) => false,
@@ -124,7 +120,6 @@ pub trait Viewable {
 
 #[derive(Debug, Default, Clone, PartialEq, Copy)]
 pub enum ViewType {
-    Counter,
     Editor,
     LineGraph,
     BarChart,
@@ -133,22 +128,14 @@ pub enum ViewType {
 }
 
 impl ViewType {
-    pub const ALL: &'static [Self] = &[
-        Self::Counter,
-        Self::Editor,
-        Self::LineGraph,
-        Self::BarChart,
-        Self::None,
-    ];
+    pub const ALL: &'static [Self] = &[Self::Editor, Self::LineGraph, Self::BarChart, Self::None];
 
     /// Options for the setup wizard
-    pub const WIZARD: &'static [Self] =
-        &[Self::Counter, Self::Editor, Self::LineGraph, Self::BarChart];
+    pub const WIZARD: &'static [Self] = &[Self::Editor, Self::LineGraph, Self::BarChart];
 
     pub fn name(&self) -> String {
         match self {
             Self::None => String::default(),
-            Self::Counter => "Counter".into(),
             Self::Editor => "Editor".into(),
             Self::LineGraph => "Line Graph".into(),
             Self::BarChart => "Bar Chart".into(),
@@ -160,10 +147,6 @@ impl ViewType {
         match self {
             Self::Editor => {
                 let icon = icons::icon(icons::EDITOR);
-                row!(icon, txt).spacing(5)
-            }
-            Self::Counter => {
-                let icon = icons::icon(icons::COUNTER);
                 row!(icon, txt).spacing(5)
             }
             Self::LineGraph => {
@@ -182,7 +165,6 @@ impl ViewType {
     pub fn has_config(&self) -> bool {
         match self {
             Self::Editor => false,
-            Self::Counter => false,
             Self::LineGraph => true,
             Self::BarChart => true,
             Self::None => false,
@@ -199,7 +181,6 @@ impl ViewType {
                 FileType::CSV => true,
                 _ => false,
             },
-            Self::Counter => true,
             Self::Editor => true,
             Self::None => false,
         }
@@ -212,7 +193,6 @@ impl fmt::Display for ViewType {
             f,
             "{}",
             match self {
-                ViewType::Counter => "Counter",
                 ViewType::Editor => "Editor",
                 ViewType::None => "None",
                 ViewType::LineGraph => "Line Graph",

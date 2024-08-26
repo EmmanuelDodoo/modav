@@ -62,7 +62,7 @@ fn main() -> Result<(), iced::Error> {
     Modav::run(Settings {
         window,
         antialiasing: true,
-        flags: Flags::Bar,
+        flags: Flags::Prod,
         ..Default::default()
     })
 }
@@ -418,11 +418,6 @@ impl Modav {
         content: String,
     ) -> Command<Message> {
         match action {
-            FileIOAction::NewTab((View::Counter, _)) => {
-                let idr = View::Counter;
-
-                self.update_tabs(TabsMessage::AddTab(idr))
-            }
             FileIOAction::NewTab((View::Editor(data), path)) => {
                 let data = data.path(path).data(content);
                 let idr = View::Editor(data);
@@ -459,9 +454,6 @@ impl Modav {
                 }
             }
             FileIOAction::NewTab((View::None, _)) => self.update_tabs(TabsMessage::None),
-            FileIOAction::RefreshTab((ViewType::Counter, tidx, _)) => {
-                self.update_tabs(TabsMessage::RefreshTab(tidx, Refresh::Counter))
-            }
             FileIOAction::RefreshTab((ViewType::Editor, tidx, path)) => {
                 let data = EditorTabData::new(Some(path), content);
                 let rsh = Refresh::Editor(data);
@@ -628,7 +620,6 @@ impl Application for Modav {
                     }
                     (Some(_path), false) => {
                         let idr = match tidr {
-                            View::Counter => View::Counter,
                             View::Editor(_) => View::None,
                             View::LineGraph(data) => {
                                 let data = data.theme(self.theme.clone());
@@ -646,7 +637,6 @@ impl Application for Modav {
                     (None, true) => self.update_tabs(TabsMessage::AddTab(tidr)),
                     (None, false) => {
                         let idr = match tidr {
-                            View::Counter => View::Counter,
                             View::Editor(_) => View::None,
                             View::LineGraph(_) => View::None,
                             View::BarChart(_) => View::None,

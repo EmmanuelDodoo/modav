@@ -114,7 +114,6 @@ where
     fn model_config(&self, state: &Hex) -> Element<'_, Charm> {
         match &state.model {
             ViewType::Editor => Space::new(0, 0).into(),
-            ViewType::Counter => Space::new(0, 0).into(),
             ViewType::LineGraph => LineGraphConfig::new(
                 &self.file,
                 state.sheet_config.clone(),
@@ -253,7 +252,6 @@ where
                         let data = EditorTabData::new(Some(self.file.clone()), String::default());
                         Ok(View::Editor(data))
                     }
-                    ViewType::Counter => Ok(View::Counter),
                     ViewType::None => Ok(View::None),
                 };
                 match config {
