@@ -1,5 +1,3 @@
-# Core
-
 # Modern Data Visualisation Tool (Modav)
 
 ## Description
@@ -46,6 +44,7 @@ To build,
 
 ```
 $ git clone https://github.com/EmmanuelDodoo/modav
+$ git checkout release-v0.1.0
 $ cd modav
 $ cargo build --release
 $ ./target/release/modav
