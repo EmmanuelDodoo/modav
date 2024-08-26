@@ -45,9 +45,15 @@ fn main() -> Result<(), iced::Error> {
 
     let (non_blocking, _log_writer) = tracing_appender::non_blocking(log_file);
 
-    let filter = EnvFilter::new("error")
-        .add_directive("modav=info".parse().unwrap())
-        .add_directive("modav_core=info".parse().unwrap());
+    let filter = EnvFilter::new("error");
+
+    let filter = if cfg!(debug_assertions) {
+        filter
+            .add_directive("modav=info".parse().unwrap())
+            .add_directive("modav_core=info".parse().unwrap())
+    } else {
+        filter
+    };
 
     tracing_subscriber::fmt()
         .with_writer(non_blocking)
