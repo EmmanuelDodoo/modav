@@ -32,7 +32,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y librust-atk-dev
+        sudo apt-get install -y libgtk*-dev librust-atk-dev 
 
     - name: Build
       run: cargo build --release
