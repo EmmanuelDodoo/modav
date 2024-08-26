@@ -385,7 +385,7 @@ where
             }
         }
 
-        return (axis - Self::AXIS_THICKNESS, record);
+        return (axis - (Self::AXIS_THICKNESS / 2.0), record);
     }
 }
 
