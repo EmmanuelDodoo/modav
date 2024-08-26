@@ -7,13 +7,14 @@ use std::{
 
 use iced::{
     alignment::{self, Horizontal, Vertical},
-    color, mouse,
+    color, font, mouse,
     widget::canvas::{self, Frame, Geometry, Path, Stroke, Text},
     Color, Point, Rectangle, Renderer, Size, Theme,
 };
 
 use crate::widgets::toolbar::ToolbarOption;
 
+const Y_LABEL_ROTATE_WIDTH: f32 = 16.0;
 pub trait Graphable<X, Y> {
     type Data: Default + Debug;
 
@@ -65,6 +66,7 @@ where
     points: Vec<T>,
     label: Option<String>,
     clean: bool,
+    caption: Option<String>,
 }
 
 impl<T> Axis<T>
@@ -79,7 +81,13 @@ where
             label,
             points,
             clean,
+            caption: None,
         }
+    }
+
+    pub fn caption(mut self, caption: String) -> Self {
+        self.caption = Some(caption);
+        self
     }
 
     pub fn clean(&mut self, clean: bool) {
@@ -96,7 +104,7 @@ where
         let mut record = HashMap::new();
 
         let axis_color = color!(205, 0, 150);
-        let label_color = theme.palette().primary;
+        let label_color = theme.extended_palette().secondary.strong.text;
         let text_color = theme.palette().text;
         let outlines_color = theme.extended_palette().background.weak.color;
 
@@ -211,33 +219,12 @@ where
 
                 outlines_count += 1;
             }
-            // Axis end arrows
-            {
-                let diff_x = 0.75 * x_offset_right;
-                let diff_y = 0.15 * x_offset_right;
-
-                let top = Point::new(x + x_offset_length + diff_x, y - diff_y);
-                let top_line = Path::line(axis_end, top);
-                frame.stroke(
-                    &top_line,
-                    Stroke::default()
-                        .with_width(Self::AXIS_THICKNESS)
-                        .with_color(axis_color),
-                );
-
-                let bottom = Point::new(x + x_offset_length + diff_x, y + diff_y);
-                let bottom_line = Path::line(axis_end, bottom);
-                frame.stroke(
-                    &bottom_line,
-                    Stroke::default()
-                        .with_width(Self::AXIS_THICKNESS)
-                        .with_color(axis_color),
-                );
-            };
 
             if let Some(label) = &self.label {
-                let label_position = Point::new(axis_end.x + (0.45 * x_padding_right), y);
-                let label_size = f32::clamp(0.25 * x_padding_right, 10.0, 16.0);
+                let y = y_padding_top + true_y_length;
+                let x = (x_offset_length / 2.0) + x_padding_left + x_offset_left;
+                let label_position = Point::new(x, y);
+                let label_size = 16.0;
 
                 let text = Text {
                     content: label.clone(),
@@ -246,6 +233,29 @@ where
                     vertical_alignment: Vertical::Center,
                     size: label_size.into(),
                     color: label_color,
+                    ..Default::default()
+                };
+
+                frame.fill_text(text);
+            }
+
+            if let Some(caption) = &self.caption {
+                let y = y_padding_top + true_y_length;
+                let x = (x_offset_length * 0.80) + x_padding_left + x_offset_left;
+                let caption_position = Point::new(x, y);
+                let caption_size = 14.0;
+
+                let text = Text {
+                    content: caption.clone(),
+                    position: caption_position,
+                    horizontal_alignment: Horizontal::Center,
+                    vertical_alignment: Vertical::Center,
+                    size: caption_size.into(),
+                    color: label_color,
+                    font: font::Font {
+                        style: font::Style::Italic,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 };
 
@@ -344,30 +354,6 @@ where
 
                 outlines_count += 1;
             }
-
-            //Axis end arrow
-            {
-                let diff_x = 0.2 * y_offset_top;
-                let diff_y = 0.45 * y_offset_top;
-
-                let left = Point::new(x - diff_x, y_padding_top + diff_y);
-                let left_line = Path::line(axis_start, left);
-                frame.stroke(
-                    &left_line,
-                    Stroke::default()
-                        .with_width(Self::AXIS_THICKNESS)
-                        .with_color(axis_color),
-                );
-
-                let right = Point::new(x + diff_x, y_padding_top + diff_y);
-                let right_line = Path::line(axis_start, right);
-                frame.stroke(
-                    &right_line,
-                    Stroke::default()
-                        .with_width(Self::AXIS_THICKNESS)
-                        .with_color(axis_color),
-                );
-            };
 
             if let Some(label) = &self.label {
                 let label_position = Point::new(x, axis_start.y * 0.65);
@@ -719,6 +705,40 @@ where
                 )
             });
         });
+
+        let _y_label_rotate = {
+            let mut frame = Frame::new(renderer, Size::new(100.0, Y_LABEL_ROTATE_WIDTH));
+
+            if let Some(label) = self.y_axis.label.clone() {
+                let x_padding = bounds.width * 0.0375;
+                let y_padding = {
+                    let height = bounds.height;
+                    let y_padding_top = 0.035 * height;
+                    let true_y_length = height - (1.5 * y_padding_top);
+                    let y_offset_bottom = 0.05 * true_y_length;
+                    let y_offset_top = 0.5 * y_offset_bottom;
+                    let y_offset_length = true_y_length - y_offset_bottom - y_offset_top;
+
+                    (y_offset_length / 2.0) + y_padding_top + y_offset_top
+                };
+                let position = Point::new(Point::ORIGIN.x + x_padding, Point::ORIGIN.y + y_padding);
+
+                let text = Text {
+                    content: label,
+                    position,
+                    horizontal_alignment: Horizontal::Center,
+                    vertical_alignment: Vertical::Center,
+                    color: theme.palette().primary,
+                    size: 16.0.into(),
+                    ..Default::default()
+                };
+
+                frame.fill_text(text);
+                frame.rotate(1.571);
+            };
+
+            frame.into_geometry()
+        };
 
         vec![content, self.legend(renderer, bounds, self.legend, theme)]
     }

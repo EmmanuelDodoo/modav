@@ -107,6 +107,7 @@ pub struct BarChartConfigState {
     pub title: String,
     pub x_col: usize,
     pub y_col: usize,
+    pub caption: Option<String>,
     pub row_exclude: HashSet<usize>,
     pub bar_label: BarChartBarLabels,
     pub axis_label: BarChartAxisLabelStrategy,
@@ -123,6 +124,7 @@ impl Default for BarChartConfigState {
             title: "Untitled".into(),
             x_col: 0,
             y_col: 0,
+            caption: None,
             bar_label: BarChartBarLabels::default(),
             axis_label: BarChartAxisLabelStrategy::default(),
             row_exclude: HashSet::default(),
@@ -142,12 +144,14 @@ impl BarChartConfigState {
             flexible,
             header_type,
             header_labels,
+            caption,
         } = sheet_config;
 
         self.trim = trim;
         self.flexible = flexible;
         self.header_labels = header_labels;
         self.header_types = header_type;
+        self.caption = caption;
     }
 }
 

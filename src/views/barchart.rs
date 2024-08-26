@@ -309,6 +309,7 @@ pub struct BarChartTabData {
     barchart: BarChart<Data, Data>,
     theme: Theme,
     order: bool,
+    caption: Option<String>,
 }
 
 impl BarChartTabData {
@@ -325,6 +326,7 @@ impl BarChartTabData {
             x_col,
             y_col,
             order,
+            caption,
         } = config;
 
         let sht = SheetBuilder::new(file.clone().into())
@@ -344,6 +346,7 @@ impl BarChartTabData {
             title,
             barchart,
             order,
+            caption,
             theme: Theme::default(),
         })
     }
@@ -368,11 +371,16 @@ pub struct BarChartTab {
     x_label: Option<String>,
     y_label: Option<String>,
     bars: Vec<GraphBar>,
+    caption: Option<String>,
 }
 
 impl BarChartTab {
     fn graph(&self) -> BarChartGraph<'_, BarChartMessage> {
-        let x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
+        let mut x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
+
+        if let Some(caption) = self.caption.clone() {
+            x_axis = x_axis.caption(caption);
+        }
 
         let y_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone(), false);
 
@@ -391,6 +399,7 @@ impl Viewable for BarChartTab {
             barchart,
             theme,
             order,
+            caption,
         } = data;
 
         let BarChart {
@@ -420,6 +429,7 @@ impl Viewable for BarChartTab {
             x_label,
             y_scale,
             y_label,
+            caption,
             bars,
         }
     }

@@ -415,6 +415,7 @@ pub struct LineTabData {
     title: String,
     theme: Theme,
     line: line::LineGraph<String, Data>,
+    caption: Option<String>,
 }
 
 impl LineTabData {
@@ -430,7 +431,7 @@ impl LineTabData {
             flexible,
             header_types,
             header_labels,
-            ..
+            caption,
         } = config;
 
         let sht = SheetBuilder::new(file.clone().into())
@@ -455,6 +456,7 @@ impl LineTabData {
             file,
             title,
             line,
+            caption,
             theme: Theme::default(),
         })
     }
@@ -480,11 +482,16 @@ pub struct LineGraphTab {
     y_label: Option<String>,
     lines: Vec<GraphLine<String, Data>>,
     theme: Theme,
+    caption: Option<String>,
 }
 
 impl LineGraphTab {
     fn graph(&self) -> LineGraph<ModelMessage, String, Data> {
-        let x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
+        let mut x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
+
+        if let Some(caption) = self.caption.clone() {
+            x_axis = x_axis.caption(caption);
+        }
 
         let y_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone(), false);
 
@@ -502,6 +509,7 @@ impl Viewable for LineGraphTab {
             title,
             line,
             theme,
+            caption,
         } = data;
 
         let line::LineGraph {
@@ -538,6 +546,7 @@ impl Viewable for LineGraphTab {
             y_scale,
             x_label: Some(x_label),
             y_label: Some(y_label),
+            caption,
         }
     }
 
@@ -583,6 +592,7 @@ impl Viewable for LineGraphTab {
             title,
             line,
             theme,
+            caption,
         } = data;
 
         let line::LineGraph {
@@ -612,6 +622,7 @@ impl Viewable for LineGraphTab {
         self.y_scale = y_scale;
         self.x_label = Some(x_label);
         self.y_label = Some(y_label);
+        self.caption = caption;
     }
 
     fn update(&mut self, message: Self::Event) -> Option<Message> {

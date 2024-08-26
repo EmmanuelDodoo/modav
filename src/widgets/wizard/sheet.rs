@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use iced::{
     widget::{
         button, checkbox, column, component, container, horizontal_space, pick_list, row, text,
-        vertical_space, Component,
+        text_input, vertical_space, Component,
     },
     Alignment, Element, Renderer, Theme,
 };
@@ -18,6 +18,7 @@ pub struct SheetConfigState {
     pub flexible: bool,
     pub header_type: HeaderTypesStrategy,
     pub header_labels: HeaderLabelStrategy,
+    pub caption: Option<String>,
 }
 
 impl Default for SheetConfigState {
@@ -27,6 +28,7 @@ impl Default for SheetConfigState {
             flexible: false,
             header_labels: HeaderLabelStrategy::ReadLabels,
             header_type: HeaderTypesStrategy::Infer,
+            caption: None,
         }
     }
 }
@@ -40,6 +42,7 @@ pub enum SheetConfigMessage {
     FlexibleToggled(bool),
     HeaderTypeChanged(HeaderTypesStrategy),
     HeaderLabelChanged(HeaderLabelStrategy),
+    CaptionChange(String),
 }
 
 pub struct SheetConfig<'a, Message> {
@@ -135,7 +138,17 @@ impl<'a, Message> SheetConfig<'a, Message> {
                 .align_items(Alignment::Center)
         };
 
-        column!(trim, flexible, header_labels, header_types,)
+        let caption = text_input(
+            "Graph Caption",
+            state
+                .caption
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_default(),
+        )
+        .on_input(SheetConfigMessage::CaptionChange);
+
+        column!(trim, flexible, header_labels, header_types, caption)
             .align_items(Alignment::Start)
             .spacing(30.0)
             .into()
@@ -168,6 +181,15 @@ where
             }
             SheetConfigMessage::HeaderLabelChanged(label) => {
                 state.header_labels = label;
+                None
+            }
+            SheetConfigMessage::CaptionChange(caption) => {
+                if !caption.is_empty() {
+                    state.caption = Some(caption);
+                } else {
+                    state.caption = None;
+                }
+
                 None
             }
         }

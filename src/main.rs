@@ -192,6 +192,7 @@ impl Flags {
                         axis_label: BarChartAxisLabelStrategy::Headers,
                         bar_label: BarChartBarLabels::FromColumn(0),
                         order: true,
+                        caption: Some("Caption: This".into()),
                         ..Default::default()
                     };
 

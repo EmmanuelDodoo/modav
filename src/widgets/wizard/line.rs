@@ -66,6 +66,7 @@ pub struct LineConfigState {
     pub title: String,
     pub x_label: String,
     pub y_label: String,
+    pub caption: Option<String>,
     pub label_strat: LineLabelStrategy,
     pub row_exclude: HashSet<usize>,
     pub col_exclude: HashSet<usize>,
@@ -81,6 +82,7 @@ impl Default for LineConfigState {
             title: "Untitled".into(),
             x_label: String::default(),
             y_label: String::default(),
+            caption: None,
             label_strat: LineLabelStrategy::FromCell(0),
             row_exclude: HashSet::default(),
             col_exclude: HashSet::default(),
@@ -99,12 +101,14 @@ impl LineConfigState {
             flexible,
             header_type,
             header_labels,
+            caption,
         } = sheet_config;
 
         self.trim = trim;
         self.flexible = flexible;
         self.header_labels = header_labels;
         self.header_types = header_type;
+        self.caption = caption;
     }
 }
 
