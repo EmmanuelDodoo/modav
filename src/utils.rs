@@ -444,14 +444,14 @@ pub mod menus {
     }
 
     pub fn about_menu<'a>() -> DashMenu<Message, Renderer> {
-        let menu = DashMenu::new(icons::INFO, "About").on_select(Message::None);
+        let menu = DashMenu::new(icons::INFO, "About").on_select(Message::OpenAboutDialog);
 
         menu_styler(menu)
     }
 
     pub fn settings_menu<'a>() -> DashMenu<Message, Renderer> {
         let menu =
-            DashMenu::new(icons::SETTINGS, "Settings").on_select(Message::ToggleSettingsDialog);
+            DashMenu::new(icons::SETTINGS, "Settings").on_select(Message::OpenSettingsDialog);
 
         menu_styler(menu)
     }

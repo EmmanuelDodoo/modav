@@ -30,6 +30,7 @@ use widgets::{
     dashmenu::{DashMenu, DashMenuOption},
     modal::Modal,
     settings::SettingsDialog,
+    style::dialog_container,
     toast::{self, Status, Toast},
     wizard::{BarChartConfigState, LineConfigState, Wizard},
 };
@@ -94,6 +95,15 @@ impl FileIOAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+enum DialogView {
+    Wizard,
+    Settings,
+    About,
+    #[default]
+    None,
+}
+
 pub struct Modav {
     theme: Theme,
     theme_shadow: Theme,
@@ -103,8 +113,7 @@ pub struct Modav {
     tabs: Tabs<Theme>,
     toasts: Vec<Toast>,
     toast_timeout: u64,
-    wizard_shown: bool,
-    settings_shown: bool,
+    dialog_view: DialogView,
     error: AppError,
 }
 
@@ -134,22 +143,20 @@ impl Flags {
             .tab_spacing(2.5)
             .tab_bar_padding(3)
             .tab_padding([5, 7]);
-        let wizard_shown = false;
-        let settings_shown = false;
         let toast_timeout = 2;
+        let dialog_view = DialogView::default();
         match self {
             Self::Prod => Modav {
                 file_path: None,
                 current_view: ViewType::None,
                 theme_shadow: theme.clone(),
-                wizard_shown,
-                settings_shown,
                 title,
                 theme,
                 toasts,
                 toast_timeout,
                 error,
                 tabs,
+                dialog_view,
             },
             Self::Line => {
                 let file_path = PathBuf::from("../../../alter.csv");
@@ -166,8 +173,6 @@ impl Flags {
                 Modav {
                     file_path: Some(file_path),
                     theme_shadow: theme.clone(),
-                    wizard_shown,
-                    settings_shown,
                     current_view,
                     title,
                     theme,
@@ -175,6 +180,7 @@ impl Flags {
                     toast_timeout,
                     error,
                     tabs,
+                    dialog_view,
                 }
             }
             Self::Bar => {
@@ -205,8 +211,6 @@ impl Flags {
                 Modav {
                     file_path: Some(file_path),
                     theme_shadow: theme.clone(),
-                    wizard_shown,
-                    settings_shown,
                     current_view,
                     title,
                     theme,
@@ -214,6 +218,7 @@ impl Flags {
                     toast_timeout,
                     error,
                     tabs,
+                    dialog_view,
                 }
             }
         }
@@ -241,10 +246,12 @@ pub enum Message {
     TabsMessage(TabsMessage),
     Debugging,
     WizardSubmit(PathBuf, View),
-    ToggleWizardShown,
-    ToggleSettingsDialog,
+    CloseWizard,
+    OpenSettingsDialog,
     AbortSettings,
     SaveSettings(Theme, u64),
+    OpenAboutDialog,
+    CloseAboutDialog,
     OpenLogFile,
     ChangeTheme(Theme),
     AddToast(Toast),
@@ -515,6 +522,17 @@ impl Modav {
         let message: String = message.into();
         info!(message);
     }
+
+    fn about(&self) -> Element<'_, Message> {
+        let text = text(
+            "Yet another one of my projects. I started this particular one to grow more familiar with Rust. I hope to be able to continue this is it for now. 
+
+This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 parts. This is the Iced GUI frontend. The backend, modav_core, can be found on my Github profile.
+            ",
+        );
+
+        dialog_container(text).height(Length::Shrink).into()
+    }
 }
 
 impl Application for Modav {
@@ -579,7 +597,7 @@ impl Application for Modav {
                         .unwrap_or("None")
                 ));
                 self.file_path = Some(p);
-                self.wizard_shown = true;
+                self.dialog_view = DialogView::Wizard;
                 Command::none()
             }
             Message::FileSelected(Err(e)) => Command::perform(async { e }, Message::Error),
@@ -594,7 +612,7 @@ impl Application for Modav {
                 self.file_io_action_handler(action, res)
             }
             Message::OpenLogFile => {
-                self.settings_shown = false;
+                self.dialog_view = DialogView::None;
                 self.theme = self.theme_shadow.clone();
                 self.info_log("Opening Log file");
 
@@ -699,17 +717,12 @@ impl Application for Modav {
                 dbg!("Debugging Message sent!");
                 Command::none()
             }
-            Message::ToggleWizardShown => {
-                if self.wizard_shown {
-                    self.wizard_shown = false;
-                    Command::perform(async {}, |_| Message::NewActiveTab)
-                } else {
-                    self.wizard_shown = true;
-                    Command::none()
-                }
+            Message::CloseWizard => {
+                self.dialog_view = DialogView::None;
+                Command::perform(async {}, |_| Message::NewActiveTab)
             }
             Message::WizardSubmit(path, view) => {
-                self.wizard_shown = false;
+                self.dialog_view = DialogView::None;
                 self.info_log("Wizard Submitted");
                 Command::perform(async { Message::OpenTab(Some(path), view) }, |msg| msg)
             }
@@ -718,14 +731,14 @@ impl Application for Modav {
                 self.info_log("Theme Changed");
                 Command::none()
             }
-            Message::ToggleSettingsDialog => {
-                self.settings_shown = !self.settings_shown;
-                self.info_log("Settings Dialog Closed");
+            Message::OpenSettingsDialog => {
+                self.dialog_view = DialogView::Settings;
+                self.info_log("Settings Dialog Opened");
                 Command::none()
             }
             Message::AbortSettings => {
                 self.theme = self.theme_shadow.clone();
-                self.settings_shown = false;
+                self.dialog_view = DialogView::None;
                 self.info_log("Settings Aborted");
                 Command::none()
             }
@@ -733,7 +746,7 @@ impl Application for Modav {
                 self.theme_shadow = theme.clone();
                 self.theme = theme;
                 self.toast_timeout = timeout;
-                self.settings_shown = false;
+                self.dialog_view = DialogView::None;
 
                 let toast = Toast {
                     body: "Settings Saved".into(),
@@ -749,6 +762,16 @@ impl Application for Modav {
             }
             Message::CloseToast(index) => {
                 self.toasts.remove(index);
+                Command::none()
+            }
+            Message::OpenAboutDialog => {
+                self.dialog_view = DialogView::About;
+                self.info_log("About dialog open");
+                Command::none()
+            }
+            Message::CloseAboutDialog => {
+                self.dialog_view = DialogView::None;
+                self.info_log("About dialog closed");
                 Command::none()
             }
             Message::OpenEditor(path) => match path {
@@ -801,29 +824,34 @@ impl Application for Modav {
 
         let main_axis = column!(cross_axis, status_bar);
 
-        let content: Element<'_, Message> = if self.settings_shown {
-            let settings = SettingsDialog::new(self.theme.clone(), self.toast_timeout)
-                .on_cancel(Message::AbortSettings)
-                .on_submit(Message::SaveSettings)
-                .on_log(Message::OpenLogFile)
-                .on_theme_change(Message::ChangeTheme);
-            Modal::new(main_axis, settings)
-                .on_blur(Message::AbortSettings)
-                .into()
-        } else if self.wizard_shown {
-            let file = self
-                .file_path
-                .clone()
-                .expect("File path was empty for Wizard")
-                .clone();
-            let wizard = Wizard::new(file, Message::WizardSubmit, Message::Error)
-                .on_reselect(Message::SelectFile)
-                .on_cancel(Message::ToggleWizardShown);
-            Modal::new(main_axis, wizard)
-                .on_blur(Message::ToggleWizardShown)
-                .into()
-        } else {
-            main_axis.into()
+        let content: Element<'_, Message> = match self.dialog_view {
+            DialogView::None => main_axis.into(),
+            DialogView::Wizard => {
+                let file = self
+                    .file_path
+                    .clone()
+                    .expect("File path was empty for Wizard")
+                    .clone();
+                let wizard = Wizard::new(file, Message::WizardSubmit, Message::Error)
+                    .on_reselect(Message::SelectFile)
+                    .on_cancel(Message::CloseWizard);
+                Modal::new(main_axis, wizard)
+                    .on_blur(Message::CloseWizard)
+                    .into()
+            }
+            DialogView::Settings => {
+                let settings = SettingsDialog::new(self.theme.clone(), self.toast_timeout)
+                    .on_cancel(Message::AbortSettings)
+                    .on_submit(Message::SaveSettings)
+                    .on_log(Message::OpenLogFile)
+                    .on_theme_change(Message::ChangeTheme);
+                Modal::new(main_axis, settings)
+                    .on_blur(Message::AbortSettings)
+                    .into()
+            }
+            DialogView::About => Modal::new(main_axis, self.about())
+                .on_blur(Message::CloseAboutDialog)
+                .into(),
         };
 
         let content = toast::Manager::new(content, &self.toasts, Message::CloseToast, &self.theme)
