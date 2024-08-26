@@ -3,7 +3,7 @@ name = "modav"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-documentation = "This is a personal learning project aimed at creating a simple, intuitive, and modern data visualization tool using Rust."
+description = "This is a personal learning project aimed at creating a simple, intuitive, and modern data visualization tool using Rust."
 repository = "https://github.com/EmmanuelDodoo/modav"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

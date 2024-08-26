@@ -8,7 +8,7 @@ This is a personal learning project aimed at creating a simple, intuitive, and m
 
 The tool is designed to enable users to effortlessly explore and present their data in various visual forms.
 
-The project is split into 2 parts. The core functionality and the GUI application. This repository is for GUI Application. The GUI repo can be found [here](https://github.com/EmmanuelDodoo/modav_core).
+The project is split into 2 parts. The core functionality and the GUI application. This repository is for GUI Application. The backend repo can be found [here](https://github.com/EmmanuelDodoo/modav_core).
 
 ## Planned Features/Goals
 
