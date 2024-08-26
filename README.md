@@ -32,6 +32,25 @@ I plan to support the most common dataset operations, models and data formats. I
 
 See the [images](images/) folder for more examples.
 
+## Install from Package
+
+Pre-built packages for Windows, Ubuntu Linux and MacOS can be found on the
+[Releases](https://github.com/EmmanuelDodoo/modav/releases) page.
+
+## Install from Source
+
+A [Rust Installation](https://www.rust-lang.org/) is needed to compile Modav.
+The Minimum Supported Rust Version is 1.77.0. 
+
+To build,
+
+```
+$ git clone https://github.com/EmmanuelDodoo/modav
+$ cd modav
+$ cargo build --release
+$ ./target/release/modav
+```
+
 ## Contributing
 
 At this moment, this project is specifically for gaining experience in Rust so contributions are closed. However, should the project expand past the set goals above, Contributions will be allowed.
