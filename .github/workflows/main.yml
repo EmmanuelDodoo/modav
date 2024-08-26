@@ -13,14 +13,11 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         include:
           - os: ubuntu-latest
-            artifact_name: linux
-            asset_name: modav-linux
+            artifact_name: modav
           - os: windows-latest
-            artifact_name: windows
-            asset_name: modav-windows.exe
+            artifact_name: modav.exe
           - os: macos-latest
-            artifact_name: macos
-            asset_name: your-app-macos
+            artifact_name: modav
 
     steps:
     - uses: actions/checkout@v3
@@ -34,11 +31,19 @@ jobs:
     - name: Build
       run: cargo build --release
 
+    - name: Rename binary (Unix)
+      if: matrix.os != 'windows-latest'
+      run: mv target/release/modav target/release/${{ matrix.artifact_name }}
+
+    - name: Rename binary (Windows)
+      if: matrix.os == 'windows-latest'
+      run: mv target/release/modav.exe target/release/${{ matrix.artifact_name }}
+
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
         name: ${{ matrix.artifact_name }}
-        path: target/release/${{ matrix.asset_name }}
+        path: target/release/${{ matrix.artifact_name }}
 
   create_release:
     needs: build
