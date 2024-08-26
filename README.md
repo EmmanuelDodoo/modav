@@ -20,23 +20,17 @@ I plan to support the most common dataset operations, models and data formats. I
 - JSON
 - Excel/Spreadsheet Files
 
-### Visualisation Models (Not from this application)
+### Visualisation Models
 
 - Line Charts
 
-![1000176607.jpg](images/line.jpg)
-
-- Tables
-
-![table.png](images/table.png)
+![line chart](images/line.png)
 
 - Bar graphs
 
-![Untitled](images/bar.png)
+![Bar chart](images/bar.png)
 
-- Tree graphs
-
-![graph.png](images/graph.png)
+See the [images](images/) folder for more examples.
 
 ## Contributing
 
