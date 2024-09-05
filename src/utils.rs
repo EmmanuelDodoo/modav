@@ -257,28 +257,17 @@ pub mod coloring {
         random: f32,
         mode: ColoringMode,
         stable_h: f32,
-        diff: f32,
+        count: u32,
     }
 
     impl ColorEngine {
         const RATIO: f32 = 0.60;
+        const DEFAULT_COUNT: u32 = 5;
 
         pub fn new<'a>(seed: &'a Theme) -> Self {
             let rng: f32 = thread_rng().gen();
             let is_dark = seed.extended_palette().is_dark;
             let seed: HSV = seed.extended_palette().secondary.base.color.into();
-
-            let diff = {
-                let darker: f32 = seed.v.into();
-                let lighter = 1.0 - seed.v;
-
-                // There's more room to be lighter
-                if lighter > darker {
-                    lighter * 0.2
-                } else {
-                    darker * -0.2
-                }
-            };
 
             let stable_h = {
                 let seed: f32 = seed.h.into();
@@ -289,10 +278,18 @@ pub mod coloring {
                 seed,
                 is_dark,
                 stable_h,
-                diff,
+                count: Self::DEFAULT_COUNT,
                 random: rng,
                 mode: ColoringMode::Normal,
             }
+        }
+
+        pub fn count(mut self, count: u32) -> Self {
+            if count > 0 {
+                self.count = count;
+            }
+
+            self
         }
 
         pub fn gradual(mut self, gradual: bool) -> Self {
@@ -328,7 +325,7 @@ pub mod coloring {
                     generated.into()
                 }
                 ColoringMode::Gradual => {
-                    let diff = 0.075;
+                    let diff = 0.85 / (self.count as f32);
                     let generated = if self.is_dark {
                         let v = { self.seed.v + diff }.min(0.925);
                         HSV::new(self.stable_h, 0.8, v)

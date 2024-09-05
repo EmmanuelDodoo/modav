@@ -46,7 +46,7 @@ impl ColorEngineTesting {
     fn sample(&self, theme: &Theme) -> Row<'_, ()> {
         let Size { width, height } = self.size;
 
-        let colors = ColorEngine::new(theme).gradual(true);
+        let colors = ColorEngine::new(theme).gradual(true).count(self.amount);
 
         let iter = 0..self.amount;
 
