@@ -12,7 +12,7 @@ use iced::{
 use crate::Message;
 
 pub mod tabs;
-pub use tabs::Refresh;
+pub use tabs::{Refresh, Tab};
 use tabs::{TabBarMessage, TabLabel, TabsState};
 
 mod editor;
@@ -25,6 +25,8 @@ mod barchart;
 pub use barchart::BarChartTabData;
 
 mod shared;
+
+pub mod temp;
 
 use crate::utils::icons;
 
@@ -123,12 +125,19 @@ pub enum ViewType {
     Editor,
     LineGraph,
     BarChart,
+    Color,
     #[default]
     None,
 }
 
 impl ViewType {
-    pub const ALL: &'static [Self] = &[Self::Editor, Self::LineGraph, Self::BarChart, Self::None];
+    pub const ALL: &'static [Self] = &[
+        Self::Editor,
+        Self::LineGraph,
+        Self::BarChart,
+        Self::Color,
+        Self::None,
+    ];
 
     /// Options for the setup wizard
     pub const WIZARD: &'static [Self] = &[Self::Editor, Self::LineGraph, Self::BarChart];
@@ -139,6 +148,7 @@ impl ViewType {
             Self::Editor => "Editor".into(),
             Self::LineGraph => "Line Graph".into(),
             Self::BarChart => "Bar Chart".into(),
+            Self::Color => "Coloring Engine test".into(),
         }
     }
 
@@ -157,6 +167,10 @@ impl ViewType {
                 let icon = icons::icon(icons::BARCHART);
                 row!(icon, txt).spacing(5)
             }
+            Self::Color => {
+                let icon = icons::icon(icons::SETTINGS);
+                row!(icon, txt).spacing(5)
+            }
             Self::None => Row::new(),
         }
     }
@@ -167,6 +181,7 @@ impl ViewType {
             Self::Editor => false,
             Self::LineGraph => true,
             Self::BarChart => true,
+            Self::Color => false,
             Self::None => false,
         }
     }
@@ -182,6 +197,7 @@ impl ViewType {
                 _ => false,
             },
             Self::Editor => true,
+            Self::Color => false,
             Self::None => false,
         }
     }
@@ -195,6 +211,7 @@ impl fmt::Display for ViewType {
             match self {
                 ViewType::Editor => "Editor",
                 ViewType::None => "None",
+                ViewType::Color => "Coloring Engine Test",
                 ViewType::LineGraph => "Line Graph",
                 ViewType::BarChart => "Bar Chart",
             }

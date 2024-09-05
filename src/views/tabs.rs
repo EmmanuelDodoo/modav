@@ -9,7 +9,6 @@ use iced::{
 
 use std::path::PathBuf;
 
-use super::barchart::BarChartTabData;
 use super::{
     barchart::BarChartMessage,
     line::{LineGraphTab, LineTabData, ModelMessage},
@@ -18,6 +17,7 @@ use super::{
     barchart::BarChartTab,
     editor::{EditorMessage, EditorTab, EditorTabData},
 };
+use super::{barchart::BarChartTabData, temp::ColorEngineTesting};
 use super::{View, ViewType, Viewable};
 
 use crate::widgets::style::DialogContainer;
@@ -35,6 +35,7 @@ pub enum Tab {
     Editor(EditorTab),
     LineGraph(LineGraphTab),
     BarChart(BarChartTab),
+    Color(ColorEngineTesting),
 }
 
 impl Tab {
@@ -46,6 +47,7 @@ impl Tab {
             (Tab::LineGraph(_), _) => None,
             (Tab::BarChart(tab), TabMessage::BarChart(tsg)) => tab.update(tsg),
             (Tab::BarChart(_), _) => None,
+            (Tab::Color(_), _) => None,
         }
     }
 
@@ -54,6 +56,7 @@ impl Tab {
             Tab::Editor(tab) => tab.is_dirty(),
             Tab::LineGraph(tab) => tab.is_dirty(),
             Tab::BarChart(tab) => tab.is_dirty(),
+            Tab::Color(tab) => tab.is_dirty(),
         }
     }
 
@@ -62,6 +65,7 @@ impl Tab {
             Tab::Editor(tab) => tab.label(),
             Tab::LineGraph(tab) => tab.label(),
             Tab::BarChart(tab) => tab.label(),
+            Tab::Color(tab) => tab.label(),
         }
     }
 
@@ -70,6 +74,7 @@ impl Tab {
             Tab::Editor(tab) => tab.content(),
             Tab::LineGraph(tab) => tab.content(),
             Tab::BarChart(tab) => tab.content(),
+            Tab::Color(tab) => tab.content(),
         }
     }
 
@@ -84,6 +89,7 @@ impl Tab {
             Tab::BarChart(tab) => {
                 tab.view(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::BarChart(msg)))
             }
+            Tab::Color(tab) => tab.view(move |_msg| TabBarMessage::None),
         }
     }
 
@@ -97,6 +103,7 @@ impl Tab {
             (Tab::LineGraph(_), _) => {}
             (Tab::BarChart(tab), Refresh::BarChart(data)) => tab.refresh(data),
             (Tab::BarChart(_), _) => {}
+            (Tab::Color(_), _) => {}
         }
     }
 
@@ -106,6 +113,7 @@ impl Tab {
             Tab::Editor(_) => ViewType::Editor,
             Tab::LineGraph(_) => ViewType::LineGraph,
             Tab::BarChart(_) => ViewType::BarChart,
+            Tab::Color(_) => ViewType::Color,
         }
     }
 
@@ -114,6 +122,7 @@ impl Tab {
             Tab::Editor(tab) => tab.modal_msg(),
             Tab::LineGraph(tab) => tab.modal_msg(),
             Tab::BarChart(tab) => tab.modal_msg(),
+            Tab::Color(tab) => tab.modal_msg(),
         }
     }
 
@@ -122,6 +131,7 @@ impl Tab {
             Tab::Editor(tab) => tab.path(),
             Tab::LineGraph(tab) => tab.path(),
             Tab::BarChart(tab) => tab.path(),
+            Tab::Color(tab) => tab.path(),
         }
     }
 
@@ -130,6 +140,7 @@ impl Tab {
             Tab::Editor(tab) => tab.can_save(),
             Tab::LineGraph(tab) => tab.can_save(),
             Tab::BarChart(tab) => tab.can_save(),
+            Tab::Color(tab) => tab.can_save(),
         }
     }
 }
@@ -321,7 +332,7 @@ where
         self
     }
 
-    fn push_tab(&mut self, tab: Tab) {
+    pub fn push_tab(&mut self, tab: Tab) {
         let new_active = self.active_tab.map(|idx| idx + 1).unwrap_or(0);
 
         self.labels.insert(new_active, tab.label());

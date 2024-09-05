@@ -132,6 +132,7 @@ where
                 Charm::Cancel,
             )
             .into(),
+            ViewType::Color => Space::new(0, 0).into(),
             ViewType::None => Space::new(0, 0).into(),
         }
     }
@@ -252,6 +253,7 @@ where
                         let data = EditorTabData::new(Some(self.file.clone()), String::default());
                         Ok(View::Editor(data))
                     }
+                    ViewType::Color => Ok(View::None),
                     ViewType::None => Ok(View::None),
                 };
                 match config {

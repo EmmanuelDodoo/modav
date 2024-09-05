@@ -21,8 +21,10 @@ use utils::{icons, load_file, menus, pick_file, save_file, AppError};
 
 mod views;
 use views::{
-    home_view, BarChartTabData, EditorTabData, LineTabData, Refresh, Tabs, TabsMessage, View,
-    ViewType,
+    home_view,
+    temp::{ColorEngineTesting, EngineData},
+    BarChartTabData, EditorTabData, LineTabData, Refresh, Tab, Tabs, TabsMessage, View, ViewType,
+    Viewable,
 };
 
 pub mod widgets;
@@ -69,7 +71,7 @@ fn main() -> Result<(), iced::Error> {
     Modav::run(Settings {
         window,
         antialiasing: true,
-        flags: Flags::Prod,
+        flags: Flags::Color,
         ..Default::default()
     })
 }
@@ -127,6 +129,7 @@ pub struct Modav {
 pub enum Flags {
     Bar,
     Line,
+    Color,
     #[default]
     Prod,
 }
@@ -209,13 +212,38 @@ impl Flags {
                     };
 
                     let data = BarChartTabData::new(file_path.clone(), config)
-                        .expect("Bar Chart panic with dev flag");
+                        .expect("Bar Chart panic with dev flag")
+                        .theme(theme.clone());
                     let view = View::BarChart(data);
                     tabs.update(TabsMessage::AddTab(view));
                 }
 
                 Modav {
                     file_path: Some(file_path),
+                    theme_shadow: theme.clone(),
+                    current_view,
+                    title,
+                    theme,
+                    toasts,
+                    toast_timeout,
+                    error,
+                    tabs,
+                    dialog_view,
+                }
+            }
+            Self::Color => {
+                let current_view = ViewType::Color;
+
+                let data = EngineData::default().dark(theme.clone()).amount(10);
+
+                let tab = ColorEngineTesting::new(data);
+
+                let tab = Tab::Color(tab);
+
+                tabs.push_tab(tab);
+
+                Modav {
+                    file_path: None,
                     theme_shadow: theme.clone(),
                     current_view,
                     title,
@@ -500,6 +528,9 @@ impl Modav {
                 }
             }
             FileIOAction::RefreshTab((ViewType::None, _, _)) => self.update_tabs(TabsMessage::None),
+            FileIOAction::RefreshTab((ViewType::Color, _, _)) => {
+                self.update_tabs(TabsMessage::None)
+            }
             FileIOAction::CloseTab(idx) => {
                 let tsg = TabsMessage::CloseTab(idx, true);
                 self.update_tabs(tsg)
