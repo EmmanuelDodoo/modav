@@ -70,6 +70,16 @@ pub mod coloring {
         }
     }
 
+    impl std::ops::Sub<F2> for f32 {
+        type Output = f32;
+
+        fn sub(self, rhs: F2) -> Self::Output {
+            let temp: f32 = rhs.into();
+
+            self - temp
+        }
+    }
+
     impl F2 {
         /// Hard clamps to 0.0 or 1.0 if [`value`] is below or above range.
         fn new(value: f32) -> Self {
@@ -80,6 +90,14 @@ pub mod coloring {
             } else {
                 Self(value)
             }
+        }
+
+        fn min(self, other: f32) -> Self {
+            f32::min(self.0, other).into()
+        }
+
+        fn max(self, other: f32) -> Self {
+            f32::max(self.0, other).into()
         }
     }
 
@@ -239,6 +257,7 @@ pub mod coloring {
         random: f32,
         mode: ColoringMode,
         stable_h: f32,
+        diff: f32,
     }
 
     impl ColorEngine {
@@ -249,6 +268,18 @@ pub mod coloring {
             let is_dark = seed.extended_palette().is_dark;
             let seed: HSV = seed.extended_palette().secondary.base.color.into();
 
+            let diff = {
+                let darker: f32 = seed.v.into();
+                let lighter = 1.0 - seed.v;
+
+                // There's more room to be lighter
+                if lighter > darker {
+                    lighter * 0.2
+                } else {
+                    darker * -0.2
+                }
+            };
+
             let stable_h = {
                 let seed: f32 = seed.h.into();
                 (rng + Self::RATIO + seed) % 1.0
@@ -258,6 +289,7 @@ pub mod coloring {
                 seed,
                 is_dark,
                 stable_h,
+                diff,
                 random: rng,
                 mode: ColoringMode::Normal,
             }
@@ -265,6 +297,11 @@ pub mod coloring {
 
         pub fn gradual(mut self, gradual: bool) -> Self {
             if gradual {
+                if self.is_dark {
+                    self.seed.v = (0.15).into()
+                } else {
+                    self.seed.v = (0.85).into()
+                }
                 self.mode = ColoringMode::Gradual;
             } else {
                 self.mode = ColoringMode::Normal;
@@ -291,14 +328,13 @@ pub mod coloring {
                     generated.into()
                 }
                 ColoringMode::Gradual => {
-                    let diff = 0.10;
-
+                    let diff = 0.075;
                     let generated = if self.is_dark {
-                        let v = { self.seed.v - diff };
+                        let v = { self.seed.v + diff }.min(0.925);
                         HSV::new(self.stable_h, 0.8, v)
                     } else {
-                        let v = { self.seed.v + diff };
-                        HSV::new(self.stable_h, 0.69, v)
+                        let v = { self.seed.v - diff }.max(0.125);
+                        HSV::new(self.stable_h, 0.8, v)
                     };
 
                     self.seed = generated;
