@@ -66,7 +66,7 @@ impl From<Bar<Data, Data>> for GraphBar {
 }
 
 impl Graphable<Data, Data> for GraphBar {
-    type Data = ();
+    type Data = bool;
 
     fn label(&self) -> Option<&String> {
         self.label.as_ref()
@@ -83,11 +83,11 @@ impl Graphable<Data, Data> for GraphBar {
         x_points: &HashMap<Data, f32>,
         x_axis: f32,
         y_points: &HashMap<Data, f32>,
-        _y_axis: f32,
-        _data: &Self::Data,
+        y_axis: f32,
+        data: &Self::Data,
     ) {
-        let width = {
-            let (x, y) = x_points
+        let width = |base: &HashMap<Data, f32>| {
+            let (x, y) = base
                 .values()
                 .into_iter()
                 .fold((None, None), |acc, curr| match acc {
@@ -109,7 +109,6 @@ impl Graphable<Data, Data> for GraphBar {
                         }
                     }
                 });
-
             match y {
                 Some(y) => {
                     let width = f32::abs(
@@ -122,24 +121,46 @@ impl Graphable<Data, Data> for GraphBar {
             }
         };
 
-        let x = *x_points.get(&self.point.x).unwrap_or(&-1.0);
+        if *data {
+            let height = width(y_points);
+            let x = *x_points.get(&self.point.y).unwrap_or(&-1.0);
+            if x < 0.0 {
+                warn!("Bar char x point, {} not found", &self.point.y);
+                return;
+            }
+            let y = *y_points.get(&self.point.x).unwrap_or(&-1.0);
 
-        if x < 0.0 {
-            warn!("Bar char x point, {} not found", &self.point.x);
-            return;
+            if y < 0.0 {
+                warn!("Bar char x point, {} not found", &self.point.x);
+                return;
+            }
+
+            let top_left = Point::new(y_axis + 2.5, y - (height / 2.0));
+            let size = Size::new(x - y_axis, height);
+
+            frame.fill_rectangle(top_left, size, self.color);
+        } else {
+            let width = width(x_points);
+
+            let x = *x_points.get(&self.point.x).unwrap_or(&-1.0);
+
+            if x < 0.0 {
+                warn!("Bart char x point, {} not found", &self.point.x);
+                return;
+            }
+
+            let y = *y_points.get(&self.point.y).unwrap_or(&-1.0);
+
+            if y < 0.0 {
+                warn!("Bart char x point, {} not found", &self.point.y);
+                return;
+            }
+
+            let top_left = Point::new(x - (width / 2.0), y);
+            let size = Size::new(width, x_axis - y);
+
+            frame.fill_rectangle(top_left, size, self.color);
         }
-
-        let y = *y_points.get(&self.point.y).unwrap_or(&-1.0);
-
-        if y < 0.0 {
-            warn!("Bar char x point, {} not found", &self.point.y);
-            return;
-        }
-
-        let top_left = Point::new(x - (width / 2.0), y);
-        let size = Size::new(width, x_axis - y);
-
-        frame.fill_rectangle(top_left, size, self.color);
     }
 }
 
@@ -160,6 +181,7 @@ pub struct BarChartGraph<'a, Message> {
     bars: &'a Vec<GraphBar>,
     cache: canvas::Cache,
     on_open_editor: Option<Message>,
+    is_horizontal: bool,
 }
 
 impl<'a, Message> BarChartGraph<'a, Message> {
@@ -169,6 +191,7 @@ impl<'a, Message> BarChartGraph<'a, Message> {
             y_axis,
             bars,
             cache: canvas::Cache::default(),
+            is_horizontal: false,
             on_open_editor: None,
         }
     }
@@ -251,6 +274,11 @@ impl<'a, Message> BarChartGraph<'a, Message> {
         self.on_open_editor = Some(message);
         self
     }
+
+    pub fn is_horizontal(mut self, flag: bool) -> Self {
+        self.is_horizontal = flag;
+        self
+    }
 }
 
 impl<'a, Message> Component<Message> for BarChartGraph<'a, Message>
@@ -278,6 +306,7 @@ where
                 &self.bars,
                 &self.cache,
             )
+            .graph_data(self.is_horizontal)
             .legend_position(state.legend),
         )
         .width(Length::FillPortion(24))
@@ -309,6 +338,7 @@ pub struct BarChartTabData {
     barchart: BarChart<Data, Data>,
     theme: Theme,
     order: bool,
+    is_horizontal: bool,
     caption: Option<String>,
 }
 
@@ -327,6 +357,7 @@ impl BarChartTabData {
             y_col,
             order,
             caption,
+            is_horizontal,
         } = config;
 
         let sht = SheetBuilder::new(file.clone().into())
@@ -347,6 +378,7 @@ impl BarChartTabData {
             barchart,
             order,
             caption,
+            is_horizontal,
             theme: Theme::default(),
         })
     }
@@ -372,19 +404,34 @@ pub struct BarChartTab {
     y_label: Option<String>,
     bars: Vec<GraphBar>,
     caption: Option<String>,
+    is_horizontal: bool,
 }
 
 impl BarChartTab {
     fn graph(&self) -> BarChartGraph<'_, BarChartMessage> {
-        let mut x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
+        if self.is_horizontal {
+            let mut x_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone(), false);
 
-        if let Some(caption) = self.caption.clone() {
-            x_axis = x_axis.caption(caption);
+            if let Some(caption) = self.caption.clone() {
+                x_axis = x_axis.caption(caption);
+            }
+
+            let y_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
+
+            BarChartGraph::new(x_axis, y_axis, &self.bars)
+                .on_editor(BarChartMessage::OpenEditor)
+                .is_horizontal(self.is_horizontal)
+        } else {
+            let mut x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
+
+            if let Some(caption) = self.caption.clone() {
+                x_axis = x_axis.caption(caption);
+            }
+
+            let y_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone(), false);
+
+            BarChartGraph::new(x_axis, y_axis, &self.bars).on_editor(BarChartMessage::OpenEditor)
         }
-
-        let y_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone(), false);
-
-        BarChartGraph::new(x_axis, y_axis, &self.bars).on_editor(BarChartMessage::OpenEditor)
     }
 }
 
@@ -400,6 +447,7 @@ impl Viewable for BarChartTab {
             theme,
             order,
             caption,
+            is_horizontal,
         } = data;
 
         let BarChart {
@@ -431,6 +479,7 @@ impl Viewable for BarChartTab {
             y_label,
             caption,
             bars,
+            is_horizontal,
         }
     }
 

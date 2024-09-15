@@ -97,6 +97,7 @@ pub enum BarChartConfigMessage {
     XLabelChanged(String),
     YLabelChanged(String),
     Order(bool),
+    Horizontal(bool),
     Previous,
     Cancel,
     Submit,
@@ -116,6 +117,7 @@ pub struct BarChartConfigState {
     pub header_types: HeaderTypesStrategy,
     pub header_labels: HeaderLabelStrategy,
     pub order: bool,
+    pub is_horizontal: bool,
 }
 
 impl Default for BarChartConfigState {
@@ -133,6 +135,7 @@ impl Default for BarChartConfigState {
             header_types: HeaderTypesStrategy::Infer,
             header_labels: HeaderLabelStrategy::ReadLabels,
             order: false,
+            is_horizontal: false,
         }
     }
 }
@@ -319,7 +322,16 @@ impl<'a, Message> BarChartConfig<'a, Message> {
             row!(check, tip).spacing(25.0)
         };
 
-        column!(title, x_col, y_col, axis_label, bar_labels, order)
+        let horizontal = {
+            let check = checkbox("Horizontal bars?", state.is_horizontal)
+                .on_toggle(BarChartConfigMessage::Horizontal);
+
+            let tip = tooltip("Make the bars lie horizontally");
+
+            row!(check, tip).spacing(25.0)
+        };
+
+        column!(title, x_col, y_col, axis_label, bar_labels, order, horizontal)
             .spacing(20.0)
             .into()
     }
@@ -451,6 +463,10 @@ where
             }
             BarChartConfigMessage::Order(order) => {
                 state.order = order;
+                None
+            }
+            BarChartConfigMessage::Horizontal(is_horizontal) => {
+                state.is_horizontal = is_horizontal;
                 None
             }
         }
