@@ -158,15 +158,17 @@ where
             } else {
                 10
             };
-            let outlines_width = dx / ((outlines_number) as f32);
+            let outlines_width = (dx * 0.85) / ((outlines_number) as f32);
             let mut outlines_count = 1;
+            let mut point_count = 0;
 
             let mut points = self.points.iter();
 
             while (outlines_width * (outlines_count as f32)) <= x_offset_length {
                 let x = x + outlines_width * (outlines_count as f32);
                 // This is a point outline
-                if outlines_count % outlines_number == 0 {
+                if outlines_count % outlines_number == 0 && point_count < self.points.len() {
+                    point_count += 1;
                     let path = Path::line([x, y].into(), [x, y + stump_height].into());
                     frame.stroke(
                         &path,
@@ -286,15 +288,17 @@ where
             let stump_length = 0.01 * height;
 
             let outlines_number = if dy < 50.0 { 1 } else { 5 };
-            let outlines_height = dy / ((outlines_number) as f32);
+            let outlines_height = (dy * 0.9) / ((outlines_number) as f32);
             let mut outlines_count = 1;
+            let mut point_count = 0;
 
             let mut points = self.points.iter();
 
             while (outlines_height * (outlines_count as f32)) <= y_offset_length {
                 let y = y - outlines_height * (outlines_count as f32);
                 // This is a point outline
-                if outlines_count % outlines_number == 0 {
+                if outlines_count % outlines_number == 0 && point_count < self.points.len() {
+                    point_count += 1;
                     let path = Path::line([x, y].into(), [x - stump_length, y].into());
                     frame.stroke(
                         &path,

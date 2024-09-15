@@ -135,7 +135,7 @@ impl ViewType {
 
     pub fn name(&self) -> String {
         match self {
-            Self::None => String::default(),
+            Self::None => "None".into(),
             Self::Editor => "Editor".into(),
             Self::LineGraph => "Line Graph".into(),
             Self::BarChart => "Bar Chart".into(),
@@ -189,16 +189,7 @@ impl ViewType {
 
 impl fmt::Display for ViewType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ViewType::Editor => "Editor",
-                ViewType::None => "None",
-                ViewType::LineGraph => "Line Graph",
-                ViewType::BarChart => "Bar Chart",
-            }
-        )
+        write!(f, "{}", self.name())
     }
 }
 
