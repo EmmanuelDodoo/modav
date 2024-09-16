@@ -65,10 +65,16 @@ pub struct SheetConfig<'a, Message> {
     on_previous: Box<dyn Fn(SheetConfigState) -> Message + 'a>,
     on_cancel: Message,
     previous_state: Option<SheetConfigState>,
+    on_clear_error: Message,
 }
 
 impl<'a, Message> SheetConfig<'a, Message> {
-    pub fn new<S, P>(on_submit: S, on_previous: P, on_cancel: Message) -> Self
+    pub fn new<S, P>(
+        on_submit: S,
+        on_previous: P,
+        on_cancel: Message,
+        on_clear_error: Message,
+    ) -> Self
     where
         S: 'a + Fn(SheetConfigState) -> Message,
         P: 'a + Fn(SheetConfigState) -> Message,
@@ -78,6 +84,7 @@ impl<'a, Message> SheetConfig<'a, Message> {
             on_previous: Box::new(on_previous),
             on_submit: Box::new(on_submit),
             previous_state: None,
+            on_clear_error,
         }
     }
 
@@ -231,22 +238,22 @@ where
             SheetConfigMessage::TrimToggled(trim) => {
                 self.update_state(state);
                 state.trim = trim;
-                None
+                Some(self.on_clear_error.clone())
             }
             SheetConfigMessage::FlexibleToggled(flexible) => {
                 self.update_state(state);
                 state.flexible = flexible;
-                None
+                Some(self.on_clear_error.clone())
             }
             SheetConfigMessage::HeaderTypeChanged(ht) => {
                 self.update_state(state);
                 state.header_type = ht;
-                None
+                Some(self.on_clear_error.clone())
             }
             SheetConfigMessage::HeaderLabelChanged(label) => {
                 self.update_state(state);
                 state.header_labels = label;
-                None
+                Some(self.on_clear_error.clone())
             }
             SheetConfigMessage::CaptionChange(caption) => {
                 self.update_state(state);
@@ -256,7 +263,7 @@ where
                     state.caption = None;
                 }
 
-                None
+                Some(self.on_clear_error.clone())
             }
         }
     }

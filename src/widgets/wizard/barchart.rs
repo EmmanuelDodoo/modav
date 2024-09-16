@@ -175,6 +175,7 @@ pub struct BarChartConfig<'a, Message> {
     on_error: Box<dyn Fn(AppError) -> Message + 'a>,
     on_previous: Box<dyn Fn(BarChartConfigState) -> Message + 'a>,
     on_cancel: Message,
+    on_clear_error: Message,
     previous_state: Option<BarChartConfigState>,
 }
 
@@ -186,6 +187,7 @@ impl<'a, Message> BarChartConfig<'a, Message> {
         on_error: E,
         on_previous: P,
         on_cancel: Message,
+        on_clear_error: Message,
     ) -> Self
     where
         S: 'a + Fn(View) -> Message,
@@ -200,6 +202,7 @@ impl<'a, Message> BarChartConfig<'a, Message> {
             on_previous: Box::new(on_previous),
             on_cancel,
             previous_state: None,
+            on_clear_error,
         }
     }
 
@@ -418,7 +421,7 @@ where
             BarChartConfigMessage::TitleChanged(title) => {
                 self.update_state(state);
                 state.title = title;
-                None
+                Some(self.on_clear_error.clone())
             }
             BarChartConfigMessage::AxisLabel(strat) => {
                 self.update_state(state);
@@ -432,7 +435,7 @@ where
                 };
 
                 state.axis_label = strat;
-                None
+                Some(self.on_clear_error.clone())
             }
             BarChartConfigMessage::XLabelChanged(label) => {
                 self.update_state(state);
@@ -442,10 +445,10 @@ where
                             x: label,
                             y: y.clone(),
                         };
-                        None
                     }
-                    _ => None,
-                }
+                    _ => {}
+                };
+                Some(self.on_clear_error.clone())
             }
             BarChartConfigMessage::YLabelChanged(label) => {
                 self.update_state(state);
@@ -455,10 +458,10 @@ where
                             x: x.clone(),
                             y: label,
                         };
-                        None
                     }
-                    _ => None,
-                }
+                    _ => {}
+                };
+                Some(self.on_clear_error.clone())
             }
             BarChartConfigMessage::BarLabel(label) => {
                 self.update_state(state);
@@ -468,7 +471,7 @@ where
                     BarLabels::Provided => BarChartBarLabels::Provided(vec![]),
                 };
                 state.bar_label = strat;
-                None
+                Some(self.on_clear_error.clone())
             }
             BarChartConfigMessage::BarLabelColumn(input) => {
                 self.update_state(state);
@@ -490,7 +493,7 @@ where
                     state.bar_label = BarChartBarLabels::FromColumn(col);
                 }
 
-                None
+                Some(self.on_clear_error.clone())
             }
 
             BarChartConfigMessage::XCol(input) => {
@@ -509,7 +512,7 @@ where
                 };
 
                 state.x_col = col;
-                None
+                Some(self.on_clear_error.clone())
             }
 
             BarChartConfigMessage::YCol(input) => {
@@ -527,17 +530,17 @@ where
                 };
 
                 state.y_col = col;
-                None
+                Some(self.on_clear_error.clone())
             }
             BarChartConfigMessage::Order(order) => {
                 self.update_state(state);
                 state.order = order;
-                None
+                Some(self.on_clear_error.clone())
             }
             BarChartConfigMessage::Horizontal(is_horizontal) => {
                 self.update_state(state);
                 state.is_horizontal = is_horizontal;
-                None
+                Some(self.on_clear_error.clone())
             }
         }
     }

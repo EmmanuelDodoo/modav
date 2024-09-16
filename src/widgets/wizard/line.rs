@@ -133,6 +133,7 @@ where
     on_previous: Box<dyn Fn(LineConfigState) -> Message + 'a>,
     on_cancel: Message,
     previous_state: Option<LineConfigState>,
+    on_clear_error: Message,
 }
 
 impl<'a, Message> LineGraphConfig<'a, Message>
@@ -146,6 +147,7 @@ where
         on_previous: P,
         on_cancel: Message,
         on_error: E,
+        on_clear_error: Message,
     ) -> Self
     where
         S: 'a + Fn(View) -> Message,
@@ -160,6 +162,7 @@ where
             on_previous: Box::new(on_previous),
             on_cancel,
             previous_state: None,
+            on_clear_error,
         }
     }
 
@@ -259,17 +262,17 @@ where
             ConfigMessage::TitleChanged(title) => {
                 self.update_state(state);
                 state.title = title;
-                None
+                Some(self.on_clear_error.clone())
             }
             ConfigMessage::XLabelChanged(label) => {
                 self.update_state(state);
                 state.x_label = label;
-                None
+                Some(self.on_clear_error.clone())
             }
             ConfigMessage::YLabelChanged(label) => {
                 self.update_state(state);
                 state.y_label = label;
-                None
+                Some(self.on_clear_error.clone())
             }
             ConfigMessage::Cancel => Some(self.on_cancel.clone()),
             ConfigMessage::Previous => {
@@ -291,7 +294,7 @@ where
                     LineLabelOptions::FromColumn => LineLabelStrategy::FromCell(0),
                 };
                 state.label_strat = strat;
-                None
+                Some(self.on_clear_error.clone())
             }
             ConfigMessage::LineLabelColumn(input) => {
                 self.update_state(state);
@@ -315,7 +318,7 @@ where
                     };
                     state.label_strat = LineLabelStrategy::FromCell(col)
                 };
-                None
+                Some(self.on_clear_error.clone())
             }
             ConfigMessage::Submit => {
                 let state = if state.use_previous {
