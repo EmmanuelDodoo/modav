@@ -19,6 +19,20 @@ pub struct SheetConfigState {
     pub header_type: HeaderTypesStrategy,
     pub header_labels: HeaderLabelStrategy,
     pub caption: Option<String>,
+    pub use_previous: bool,
+}
+
+impl SheetConfigState {
+    fn submit(&self) -> Self {
+        Self {
+            trim: self.trim,
+            flexible: self.flexible,
+            header_labels: self.header_labels.clone(),
+            header_type: self.header_type.clone(),
+            caption: self.caption.clone(),
+            use_previous: true,
+        }
+    }
 }
 
 impl Default for SheetConfigState {
@@ -29,6 +43,7 @@ impl Default for SheetConfigState {
             header_labels: HeaderLabelStrategy::ReadLabels,
             header_type: HeaderTypesStrategy::Infer,
             caption: None,
+            use_previous: true,
         }
     }
 }
@@ -47,20 +62,37 @@ pub enum SheetConfigMessage {
 
 pub struct SheetConfig<'a, Message> {
     on_submit: Box<dyn Fn(SheetConfigState) -> Message + 'a>,
-    on_previous: Message,
+    on_previous: Box<dyn Fn(SheetConfigState) -> Message + 'a>,
     on_cancel: Message,
+    previous_state: Option<SheetConfigState>,
 }
 
 impl<'a, Message> SheetConfig<'a, Message> {
-    pub fn new<S>(on_submit: S, on_previous: Message, on_cancel: Message) -> Self
+    pub fn new<S, P>(on_submit: S, on_previous: P, on_cancel: Message) -> Self
     where
         S: 'a + Fn(SheetConfigState) -> Message,
+        P: 'a + Fn(SheetConfigState) -> Message,
     {
         Self {
             on_cancel,
-            on_previous,
+            on_previous: Box::new(on_previous),
             on_submit: Box::new(on_submit),
+            previous_state: None,
         }
+    }
+
+    pub fn previous_state(mut self, state: SheetConfigState) -> Self {
+        self.previous_state = Some(state);
+        self
+    }
+
+    fn update_state(&self, state: &mut SheetConfigState) {
+        if state.use_previous {
+            if let Some(previous_state) = self.previous_state.clone() {
+                *state = previous_state;
+            }
+            state.use_previous = false;
+        };
     }
 
     fn actions(&self) -> Element<'_, SheetConfigMessage> {
@@ -80,6 +112,15 @@ impl<'a, Message> SheetConfig<'a, Message> {
     }
 
     fn sheet_config(&self, state: &SheetConfigState) -> Element<'_, SheetConfigMessage> {
+        let state = if state.use_previous {
+            match &self.previous_state {
+                Some(prev_state) => prev_state,
+                None => state,
+            }
+        } else {
+            state
+        };
+
         let trim = {
             let check = checkbox("Trim?", state.trim).on_toggle(SheetConfigMessage::TrimToggled);
 
@@ -165,25 +206,50 @@ where
     fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
         match event {
             SheetConfigMessage::Cancel => Some(self.on_cancel.clone()),
-            SheetConfigMessage::Previous => Some(self.on_previous.clone()),
-            SheetConfigMessage::Submit => Some((self.on_submit)(state.clone())),
+            SheetConfigMessage::Previous => {
+                let submit_state = if state.use_previous {
+                    match &self.previous_state {
+                        Some(previous_state) => previous_state,
+                        None => state,
+                    }
+                } else {
+                    state
+                };
+                Some((self.on_previous)(submit_state.submit()))
+            }
+            SheetConfigMessage::Submit => {
+                let submit_state = if state.use_previous {
+                    match &self.previous_state {
+                        Some(previous_state) => previous_state,
+                        None => state,
+                    }
+                } else {
+                    state
+                };
+                Some((self.on_submit)(submit_state.submit()))
+            }
             SheetConfigMessage::TrimToggled(trim) => {
+                self.update_state(state);
                 state.trim = trim;
                 None
             }
             SheetConfigMessage::FlexibleToggled(flexible) => {
+                self.update_state(state);
                 state.flexible = flexible;
                 None
             }
             SheetConfigMessage::HeaderTypeChanged(ht) => {
+                self.update_state(state);
                 state.header_type = ht;
                 None
             }
             SheetConfigMessage::HeaderLabelChanged(label) => {
+                self.update_state(state);
                 state.header_labels = label;
                 None
             }
             SheetConfigMessage::CaptionChange(caption) => {
+                self.update_state(state);
                 if !caption.is_empty() {
                     state.caption = Some(caption);
                 } else {

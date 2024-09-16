@@ -44,6 +44,8 @@ pub struct Hex {
     current_view: Portal,
     config: View,
     sheet_config: SheetConfigState,
+    line_config: Option<LineConfigState>,
+    bar_config: Option<BarChartConfigState>,
 }
 
 impl Default for Hex {
@@ -53,6 +55,8 @@ impl Default for Hex {
             current_view: Portal::FileSelection,
             config: View::Editor(EditorTabData::default()),
             sheet_config: SheetConfigState::default(),
+            line_config: None,
+            bar_config: None,
         }
     }
 }
@@ -66,6 +70,9 @@ pub enum Charm {
     Cancel,
     ConfigSubmit(View),
     SheetSubmit(SheetConfigState),
+    SheetPrevious(SheetConfigState),
+    LinePrevious(LineConfigState),
+    BarChartPrevious(BarChartConfigState),
     Error(AppError),
     Submit,
     #[default]
@@ -114,24 +121,38 @@ where
     fn model_config(&self, state: &Hex) -> Element<'_, Charm> {
         match &state.model {
             ViewType::Editor => Space::new(0, 0).into(),
-            ViewType::LineGraph => LineGraphConfig::new(
-                &self.file,
-                state.sheet_config.clone(),
-                Charm::ConfigSubmit,
-                Charm::ChangeView(Portal::SheetConfig),
-                Charm::Cancel,
-                Charm::Error,
-            )
-            .into(),
-            ViewType::BarChart => BarChartConfig::new(
-                &self.file,
-                state.sheet_config.clone(),
-                Charm::ConfigSubmit,
-                Charm::Error,
-                Charm::ChangeView(Portal::SheetConfig),
-                Charm::Cancel,
-            )
-            .into(),
+            ViewType::LineGraph => {
+                let mut content = LineGraphConfig::new(
+                    &self.file,
+                    state.sheet_config.clone(),
+                    Charm::ConfigSubmit,
+                    Charm::LinePrevious,
+                    Charm::Cancel,
+                    Charm::Error,
+                );
+
+                if let Some(line_config) = state.line_config.clone() {
+                    content = content.previous_state(line_config);
+                };
+
+                content.into()
+            }
+            ViewType::BarChart => {
+                let mut content = BarChartConfig::new(
+                    &self.file,
+                    state.sheet_config.clone(),
+                    Charm::ConfigSubmit,
+                    Charm::Error,
+                    Charm::BarChartPrevious,
+                    Charm::Cancel,
+                );
+
+                if let Some(barchart_config) = state.bar_config.clone() {
+                    content = content.previous_state(barchart_config);
+                }
+
+                content.into()
+            }
             ViewType::None => Space::new(0, 0).into(),
         }
     }
@@ -226,6 +247,21 @@ where
                 state.current_view = Portal::ModelConfig;
                 None
             }
+            Charm::SheetPrevious(sheet) => {
+                state.sheet_config = sheet;
+                state.current_view = Portal::FileSelection;
+                None
+            }
+            Charm::LinePrevious(line) => {
+                state.line_config = Some(line);
+                state.current_view = Portal::SheetConfig;
+                None
+            }
+            Charm::BarChartPrevious(barchart) => {
+                state.bar_config = Some(barchart);
+                state.current_view = Portal::SheetConfig;
+                None
+            }
             Charm::Error(err) => Some((self.on_error)(err)),
             Charm::ReselectFile => {
                 // Reselecting file means returning to default state
@@ -310,11 +346,9 @@ where
             }
 
             Portal::SheetConfig => {
-                let view = SheetConfig::new(
-                    Charm::SheetSubmit,
-                    Charm::ChangeView(Portal::FileSelection),
-                    Charm::Cancel,
-                );
+                let view =
+                    SheetConfig::new(Charm::SheetSubmit, Charm::SheetPrevious, Charm::Cancel)
+                        .previous_state(state.sheet_config.clone());
 
                 let content = column!(header, vertical_space().height(50.0), view).spacing(0);
 

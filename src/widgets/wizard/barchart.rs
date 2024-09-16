@@ -118,6 +118,7 @@ pub struct BarChartConfigState {
     pub header_labels: HeaderLabelStrategy,
     pub order: bool,
     pub is_horizontal: bool,
+    pub use_previous: bool,
 }
 
 impl Default for BarChartConfigState {
@@ -136,6 +137,7 @@ impl Default for BarChartConfigState {
             header_labels: HeaderLabelStrategy::ReadLabels,
             order: false,
             is_horizontal: false,
+            use_previous: true,
         }
     }
 }
@@ -148,6 +150,7 @@ impl BarChartConfigState {
             header_type,
             header_labels,
             caption,
+            ..
         } = sheet_config;
 
         self.trim = trim;
@@ -156,6 +159,13 @@ impl BarChartConfigState {
         self.header_types = header_type;
         self.caption = caption;
     }
+
+    fn submit(&self) -> Self {
+        Self {
+            use_previous: true,
+            ..self.clone()
+        }
+    }
 }
 
 pub struct BarChartConfig<'a, Message> {
@@ -163,30 +173,47 @@ pub struct BarChartConfig<'a, Message> {
     sheet_config: SheetConfigState,
     on_submit: Box<dyn Fn(View) -> Message + 'a>,
     on_error: Box<dyn Fn(AppError) -> Message + 'a>,
-    on_previous: Message,
+    on_previous: Box<dyn Fn(BarChartConfigState) -> Message + 'a>,
     on_cancel: Message,
+    previous_state: Option<BarChartConfigState>,
 }
 
 impl<'a, Message> BarChartConfig<'a, Message> {
-    pub fn new<S, E>(
+    pub fn new<S, P, E>(
         file: &'a PathBuf,
         sheet_config: SheetConfigState,
         on_submit: S,
         on_error: E,
-        on_previous: Message,
+        on_previous: P,
         on_cancel: Message,
     ) -> Self
     where
         S: 'a + Fn(View) -> Message,
         E: 'a + Fn(AppError) -> Message,
+        P: 'a + Fn(BarChartConfigState) -> Message,
     {
         Self {
             file,
             sheet_config,
             on_submit: Box::new(on_submit),
             on_error: Box::new(on_error),
-            on_previous,
+            on_previous: Box::new(on_previous),
             on_cancel,
+            previous_state: None,
+        }
+    }
+
+    pub fn previous_state(mut self, state: BarChartConfigState) -> Self {
+        self.previous_state = Some(state);
+        self
+    }
+
+    fn update_state(&self, state: &mut BarChartConfigState) {
+        if state.use_previous {
+            if let Some(previous_state) = self.previous_state.clone() {
+                *state = previous_state;
+            }
+            state.use_previous = false;
         }
     }
 
@@ -207,6 +234,15 @@ impl<'a, Message> BarChartConfig<'a, Message> {
     }
 
     fn barchart_config(&self, state: &BarChartConfigState) -> Element<'_, BarChartConfigMessage> {
+        let state = if state.use_previous {
+            match &self.previous_state {
+                Some(prev_state) => prev_state,
+                None => state,
+            }
+        } else {
+            state
+        };
+
         let title = text_input("Graph Title", state.title.as_str())
             .on_input(BarChartConfigMessage::TitleChanged);
 
@@ -347,8 +383,28 @@ where
     fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
         match event {
             BarChartConfigMessage::Cancel => Some(self.on_cancel.clone()),
-            BarChartConfigMessage::Previous => Some(self.on_previous.clone()),
+            BarChartConfigMessage::Previous => {
+                let submit_state = if state.use_previous {
+                    match &self.previous_state {
+                        Some(prev_state) => prev_state,
+                        None => state,
+                    }
+                } else {
+                    state
+                };
+
+                Some((self.on_previous)(submit_state.submit()))
+            }
             BarChartConfigMessage::Submit => {
+                let state = if state.use_previous {
+                    match self.previous_state {
+                        Some(ref mut prev_state) => prev_state,
+                        None => state,
+                    }
+                } else {
+                    state
+                };
+
                 state.diff(self.sheet_config.clone());
                 let data = BarChartTabData::new(self.file.clone(), state.clone());
                 match data {
@@ -360,10 +416,12 @@ where
                 }
             }
             BarChartConfigMessage::TitleChanged(title) => {
+                self.update_state(state);
                 state.title = title;
                 None
             }
             BarChartConfigMessage::AxisLabel(strat) => {
+                self.update_state(state);
                 let strat = match strat {
                     AxisStrategy::None => BarChartAxisLabelStrategy::None,
                     AxisStrategy::Headers => BarChartAxisLabelStrategy::Headers,
@@ -376,27 +434,34 @@ where
                 state.axis_label = strat;
                 None
             }
-            BarChartConfigMessage::XLabelChanged(label) => match &state.axis_label {
-                BarChartAxisLabelStrategy::Provided { y, .. } => {
-                    state.axis_label = BarChartAxisLabelStrategy::Provided {
-                        x: label,
-                        y: y.clone(),
-                    };
-                    None
+            BarChartConfigMessage::XLabelChanged(label) => {
+                self.update_state(state);
+                match &state.axis_label {
+                    BarChartAxisLabelStrategy::Provided { y, .. } => {
+                        state.axis_label = BarChartAxisLabelStrategy::Provided {
+                            x: label,
+                            y: y.clone(),
+                        };
+                        None
+                    }
+                    _ => None,
                 }
-                _ => None,
-            },
-            BarChartConfigMessage::YLabelChanged(label) => match &state.axis_label {
-                BarChartAxisLabelStrategy::Provided { x, .. } => {
-                    state.axis_label = BarChartAxisLabelStrategy::Provided {
-                        x: x.clone(),
-                        y: label,
-                    };
-                    None
+            }
+            BarChartConfigMessage::YLabelChanged(label) => {
+                self.update_state(state);
+                match &state.axis_label {
+                    BarChartAxisLabelStrategy::Provided { x, .. } => {
+                        state.axis_label = BarChartAxisLabelStrategy::Provided {
+                            x: x.clone(),
+                            y: label,
+                        };
+                        None
+                    }
+                    _ => None,
                 }
-                _ => None,
-            },
+            }
             BarChartConfigMessage::BarLabel(label) => {
+                self.update_state(state);
                 let strat = match label {
                     BarLabels::FromColumn => BarChartBarLabels::FromColumn(0),
                     BarLabels::None => BarChartBarLabels::None,
@@ -406,6 +471,7 @@ where
                 None
             }
             BarChartConfigMessage::BarLabelColumn(input) => {
+                self.update_state(state);
                 if let BarChartBarLabels::FromColumn(col) = state.bar_label {
                     let input = input.trim().to_string();
                     let col = if input.is_empty() {
@@ -428,6 +494,7 @@ where
             }
 
             BarChartConfigMessage::XCol(input) => {
+                self.update_state(state);
                 let input = input.trim().to_string();
                 let col = if input.is_empty() {
                     0
@@ -446,6 +513,7 @@ where
             }
 
             BarChartConfigMessage::YCol(input) => {
+                self.update_state(state);
                 let input = input.trim().to_string();
                 let col = if input.is_empty() {
                     0
@@ -462,10 +530,12 @@ where
                 None
             }
             BarChartConfigMessage::Order(order) => {
+                self.update_state(state);
                 state.order = order;
                 None
             }
             BarChartConfigMessage::Horizontal(is_horizontal) => {
+                self.update_state(state);
                 state.is_horizontal = is_horizontal;
                 None
             }

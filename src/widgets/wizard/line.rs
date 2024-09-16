@@ -74,6 +74,7 @@ pub struct LineConfigState {
     pub flexible: bool,
     pub header_types: HeaderTypesStrategy,
     pub header_labels: HeaderLabelStrategy,
+    pub use_previous: bool,
 }
 
 impl Default for LineConfigState {
@@ -90,6 +91,7 @@ impl Default for LineConfigState {
             flexible: false,
             header_types: HeaderTypesStrategy::Infer,
             header_labels: HeaderLabelStrategy::ReadLabels,
+            use_previous: true,
         }
     }
 }
@@ -102,6 +104,7 @@ impl LineConfigState {
             header_type,
             header_labels,
             caption,
+            ..
         } = sheet_config;
 
         self.trim = trim;
@@ -109,6 +112,13 @@ impl LineConfigState {
         self.header_labels = header_labels;
         self.header_types = header_type;
         self.caption = caption;
+    }
+
+    fn submit(&self) -> Self {
+        Self {
+            use_previous: true,
+            ..self.clone()
+        }
     }
 }
 
@@ -120,24 +130,26 @@ where
     sheet_config: SheetConfigState,
     on_submit: Box<dyn Fn(View) -> Message + 'a>,
     on_error: Box<dyn Fn(AppError) -> Message + 'a>,
-    on_previous: Message,
+    on_previous: Box<dyn Fn(LineConfigState) -> Message + 'a>,
     on_cancel: Message,
+    previous_state: Option<LineConfigState>,
 }
 
 impl<'a, Message> LineGraphConfig<'a, Message>
 where
     Message: Debug + Clone,
 {
-    pub fn new<F, E>(
+    pub fn new<S, P, E>(
         file: &'a PathBuf,
         sheet_config: SheetConfigState,
-        on_submit: F,
-        on_previous: Message,
+        on_submit: S,
+        on_previous: P,
         on_cancel: Message,
         on_error: E,
     ) -> Self
     where
-        F: 'a + Fn(View) -> Message,
+        S: 'a + Fn(View) -> Message,
+        P: 'a + Fn(LineConfigState) -> Message,
         E: 'a + Fn(AppError) -> Message,
     {
         Self {
@@ -145,8 +157,23 @@ where
             sheet_config,
             on_submit: Box::new(on_submit),
             on_error: Box::new(on_error),
-            on_previous,
+            on_previous: Box::new(on_previous),
             on_cancel,
+            previous_state: None,
+        }
+    }
+
+    pub fn previous_state(mut self, state: LineConfigState) -> Self {
+        self.previous_state = Some(state);
+        self
+    }
+
+    fn update_state(&self, state: &mut LineConfigState) {
+        if state.use_previous {
+            if let Some(previous_state) = self.previous_state.clone() {
+                *state = previous_state;
+            }
+            state.use_previous = false;
         }
     }
 
@@ -167,6 +194,15 @@ where
     }
 
     fn line_config(&self, state: &LineConfigState) -> Element<'_, ConfigMessage> {
+        let state = if state.use_previous {
+            match &self.previous_state {
+                Some(prev_state) => prev_state,
+                None => state,
+            }
+        } else {
+            state
+        };
+
         let title =
             text_input("Graph Title", state.title.as_str()).on_input(ConfigMessage::TitleChanged);
 
@@ -221,20 +257,35 @@ where
         match event {
             ConfigMessage::Error(err) => Some((self.on_error)(err)),
             ConfigMessage::TitleChanged(title) => {
+                self.update_state(state);
                 state.title = title;
                 None
             }
             ConfigMessage::XLabelChanged(label) => {
+                self.update_state(state);
                 state.x_label = label;
                 None
             }
             ConfigMessage::YLabelChanged(label) => {
+                self.update_state(state);
                 state.y_label = label;
                 None
             }
             ConfigMessage::Cancel => Some(self.on_cancel.clone()),
-            ConfigMessage::Previous => Some(self.on_previous.clone()),
+            ConfigMessage::Previous => {
+                let submit_state = if state.use_previous {
+                    match &self.previous_state {
+                        Some(prev_state) => prev_state,
+                        None => state,
+                    }
+                } else {
+                    state
+                };
+
+                Some((self.on_previous)(submit_state.submit()))
+            }
             ConfigMessage::LineLabelOption(option) => {
+                self.update_state(state);
                 let strat = match option {
                     LineLabelOptions::None => LineLabelStrategy::None,
                     LineLabelOptions::FromColumn => LineLabelStrategy::FromCell(0),
@@ -243,6 +294,7 @@ where
                 None
             }
             ConfigMessage::LineLabelColumn(input) => {
+                self.update_state(state);
                 if let LineLabelStrategy::FromCell(col) = state.label_strat {
                     let input = input.trim().to_string();
                     let col = if input.is_empty() {
@@ -266,6 +318,15 @@ where
                 None
             }
             ConfigMessage::Submit => {
+                let state = if state.use_previous {
+                    match self.previous_state {
+                        Some(ref mut prev_state) => prev_state,
+                        None => state,
+                    }
+                } else {
+                    state
+                };
+
                 state.diff(self.sheet_config.clone());
                 let data = LineTabData::new(self.file.clone(), state.clone());
                 match data {
