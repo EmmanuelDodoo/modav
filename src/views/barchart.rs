@@ -358,6 +358,7 @@ impl BarChartTabData {
             order,
             caption,
             is_horizontal,
+            ..
         } = config;
 
         let sht = SheetBuilder::new(file.clone().into())

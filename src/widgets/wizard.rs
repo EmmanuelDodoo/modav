@@ -3,7 +3,7 @@ use std::{fmt::Debug, path::PathBuf};
 use barchart::BarChartConfig;
 use iced::{
     alignment::{Alignment, Horizontal, Vertical},
-    theme,
+    color, theme,
     widget::{
         self, button, column, component, container, horizontal_space, pick_list, row, text,
         vertical_space, Component, Space,
@@ -44,6 +44,9 @@ pub struct Hex {
     current_view: Portal,
     config: View,
     sheet_config: SheetConfigState,
+    line_config: Option<LineConfigState>,
+    bar_config: Option<BarChartConfigState>,
+    error: Option<String>,
 }
 
 impl Default for Hex {
@@ -53,6 +56,9 @@ impl Default for Hex {
             current_view: Portal::FileSelection,
             config: View::Editor(EditorTabData::default()),
             sheet_config: SheetConfigState::default(),
+            line_config: None,
+            bar_config: None,
+            error: None,
         }
     }
 }
@@ -66,8 +72,12 @@ pub enum Charm {
     Cancel,
     ConfigSubmit(View),
     SheetSubmit(SheetConfigState),
+    SheetPrevious(SheetConfigState),
+    LinePrevious(LineConfigState),
+    BarChartPrevious(BarChartConfigState),
     Error(AppError),
     Submit,
+    ClearError,
     #[default]
     None,
 }
@@ -114,24 +124,40 @@ where
     fn model_config(&self, state: &Hex) -> Element<'_, Charm> {
         match &state.model {
             ViewType::Editor => Space::new(0, 0).into(),
-            ViewType::LineGraph => LineGraphConfig::new(
-                &self.file,
-                state.sheet_config.clone(),
-                Charm::ConfigSubmit,
-                Charm::ChangeView(Portal::SheetConfig),
-                Charm::Cancel,
-                Charm::Error,
-            )
-            .into(),
-            ViewType::BarChart => BarChartConfig::new(
-                &self.file,
-                state.sheet_config.clone(),
-                Charm::ConfigSubmit,
-                Charm::Error,
-                Charm::ChangeView(Portal::SheetConfig),
-                Charm::Cancel,
-            )
-            .into(),
+            ViewType::LineGraph => {
+                let mut content = LineGraphConfig::new(
+                    &self.file,
+                    state.sheet_config.clone(),
+                    Charm::ConfigSubmit,
+                    Charm::LinePrevious,
+                    Charm::Cancel,
+                    Charm::Error,
+                    Charm::ClearError,
+                );
+
+                if let Some(line_config) = state.line_config.clone() {
+                    content = content.previous_state(line_config);
+                };
+
+                content.into()
+            }
+            ViewType::BarChart => {
+                let mut content = BarChartConfig::new(
+                    &self.file,
+                    state.sheet_config.clone(),
+                    Charm::ConfigSubmit,
+                    Charm::Error,
+                    Charm::BarChartPrevious,
+                    Charm::Cancel,
+                    Charm::ClearError,
+                );
+
+                if let Some(barchart_config) = state.bar_config.clone() {
+                    content = content.previous_state(barchart_config);
+                }
+
+                content.into()
+            }
             ViewType::None => Space::new(0, 0).into(),
         }
     }
@@ -226,7 +252,29 @@ where
                 state.current_view = Portal::ModelConfig;
                 None
             }
-            Charm::Error(err) => Some((self.on_error)(err)),
+            Charm::SheetPrevious(sheet) => {
+                state.sheet_config = sheet;
+                state.current_view = Portal::FileSelection;
+                None
+            }
+            Charm::LinePrevious(line) => {
+                state.line_config = Some(line);
+                state.current_view = Portal::SheetConfig;
+                None
+            }
+            Charm::BarChartPrevious(barchart) => {
+                state.bar_config = Some(barchart);
+                state.current_view = Portal::SheetConfig;
+                None
+            }
+            Charm::Error(err) => {
+                state.error = Some(err.to_string());
+                Some((self.on_error)(err))
+            }
+            Charm::ClearError => {
+                state.error = None;
+                None
+            }
             Charm::ReselectFile => {
                 // Reselecting file means returning to default state
                 state.model = ViewType::Editor;
@@ -284,11 +332,56 @@ where
             .width(Length::Fill)
             .horizontal_alignment(Horizontal::Center);
 
+        let error_section: Element<'_, Self::Event> = match state.error.clone() {
+            Some(msg) => {
+                struct Background;
+
+                impl widget::container::StyleSheet for Background {
+                    type Style = Theme;
+
+                    fn appearance(&self, style: &Self::Style) -> container::Appearance {
+                        if style.extended_palette().is_dark {
+                            let text_color = color!(248, 133, 133);
+                            let background = color!(153, 27, 27);
+
+                            container::Appearance {
+                                text_color: Some(text_color),
+                                background: Some(iced::Background::Color(background)),
+                                ..Default::default()
+                            }
+                        } else {
+                            let text_color = color!(75, 20, 20);
+                            let background = color!(248, 113, 113);
+
+                            container::Appearance {
+                                text_color: Some(text_color),
+                                background: Some(iced::Background::Color(background)),
+                                ..Default::default()
+                            }
+                        }
+                    }
+                }
+
+                container(text(msg).size(15.0))
+                    .width(Length::Fill)
+                    .padding([4, 6])
+                    .style(theme::Container::Custom(Box::new(Background)))
+                    .into()
+            }
+            None => Space::new(0, 0).into(),
+        };
+
         match state.current_view {
             Portal::ModelConfig => {
                 let content = column!(
                     header,
-                    vertical_space().height(50.0),
+                    if state.error.is_some() {
+                        vertical_space().height(25.0)
+                    } else {
+                        Space::new(0, 0)
+                    },
+                    error_section,
+                    vertical_space().height(25.0),
                     self.model_config(state),
                 )
                 .spacing(0);
@@ -312,11 +405,24 @@ where
             Portal::SheetConfig => {
                 let view = SheetConfig::new(
                     Charm::SheetSubmit,
-                    Charm::ChangeView(Portal::FileSelection),
+                    Charm::SheetPrevious,
                     Charm::Cancel,
-                );
+                    Charm::ClearError,
+                )
+                .previous_state(state.sheet_config.clone());
 
-                let content = column!(header, vertical_space().height(50.0), view).spacing(0);
+                let content = column!(
+                    header,
+                    if state.error.is_some() {
+                        vertical_space().height(25.0)
+                    } else {
+                        Space::new(0, 0)
+                    },
+                    error_section,
+                    vertical_space().height(25.0),
+                    view
+                )
+                .spacing(0);
 
                 dialog_container(content)
                     .width(420.0)

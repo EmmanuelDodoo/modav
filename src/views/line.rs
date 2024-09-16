@@ -432,6 +432,7 @@ impl LineTabData {
             header_types,
             header_labels,
             caption,
+            ..
         } = config;
 
         let sht = SheetBuilder::new(file.clone().into())
