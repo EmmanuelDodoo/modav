@@ -1,3 +1,4 @@
+use core::f32;
 /// Text always being overlayed is an Iced issue. Keep eye out for fix
 use std::{
     collections::HashMap,
@@ -9,7 +10,7 @@ use iced::{
     alignment::{self, Horizontal, Vertical},
     color, font, mouse,
     widget::canvas::{self, Frame, Geometry, Path, Stroke, Text},
-    Color, Point, Rectangle, Renderer, Size, Theme,
+    Color, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
 
 use crate::widgets::toolbar::ToolbarOption;
@@ -110,9 +111,10 @@ where
 
         let height = frame.height();
         let width = frame.width();
+        let point_text_size = 14.0.into();
 
         let x_padding_right = 0.075 * width;
-        let x_padding_left = 0.5 * x_padding_right;
+        let x_padding_left = 0.65 * x_padding_right;
         let true_x_length = width - (1.5 * x_padding_right);
         let x_offset_left = 0.05 * true_x_length;
         let x_offset_right = x_offset_left * 0.5;
@@ -189,7 +191,7 @@ where
                             position: text_position,
                             horizontal_alignment: Horizontal::Center,
                             color: text_color,
-
+                            size: point_text_size,
                             ..Default::default()
                         };
 
@@ -321,6 +323,7 @@ where
                             vertical_alignment: Vertical::Center,
                             horizontal_alignment: Horizontal::Right,
                             color: text_color,
+                            size: point_text_size,
                             ..Default::default()
                         };
 
@@ -357,21 +360,6 @@ where
                 }
 
                 outlines_count += 1;
-            }
-
-            if let Some(label) = &self.label {
-                let label_position = Point::new(x, axis_start.y * 0.65);
-
-                let text = Text {
-                    content: label.clone(),
-                    position: label_position,
-                    horizontal_alignment: Horizontal::Center,
-                    vertical_alignment: Vertical::Center,
-                    color: label_color,
-                    ..Default::default()
-                };
-
-                frame.fill_text(text);
             }
         }
 
@@ -708,6 +696,35 @@ where
                     graphable, frame, cursor, &x_record, x_axis, &y_record, y_axis, &self.data,
                 )
             });
+
+            if let Some(label) = self.y_axis.label.clone() {
+                let x_padding = frame.width() * 0.025;
+                let y_padding = {
+                    let height = frame.height();
+                    let y_padding_top = 0.035 * height;
+                    let true_y_length = height - (1.5 * y_padding_top);
+                    let y_offset_bottom = 0.05 * true_y_length;
+                    let y_offset_top = 0.5 * y_offset_bottom;
+                    let y_offset_length = true_y_length - y_offset_bottom - y_offset_top;
+
+                    (y_offset_length / 2.0) + y_padding_top + y_offset_top
+                };
+                frame.translate(Vector::new(
+                    Point::ORIGIN.x + x_padding,
+                    Point::ORIGIN.y + y_padding,
+                ));
+                frame.rotate(-90.0 * f32::consts::PI / 180.0);
+                let text = Text {
+                    content: label,
+                    position: Point::new(0.0, 0.0),
+                    horizontal_alignment: Horizontal::Center,
+                    vertical_alignment: Vertical::Center,
+                    color: theme.extended_palette().secondary.strong.text,
+                    ..Default::default()
+                };
+
+                frame.fill_text(text);
+            }
         });
 
         let _y_label_rotate = {
