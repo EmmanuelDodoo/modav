@@ -4,7 +4,7 @@ use iced::{
     keyboard::{self, key, Key},
     theme,
     widget::{self, column, container, horizontal_space, row, text, vertical_rule, Container, Row},
-    window, Alignment, Application, Command, Element, Font, Length, Renderer, Settings,
+    window, Alignment, Application, Command, Element, Font, Length, Pixels, Renderer, Settings,
     Subscription, Theme,
 };
 
@@ -35,13 +35,48 @@ use widgets::{
     wizard::{BarChartConfigState, LineConfigState, Wizard},
 };
 
-pub const LOG_FILE: &'static str = "modav.log";
-
 fn main() -> Result<(), iced::Error> {
+    let fallback_log = "./modav.log";
+
+    let log = if cfg!(target_os = "windows") {
+        match directories::UserDirs::new() {
+            Some(usr) => usr
+                .home_dir()
+                .join("AppData")
+                .join("Local")
+                .join("modav.log"),
+            None => PathBuf::from(fallback_log),
+        }
+    } else if cfg!(target_os = "macos") {
+        match directories::UserDirs::new() {
+            Some(usr) => usr
+                .home_dir()
+                .join("Library")
+                .join("Logs")
+                .join("modav.log"),
+            None => PathBuf::from(fallback_log),
+        }
+    } else if cfg!(target_os = "linux") {
+        match directories::UserDirs::new() {
+            Some(usr) => usr
+                .home_dir()
+                .join(".local")
+                .join("share")
+                .join("modav.log"),
+            None => PathBuf::from(fallback_log),
+        }
+    } else {
+        PathBuf::from(fallback_log)
+    };
+
     let span = span!(Level::INFO, "Modav");
     let _guard = span.enter();
 
-    let log_file = File::create(LOG_FILE).unwrap();
+    let mut fallback_flag = false;
+    let log_file = File::create(log.clone()).unwrap_or_else(|_| {
+        fallback_flag = true;
+        File::create(fallback_log).unwrap()
+    });
 
     let (non_blocking, _log_writer) = tracing_appender::non_blocking(log_file);
 
@@ -66,11 +101,20 @@ fn main() -> Result<(), iced::Error> {
         ..Default::default()
     };
 
+    let flags = Flags::Prod(if fallback_flag {
+        PathBuf::from(fallback_log)
+    } else {
+        log
+    });
+
     Modav::run(Settings {
         window,
         antialiasing: true,
-        flags: Flags::Prod,
-        ..Default::default()
+        flags,
+        id: None,
+        fonts: Vec::new(),
+        default_font: Font::default(),
+        default_text_size: Pixels(16.0),
     })
 }
 
@@ -121,18 +165,18 @@ pub struct Modav {
     toast_timeout: u64,
     dialog_view: DialogView,
     error: AppError,
+    log_file: PathBuf,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone)]
 pub enum Flags {
     Bar,
     Line,
-    #[default]
-    Prod,
+    Prod(PathBuf),
 }
 
 impl Flags {
-    fn create(&self) -> Modav {
+    fn create(self) -> Modav {
         let theme = Theme::TokyoNight;
         let toasts = Vec::default();
         let title = String::from("Modav");
@@ -151,8 +195,9 @@ impl Flags {
             .tab_padding([5, 7]);
         let toast_timeout = 2;
         let dialog_view = DialogView::default();
+        let default_log_file = PathBuf::from("./modav.log");
         match self {
-            Self::Prod => Modav {
+            Self::Prod(log_file) => Modav {
                 file_path: None,
                 current_view: ViewType::None,
                 theme_shadow: theme.clone(),
@@ -163,6 +208,7 @@ impl Flags {
                 error,
                 tabs,
                 dialog_view,
+                log_file,
             },
             Self::Line => {
                 let file_path = PathBuf::from("../../../alter.csv");
@@ -187,6 +233,7 @@ impl Flags {
                     error,
                     tabs,
                     dialog_view,
+                    log_file: default_log_file,
                 }
             }
             Self::Bar => {
@@ -225,6 +272,7 @@ impl Flags {
                     error,
                     tabs,
                     dialog_view,
+                    log_file: default_log_file,
                 }
             }
         }
@@ -628,7 +676,7 @@ impl Application for Modav {
                 self.theme = self.theme_shadow.clone();
                 self.info_log("Opening Log file");
 
-                let path = PathBuf::from(LOG_FILE);
+                let path = self.log_file.clone();
                 let data =
                     EditorTabData::new(Some(path.clone()), String::default()).read_only(true);
                 let action = FileIOAction::NewTab((View::Editor(data), path.clone()));
