@@ -21,8 +21,8 @@ use utils::{icons, load_file, menus, pick_file, save_file, AppError};
 
 mod views;
 use views::{
-    home_view, BarChartTabData, EditorTabData, LineTabData, Refresh, Tabs, TabsMessage, View,
-    ViewType,
+    home_view, BarChartTabData, EditorTabData, LineTabData, Refresh, StackedBarChartTabData, Tabs,
+    TabsMessage, View, ViewType,
 };
 
 pub mod widgets;
@@ -32,7 +32,7 @@ use widgets::{
     settings::SettingsDialog,
     style::dialog_container,
     toast::{self, Status, Toast},
-    wizard::{BarChartConfigState, LineConfigState, Wizard},
+    wizard::{BarChartConfigState, LineConfigState, StackedBarChartConfigState, Wizard},
 };
 
 fn main() -> Result<(), iced::Error> {
@@ -101,11 +101,13 @@ fn main() -> Result<(), iced::Error> {
         ..Default::default()
     };
 
-    let flags = Flags::Prod(if fallback_flag {
+    let _flags = Flags::Prod(if fallback_flag {
         PathBuf::from(fallback_log)
     } else {
         log
     });
+
+    let flags = Flags::Stacked;
 
     Modav::run(Settings {
         window,
@@ -172,6 +174,7 @@ pub struct Modav {
 pub enum Flags {
     Bar,
     Line,
+    Stacked,
     Prod(PathBuf),
 }
 
@@ -250,7 +253,7 @@ impl Flags {
                         y_col: 2,
                         axis_label: BarChartAxisLabelStrategy::Headers,
                         bar_label: BarChartBarLabels::FromColumn(0),
-                        order: true,
+                        //order: true,
                         caption: Some("Caption: This".into()),
                         ..Default::default()
                     };
@@ -258,6 +261,42 @@ impl Flags {
                     let data = BarChartTabData::new(file_path.clone(), config)
                         .expect("Bar Chart panic with dev flag");
                     let view = View::BarChart(data);
+                    tabs.update(TabsMessage::AddTab(view));
+                }
+
+                Modav {
+                    file_path: Some(file_path),
+                    theme_shadow: theme.clone(),
+                    current_view,
+                    title,
+                    theme,
+                    toasts,
+                    toast_timeout,
+                    error,
+                    tabs,
+                    dialog_view,
+                    log_file: default_log_file,
+                }
+            }
+            Self::Stacked => {
+                use modav_core::repr::sheet::utils::StackedBarChartAxisLabelStrategy;
+
+                let file_path = PathBuf::from("../../../stacked.csv");
+                let current_view = ViewType::StackedBarChart;
+
+                {
+                    let config = StackedBarChartConfigState {
+                        x_col: 0,
+                        acc_cols: vec![1, 2, 3, 4],
+                        axis_label: StackedBarChartAxisLabelStrategy::Header("Total Cost".into()),
+                        is_horizontal: false,
+                        caption: Some("Caption where?".into()),
+                        title: "Stacked Bar Chart".into(),
+                        ..Default::default()
+                    };
+                    let data = StackedBarChartTabData::new(file_path.clone(), config)
+                        .expect("Stacked Bar Chart dev flag panic");
+                    let view = View::StackedBarChart(data);
                     tabs.update(TabsMessage::AddTab(view));
                 }
 
@@ -515,6 +554,21 @@ impl Modav {
                     }
                 }
             }
+            FileIOAction::NewTab((View::StackedBarChart(_), path)) => {
+                let data = StackedBarChartTabData::new(path, StackedBarChartConfigState::default());
+                match data {
+                    Err(err) => {
+                        let msg = Message::Error(err, true);
+                        Command::perform(async { msg }, |msg| msg)
+                    }
+
+                    Ok(data) => {
+                        let data = data.theme(self.theme.clone());
+                        let idr = View::StackedBarChart(data);
+                        self.update_tabs(TabsMessage::AddTab(idr))
+                    }
+                }
+            }
             FileIOAction::NewTab((View::None, _)) => self.update_tabs(TabsMessage::None),
             FileIOAction::RefreshTab((ViewType::Editor, tidx, path)) => {
                 let data = EditorTabData::new(Some(path), content);
@@ -543,6 +597,19 @@ impl Modav {
                     }
                     Ok(data) => {
                         let rsh = Refresh::BarChart(data);
+                        self.update_tabs(TabsMessage::RefreshTab(tidx, rsh))
+                    }
+                }
+            }
+            FileIOAction::RefreshTab((ViewType::StackedBarChart, tidx, path)) => {
+                let data = StackedBarChartTabData::new(path, StackedBarChartConfigState::default());
+                match data {
+                    Err(err) => {
+                        let msg = Message::Error(err, true);
+                        Command::perform(async { msg }, |msg| msg)
+                    }
+                    Ok(data) => {
+                        let rsh = Refresh::StackedBarChart(data);
                         self.update_tabs(TabsMessage::RefreshTab(tidx, rsh))
                     }
                 }
@@ -710,6 +777,10 @@ impl Application for Modav {
                                 let data = data.theme(self.theme.clone());
                                 View::BarChart(data)
                             }
+                            View::StackedBarChart(data) => {
+                                let data = data.theme(self.theme.clone());
+                                View::StackedBarChart(data)
+                            }
                             View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
@@ -721,6 +792,7 @@ impl Application for Modav {
                             View::Editor(_) => View::None,
                             View::LineGraph(_) => View::None,
                             View::BarChart(_) => View::None,
+                            View::StackedBarChart(_) => View::None,
                             View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))

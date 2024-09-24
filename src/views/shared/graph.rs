@@ -105,6 +105,7 @@ where
         let mut record = HashMap::new();
 
         let axis_color = color!(205, 0, 150);
+        let axis_color = theme.extended_palette().background.base.color;
         let label_color = theme.extended_palette().secondary.strong.text;
         let text_color = theme.palette().text;
         let outlines_color = theme.extended_palette().background.weak.color;

@@ -331,7 +331,7 @@ where
                 };
 
                 state.diff(self.sheet_config.clone());
-                let data = LineTabData::new(self.file.clone(), state.clone());
+                let data = LineTabData::new(self.file.clone(), state.submit());
                 match data {
                     Err(err) => Some((self.on_error)(err)),
                     Ok(data) => {

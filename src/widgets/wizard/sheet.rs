@@ -12,7 +12,7 @@ use modav_core::repr::sheet::utils::{HeaderLabelStrategy, HeaderTypesStrategy};
 
 use super::shared::tooltip;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SheetConfigState {
     pub trim: bool,
     pub flexible: bool,
