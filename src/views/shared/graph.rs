@@ -2,8 +2,7 @@ use core::f32;
 /// Text always being overlayed is an Iced issue. Keep eye out for fix
 use std::{
     collections::HashMap,
-    fmt::{self, Debug, Display},
-    hash::Hash,
+    fmt::{self, Debug},
 };
 
 use iced::{
@@ -14,9 +13,10 @@ use iced::{
 };
 
 use crate::widgets::toolbar::ToolbarOption;
+use modav_core::repr::Data;
 
 const Y_LABEL_ROTATE_WIDTH: f32 = 16.0;
-pub trait Graphable<X, Y> {
+pub trait Graphable {
     type Data: Default + Debug;
 
     fn label(&self) -> Option<&String>;
@@ -51,33 +51,27 @@ pub trait Graphable<X, Y> {
         &self,
         frame: &mut Frame,
         cursor: mouse::Cursor,
-        x_points: &HashMap<X, f32>,
+        x_points: &HashMap<Data, f32>,
         x_axis: f32,
-        y_points: &HashMap<Y, f32>,
+        y_points: &HashMap<Data, f32>,
         y_axis: f32,
         data: &Self::Data,
     );
 }
 
 #[derive(Debug, Clone)]
-pub struct Axis<T>
-where
-    T: Clone + Display + Hash + Eq,
-{
-    points: Vec<T>,
+pub struct Axis {
+    points: Vec<Data>,
     label: Option<String>,
     clean: bool,
     caption: Option<String>,
 }
 
-impl<T> Axis<T>
-where
-    T: Clone + Display + Hash + Eq,
-{
+impl Axis {
     const AXIS_THICKNESS: f32 = 2.0;
     const OUTLINES_THICKNESS: f32 = 0.5;
 
-    pub fn new(label: Option<String>, points: Vec<T>, clean: bool) -> Self {
+    pub fn new(label: Option<String>, points: Vec<Data>, clean: bool) -> Self {
         Self {
             label,
             points,
@@ -101,7 +95,7 @@ where
     }
 
     #[allow(unused_variables, unused_assignments)]
-    fn draw(&self, frame: &mut Frame, is_x_axis: bool, theme: &Theme) -> (f32, HashMap<T, f32>) {
+    fn draw(&self, frame: &mut Frame, is_x_axis: bool, theme: &Theme) -> (f32, HashMap<Data, f32>) {
         let mut record = HashMap::new();
 
         let axis_color = color!(205, 0, 150);
@@ -538,29 +532,25 @@ impl ToolbarOption for LegendPosition {
 }
 
 #[derive(Debug)]
-pub struct GraphCanvas<'a, G, X, Y>
+pub struct GraphCanvas<'a, G>
 where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-    G: Graphable<X, Y>,
+    G: Graphable,
 {
-    x_axis: &'a Axis<X>,
-    y_axis: &'a Axis<Y>,
+    x_axis: &'a Axis,
+    y_axis: &'a Axis,
     graphables: &'a Vec<G>,
     cache: &'a canvas::Cache,
     legend: LegendPosition,
-    data: <G as Graphable<X, Y>>::Data,
+    data: <G as Graphable>::Data,
 }
 
-impl<'a, G, X, Y> GraphCanvas<'a, G, X, Y>
+impl<'a, G> GraphCanvas<'a, G>
 where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-    G: Graphable<X, Y>,
+    G: Graphable,
 {
     pub fn new(
-        x_axis: &'a Axis<X>,
-        y_axis: &'a Axis<Y>,
+        x_axis: &'a Axis,
+        y_axis: &'a Axis,
         graphables: &'a Vec<G>,
         cache: &'a canvas::Cache,
     ) -> Self {
@@ -570,7 +560,7 @@ where
             graphables,
             cache,
             legend: LegendPosition::default(),
-            data: <G as Graphable<X, Y>>::Data::default(),
+            data: <G as Graphable>::Data::default(),
         }
     }
 
@@ -579,7 +569,7 @@ where
         self
     }
 
-    pub fn graph_data(mut self, data: <G as Graphable<X, Y>>::Data) -> Self {
+    pub fn graph_data(mut self, data: <G as Graphable>::Data) -> Self {
         self.data = data;
         self
     }
@@ -671,11 +661,9 @@ where
     }
 }
 
-impl<'a, G, X, Y, Message> canvas::Program<Message> for GraphCanvas<'a, G, X, Y>
+impl<'a, G, Message> canvas::Program<Message> for GraphCanvas<'a, G>
 where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-    G: Graphable<X, Y>,
+    G: Graphable,
 {
     type State = ();
 

@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+use core::panic;
 use std::{collections::HashMap, fmt::Debug, path::PathBuf};
 
 use iced::{
@@ -10,7 +11,7 @@ use iced::{
 use modav_core::{
     models::{
         stacked_bar::{StackedBar, StackedBarChart},
-        Scale,
+        AxisPoints, Scale,
     },
     repr::sheet::{builders::SheetBuilder, utils::Data},
 };
@@ -23,7 +24,7 @@ use crate::{
 };
 
 mod graph;
-use graph::{Axis, AxisKind, Graph, Graphable};
+use graph::{Axis, AxisKind, DrawnOutput, Graph, Graphable};
 
 use super::{
     shared::{ContentAreaContainer, ToolbarContainerStyle, ToolbarMenuStyle, ToolbarStyle},
@@ -32,13 +33,6 @@ use super::{
 };
 
 const DEFAULT_WIDTH: f32 = 50.0;
-
-#[derive(Debug, Clone, Copy)]
-enum StackType {
-    Positives,
-    Negatives,
-    Mixed,
-}
 
 #[derive(Debug, Clone, PartialEq)]
 struct GraphBar {
@@ -61,8 +55,8 @@ impl GraphBar {
     }
 }
 
-impl Graphable<Data, Data> for GraphBar {
-    type Data = usize;
+impl Graphable for GraphBar {
+    type Data = (usize, bool);
 
     fn label(&self) -> Option<&String> {
         None
@@ -75,7 +69,7 @@ impl Graphable<Data, Data> for GraphBar {
         color: Color,
         data: &Self::Data,
     ) {
-        if self.id != *data {
+        if self.id != data.0 {
             return;
         }
 
@@ -119,65 +113,129 @@ impl Graphable<Data, Data> for GraphBar {
     fn draw(
         &self,
         frame: &mut canvas::Frame,
-        x_points: &HashMap<Data, f32>,
-        x_axis: f32,
-        y_points: &HashMap<Data, f32>,
-        _y_axis: f32,
-        _data: &Self::Data,
+        x_output: &DrawnOutput,
+        y_output: &DrawnOutput,
+        data: &Self::Data,
     ) {
-        let width = |base: &HashMap<Data, f32>| {
-            let (x, y) = base
-                .values()
-                .into_iter()
-                .fold((None, None), |acc, curr| match acc {
-                    (None, None) => (Some(curr), None),
-                    (Some(pp), None) | (None, Some(pp)) => {
-                        if pp < curr {
-                            (Some(pp), Some(curr))
-                        } else {
-                            (Some(curr), Some(pp))
-                        }
-                    }
-                    (Some(pp), Some(p)) => {
-                        if pp < curr && curr < p {
-                            (Some(pp), Some(curr))
-                        } else if curr < pp {
-                            (Some(curr), Some(pp))
-                        } else {
-                            (Some(pp), Some(p))
-                        }
-                    }
-                });
-            match y {
-                Some(y) => {
-                    let width = f32::abs(
-                        x.expect("BarChart draw: Empty Bar charts should not be possible") - y,
-                    ) / 2.0;
+        let is_horizontal = data.1;
 
-                    width.min(DEFAULT_WIDTH)
+        let mut x_output = x_output;
+        let mut y_output = y_output;
+
+        if is_horizontal {
+            let temp = x_output;
+            x_output = y_output;
+            y_output = temp;
+        }
+
+        let DrawnOutput {
+            record: x_points,
+            axis_pos: x_axis,
+            spacing: x_spacing,
+            step: x_step,
+            ..
+        } = x_output;
+
+        let DrawnOutput {
+            record: y_points,
+            spacing: y_spacing,
+            step: y_step,
+            ..
+        } = y_output;
+
+        let x = match x_points.get(self.x()) {
+            Some(x) => *x,
+            None => {
+                let closest = x_points
+                    .keys()
+                    .into_iter()
+                    .fold(None, |acc, curr| match acc {
+                        Some(prev) => {
+                            if curr < self.x() && curr > prev {
+                                Some(curr)
+                            } else if curr < self.x() && prev > self.x() {
+                                Some(curr)
+                            } else {
+                                Some(prev)
+                            }
+                        }
+                        None => Some(curr),
+                    });
+
+                let closest = closest.expect("Stacked BarChart: Empty graph not possible");
+
+                let x = x_points.get(closest).unwrap();
+
+                match (self.x(), closest) {
+                    (Data::Integer(a), Data::Integer(b)) => {
+                        let diff = a - b;
+                        let ratio = diff as f32 / x_step;
+                        x + (ratio * x_spacing)
+                    }
+                    (Data::Number(a), Data::Number(b)) => {
+                        let diff = a - b;
+                        let ratio = diff as f32 / x_step;
+                        x + (ratio * x_spacing)
+                    }
+                    (Data::Float(a), Data::Float(b)) => {
+                        let diff = a - b;
+                        let ratio = diff / x_step;
+                        x + (ratio * x_spacing)
+                    }
+                    _ => {
+                        warn!("Stacked BartChart x point, {} not found", self.x());
+                        return;
+                    }
                 }
-                None => DEFAULT_WIDTH,
             }
         };
 
-        let width = width(x_points);
+        let y = match y_points.get(self.y()) {
+            Some(y) => *y,
+            None => {
+                let closest = y_points
+                    .keys()
+                    .into_iter()
+                    .fold(None, |acc, curr| match acc {
+                        Some(prev) => {
+                            if curr < self.y() && curr > prev {
+                                Some(curr)
+                            } else if curr < self.y() && prev > self.y() {
+                                Some(curr)
+                            } else {
+                                Some(prev)
+                            }
+                        }
+                        None => Some(curr),
+                    });
 
-        let x = x_points.get(self.x()).cloned().unwrap_or(-1.0);
+                let closest = closest.expect("Stacked BarChart: Empty graph not possible");
+                let y = y_points.get(closest).unwrap();
 
-        if x < 0.0 {
-            warn!("Bart char x point, {} not found", self.x());
-            return;
-        }
+                match (self.y(), closest) {
+                    (Data::Integer(a), Data::Integer(b)) => {
+                        let diff = a - b;
+                        let ratio = diff as f32 / y_step;
+                        y - (ratio * y_spacing)
+                    }
+                    (Data::Number(a), Data::Number(b)) => {
+                        let diff = a - b;
+                        let ratio = diff as f32 / y_step;
+                        y - (ratio * y_spacing)
+                    }
+                    (Data::Float(a), Data::Float(b)) => {
+                        let diff = a - b;
+                        let ratio = diff / y_step;
+                        y - (ratio * y_spacing)
+                    }
 
-        let y = y_points.get(self.y()).cloned().unwrap_or(-1.0);
-
-        if y < 0.0 {
-            warn!("Bart char x point, {} not found", &self.y());
-            return;
-        }
-
-        let mut base = x_axis;
-        let y = x_axis - y;
+                    _ => {
+                        warn!("Stacked BarChart y point, {} not found", self.y());
+                        return;
+                    }
+                }
+            }
+        };
 
         let mut fractions = self.bar.fractions.iter().collect::<Vec<(&String, &f64)>>();
         fractions.sort_by(|x, y| {
@@ -187,15 +245,37 @@ impl Graphable<Data, Data> for GraphBar {
             x.total_cmp(y)
         });
 
-        for (label, fraction) in fractions.iter().rev() {
-            let height = (*fraction * y as f64) as f32;
-            base -= height;
+        if is_horizontal {
+            let height = x_spacing / 2.0;
 
-            let size = Size::new(width, height);
-            let top_left = Point::new(x - (width * 0.5), base);
-            let color = self.colors.get(*label).copied().unwrap_or(Color::BLACK);
+            let mut base = *x_axis;
+            let y = y - x_axis;
 
-            frame.fill_rectangle(top_left, size, color);
+            for (label, fraction) in fractions.iter().rev() {
+                let width = (*fraction * y as f64) as f32;
+
+                let size = Size::new(width, height);
+                let top_left = Point::new(base, x - (0.5 * height));
+                let color = self.colors.get(*label).copied().unwrap_or(Color::BLACK);
+                base += width;
+
+                frame.fill_rectangle(top_left, size, color);
+            }
+        } else {
+            let width = x_spacing / 2.0;
+            let mut base = *x_axis;
+            let y = x_axis - y;
+
+            for (label, fraction) in fractions.iter().rev() {
+                let height = (*fraction * y as f64) as f32;
+                base -= height;
+
+                let size = Size::new(width, height);
+                let top_left = Point::new(x - (width * 0.5), base);
+                let color = self.colors.get(*label).copied().unwrap_or(Color::BLACK);
+
+                frame.fill_rectangle(top_left, size, color);
+            }
         }
     }
 }
@@ -266,92 +346,97 @@ impl StackedBarChartTabData {
 pub struct StackedBarChartTab {
     title: String,
     file: PathBuf,
-    x_axis: Axis<Data>,
-    y_axis: Axis<Data>,
+    x_axis: Axis,
+    y_axis: Axis,
     is_horizontal: bool,
     order: bool,
     bars: Vec<GraphBar>,
     cache: canvas::Cache,
     labels_len: usize,
+    caption: Option<String>,
 }
 
 impl StackedBarChartTab {
-    fn create_axis(
-        is_horizontal: bool,
-        x_scale: Scale<Data>,
-        y_scale: Scale<Data>,
-        stack_type: StackType,
-        order: bool,
-    ) -> (Axis<Data>, Axis<Data>) {
-        if is_horizontal {
-            todo!()
-        } else {
-            let mut x_points = x_scale.points();
-            if order {
-                x_points.sort();
+    fn create_axis(x_scale: Scale, y_scale: Scale, _order: bool) -> (Axis, Axis) {
+        let sequential_x = false;
+        let sequential_y = false;
+
+        let (x_kind, y_fraction) = match x_scale.axis_points(sequential_x) {
+            AxisPoints::Categorical(points) => {
+                let kind = AxisKind::BaseHorizontal(points);
+                (kind, 1.0)
             }
-            let kind = AxisKind::BaseHorizontal(x_points);
-            let x_axis = Axis::new(kind, 1.0);
-
-            let y_axis = match stack_type {
-                StackType::Mixed => {
-                    let mut y_points = y_scale.points();
-                    if order {
-                        y_points.sort();
-                    }
-                    let mut pos = vec![];
-                    let mut neg = vec![];
-
-                    for point in y_points {
-                        match point {
-                            Data::Number(num) => {
-                                if num < 0 {
-                                    neg.push(Data::Number(num));
-                                } else {
-                                    pos.push(Data::Number(num));
-                                }
-                            }
-                            Data::Integer(int) => {
-                                if int < 0 {
-                                    neg.push(Data::Integer(int));
-                                } else {
-                                    pos.push(Data::Integer(int));
-                                }
-                            }
-                            Data::Float(float) => {
-                                if float < 0.0 {
-                                    neg.push(Data::Float(float));
-                                } else {
-                                    pos.push(Data::Float(float));
-                                }
-                            }
-                            _ => {}
-                        };
-                    }
-                    let fraction = pos.len() as f32 / (pos.len() + neg.len()) as f32;
-                    let kind = AxisKind::SplitVertical(pos, neg);
-
-                    Axis::new(kind, fraction)
+            AxisPoints::Numeric {
+                positives,
+                negatives,
+            } => {
+                if positives.is_empty() {
+                    let kind = AxisKind::BaseHorizontal(negatives);
+                    (kind, 0.0)
+                } else if negatives.is_empty() {
+                    let kind = AxisKind::BaseHorizontal(positives);
+                    (kind, 1.0)
+                } else if positives.is_empty() && negatives.is_empty() {
+                    // Scale is never empty.
+                    panic!("StackedBarChart: Empty Scale")
+                } else {
+                    let fraction =
+                        positives.len() as f32 / (positives.len() + negatives.len()) as f32;
+                    let kind = AxisKind::SplitHorizontal(positives, negatives);
+                    (kind, fraction)
                 }
-                StackType::Positives | StackType::Negatives => {
-                    let mut y_points = y_scale.points();
-                    if order {
-                        y_points.sort();
-                    }
-                    let kind = AxisKind::BaseVertical(y_points);
-                    Axis::new(kind, 1.0)
-                }
-            };
+            }
+        };
 
-            return (x_axis, y_axis);
-        }
+        let y_points = y_scale.axis_points(sequential_y);
+
+        let (y_kind, x_fraction) = match y_points {
+            AxisPoints::Categorical(points) => {
+                let kind = AxisKind::BaseVertical(points);
+                (kind, 1.0)
+            }
+            AxisPoints::Numeric {
+                positives,
+                negatives,
+            } => {
+                if positives.is_empty() {
+                    let kind = AxisKind::BaseVertical(negatives);
+                    (kind, 0.0)
+                } else if negatives.is_empty() {
+                    let kind = AxisKind::BaseVertical(positives);
+                    (kind, 1.0)
+                } else if positives.is_empty() && negatives.is_empty() {
+                    // Scale is never empty.
+                    panic!("StackedBarChart: Empty Scale")
+                } else {
+                    let fraction =
+                        positives.len() as f32 / (positives.len() + negatives.len()) as f32;
+
+                    let kind = AxisKind::SplitVertical(positives, negatives);
+
+                    (kind, fraction)
+                }
+            }
+        };
+
+        let x_axis = Axis::new(x_kind, x_fraction, y_fraction);
+        let y_axis = Axis::new(y_kind, y_fraction, x_fraction);
+
+        return (x_axis, y_axis);
     }
 
     fn graph(&self) -> Element<'_, StackedBarChartMessage> {
+        let (x_axis, y_axis) = if self.is_horizontal {
+            (&self.y_axis, &self.x_axis)
+        } else {
+            (&self.x_axis, &self.y_axis)
+        };
+
         let content = Canvas::new(
-            Graph::new(&self.x_axis, &self.y_axis, &self.bars, &self.cache)
+            Graph::new(x_axis, y_axis, &self.bars, &self.cache)
+                .caption(self.caption.as_ref())
                 .labels_len(self.labels_len)
-                .data(0),
+                .data((0, self.is_horizontal)),
         )
         .width(Length::FillPortion(24))
         .height(Length::Fill);
@@ -375,19 +460,11 @@ impl Viewable for StackedBarChartTab {
             is_horizontal,
         } = data;
 
-        let kind = if chart.has_negatives && chart.has_positives {
-            StackType::Mixed
-        } else if chart.has_positives {
-            StackType::Positives
-        } else {
-            StackType::Negatives
-        };
-
         let StackedBarChart {
             x_axis,
-            x_scale,
+            mut x_scale,
             y_axis,
-            y_scale,
+            mut y_scale,
             labels,
             mut bars,
             ..
@@ -412,16 +489,25 @@ impl Viewable for StackedBarChartTab {
             .map(|(id, bar)| GraphBar::new(id, bar, colors.clone()))
             .collect::<Vec<GraphBar>>();
 
-        let (mut x, mut y) = Self::create_axis(is_horizontal, x_scale, y_scale, kind, order);
+        if is_horizontal {
+            let temp = x_scale;
+            x_scale = y_scale;
+            y_scale = temp;
+        }
+
+        let (mut x, mut y) = Self::create_axis(x_scale, y_scale, order);
+
+        if is_horizontal {
+            let temp = x;
+            x = y;
+            y = temp;
+        }
 
         if let Some(label) = x_axis {
             x = x.label(label);
         }
         if let Some(label) = y_axis {
             y = y.label(label);
-        }
-        if let Some(caption) = caption {
-            x = x.caption(caption);
         }
 
         Self {
@@ -433,6 +519,7 @@ impl Viewable for StackedBarChartTab {
             is_horizontal,
             bars,
             order,
+            caption,
             cache: canvas::Cache::default(),
         }
     }

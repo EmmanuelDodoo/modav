@@ -185,7 +185,7 @@ impl ToolbarOption for LegendPosition {
     }
 }
 
-pub trait Graphable<X, Y> {
+pub trait Graphable {
     type Data: Default + Debug;
 
     fn label(&self) -> Option<&String>;
@@ -197,10 +197,8 @@ pub trait Graphable<X, Y> {
     fn draw(
         &self,
         frame: &mut Frame,
-        x_points: &HashMap<X, f32>,
-        x_axis: f32,
-        y_points: &HashMap<Y, f32>,
-        y_axis: f32,
+        x_output: &DrawnOutput,
+        y_output: &DrawnOutput,
         data: &Self::Data,
     );
 }
@@ -218,6 +216,7 @@ struct AxisData {
     label_size: Pixels,
     caption_size: Pixels,
     point_size: Pixels,
+    x_point_padding: f32,
 
     x_padding_left: f32,
     x_padding_right: f32,
@@ -234,11 +233,16 @@ struct AxisData {
     y_offset_bottom: f32,
     y_offset_length: f32,
 
+    y_top: f32,
+    y_bottom: f32,
+    x_left: f32,
+    x_right: f32,
+
     bottom_text_y: f32,
 }
 
 impl AxisData {
-    fn new(frame: &Frame, theme: &Theme) -> Self {
+    fn new(frame: &Frame, theme: &Theme, x_pos: f32, y_pos: f32) -> Self {
         let background = theme.extended_palette().background;
         let axis_color = background.base.color;
         let label_color = theme.extended_palette().secondary.strong.text;
@@ -250,12 +254,13 @@ impl AxisData {
 
         let label_size = 16.0.into();
         let caption_size = 14.0.into();
-        let point_size = 12.0.into();
+        let point_size = 14.0.into();
+        let x_point_padding = 5.0;
 
         let x_padding_left = 0.05 * width;
         let x_padding_right = x_padding_left;
         let true_x_length = width - x_padding_left - x_padding_right;
-        let x_offset_right = 0.025 * true_x_length;
+        let x_offset_right = 0.015 * true_x_length;
         let x_offset_left = 0.045 * true_x_length;
         let x_offset_length = true_x_length - x_offset_left - x_offset_right;
 
@@ -268,6 +273,12 @@ impl AxisData {
         let y_offset_length = true_y_length - y_offset_top - y_offset_bottom;
         let y = height - (0.5 * y_padding_bottom);
 
+        let y_top = x_pos * y_offset_length;
+        let y_bottom = y_offset_length - y_top;
+
+        let x_right = y_pos * x_offset_length;
+        let x_left = x_offset_length - x_right;
+
         Self {
             axis_color,
             label_color,
@@ -278,6 +289,7 @@ impl AxisData {
             label_size,
             caption_size,
             point_size,
+            x_point_padding,
             x_padding_left,
             x_padding_right,
             true_x_length,
@@ -290,25 +302,35 @@ impl AxisData {
             y_offset_top,
             y_offset_bottom,
             y_offset_length,
+            y_top,
+            y_bottom,
+            x_left,
+            x_right,
             bottom_text_y: y,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AxisKind<T> {
-    BaseHorizontal(Vec<T>),
-    BaseVertical(Vec<T>),
-    SplitHorizontal(Vec<T>, Vec<T>),
-    SplitVertical(Vec<T>, Vec<T>),
+pub struct DrawnOutput {
+    pub record: HashMap<Data, f32>,
+    pub axis_pos: f32,
+    pub spacing: f32,
+    pub step: f32,
 }
 
-impl<T> AxisKind<T>
-where
-    T: Hash + Eq + Display + Clone,
-{
+#[derive(Debug, Clone, PartialEq)]
+pub enum AxisKind {
+    BaseHorizontal(Vec<Data>),
+    BaseVertical(Vec<Data>),
+    SplitHorizontal(Vec<Data>, Vec<Data>),
+    SplitVertical(Vec<Data>, Vec<Data>),
+}
+
+impl AxisKind {
     const AXIS_THICKNESS: f32 = 2.0;
     const OUTLINES_THICKNESS: f32 = 0.5;
+    const POINT_THICKNESS: f32 = Self::OUTLINES_THICKNESS * 2.0;
 
     fn is_split(&self) -> bool {
         match self {
@@ -344,7 +366,7 @@ where
         }
     }
 
-    fn positives(&self) -> &[T] {
+    fn positives(&self) -> &[Data] {
         match self {
             Self::BaseHorizontal(points) => points,
             Self::BaseVertical(points) => points,
@@ -353,47 +375,43 @@ where
         }
     }
 
-    #[allow(unused_variables)]
     fn draw_base_horizontal(
         frame: &mut Frame,
-        theme: &Theme,
-        points: &[T],
-        label: Option<String>,
-        caption: Option<String>,
-        y_fraction: f32,
+        points: &[Data],
+        axis_data: AxisData,
         clean: bool,
-    ) -> (f32, HashMap<T, f32>) {
+    ) -> DrawnOutput {
         let mut record = HashMap::new();
-        let data = AxisData::new(frame, theme);
         let points_len = points.len();
 
-        let axis_color = data.axis_color;
-        let label_color = data.label_color;
-        let text_color = data.text_color;
-        let outlines_color = data.outlines_color;
+        let axis_color = axis_data.axis_color;
+        let label_color = axis_data.label_color;
+        let text_color = axis_data.text_color;
+        let outlines_color = axis_data.outlines_color;
 
-        let point_size = data.point_size.into();
+        let point_size = axis_data.point_size.into();
+        let x_point_padding = axis_data.x_point_padding;
 
-        let x_padding_left = data.x_padding_left;
-        let x_padding_right = data.x_padding_right;
-        let true_x_length = data.true_x_length;
-        let x_offset_right = data.x_offset_right;
-        let x_offset_left = data.x_offset_left;
-        let x_offset_length = data.x_offset_length;
+        let x_padding_left = axis_data.x_padding_left;
+        let x_padding_right = axis_data.x_padding_right;
+        let true_x_length = axis_data.true_x_length;
+        let x_offset_right = axis_data.x_offset_right;
+        let x_offset_left = axis_data.x_offset_left;
+        let x_offset_length = axis_data.x_offset_length;
 
-        let y_padding_top = data.y_padding_top;
-        let y_padding_bottom = data.y_padding_bottom;
-        let true_y_length = data.true_y_length;
+        let y_padding_top = axis_data.y_padding_top;
+        let y_padding_bottom = axis_data.y_padding_bottom;
+        let true_y_length = axis_data.true_y_length;
 
-        let y_offset_top = data.y_offset_top;
-        let y_offset_bottom = data.y_offset_bottom;
-        let y_offset_length = data.y_offset_length;
-        let bottom_text_y = data.bottom_text_y;
+        let y_offset_top = axis_data.y_offset_top;
+        let y_offset_bottom = axis_data.y_offset_bottom;
+        let y_offset_length = axis_data.y_offset_length;
+        let bottom_text_y = axis_data.bottom_text_y;
 
-        let y_top = y_fraction * y_offset_length;
-        let y_bottom = y_offset_length - y_top;
+        let y_top = axis_data.y_top;
+        let y_bottom = axis_data.y_bottom;
 
-        let x = x_padding_left;
+        let x = x_padding_left + (0.75 * x_offset_left);
         let y = y_padding_top + y_offset_top + y_top;
         let axis_pos = y;
 
@@ -409,6 +427,10 @@ where
         );
 
         let x = x_padding_left + x_offset_left;
+        let mut prev_x = x;
+        let mut x_dist = 0.0;
+        let mut prev = Data::None;
+        let mut prev_prev = Data::None;
         let y = y + y_bottom;
 
         let dx = x_offset_length / (points.len() as f32);
@@ -418,7 +440,7 @@ where
             50.0..250.0 => 5,
             _ => 10,
         };
-        let outlines_width = (dx * 0.85) / (outlines_number as f32);
+        let outlines_width = (dx * 0.9) / (outlines_number as f32);
         let mut outlines_count = 1.0;
         let mut point_count = 0;
 
@@ -426,15 +448,32 @@ where
 
         while (outlines_width * outlines_count) <= x_offset_length {
             let x = x + outlines_width * outlines_count;
-            //println!("{}", (outlines_count as i32) % outlines_number);
 
             if (outlines_count as i32) % outlines_number == 0 && point_count < points_len {
+                x_dist = prev_x - x;
+                prev_x = x;
                 point_count += 1;
 
                 if let Some(point) = points.next() {
                     record.insert(point.clone(), x);
 
-                    let text_position = Point::new(x, y + 5.0);
+                    if prev_prev == Data::None {
+                        match point {
+                            Data::Float(f) => prev_prev = Data::Float(*f),
+                            Data::Integer(i) => prev_prev = Data::Integer(*i),
+                            Data::Number(n) => prev_prev = Data::Number(*n),
+                            _ => {}
+                        }
+                    } else if prev == Data::None {
+                        match point {
+                            Data::Float(f) => prev = Data::Float(*f),
+                            Data::Integer(i) => prev = Data::Integer(*i),
+                            Data::Number(n) => prev = Data::Number(*n),
+                            _ => {}
+                        }
+                    };
+
+                    let text_position = Point::new(x, y + x_point_padding);
                     let text = Text {
                         content: point.clone().to_string(),
                         position: text_position,
@@ -451,7 +490,7 @@ where
                 frame.stroke(
                     &outline,
                     Stroke::default()
-                        .with_width(Self::OUTLINES_THICKNESS)
+                        .with_width(Self::POINT_THICKNESS)
                         .with_color(outlines_color),
                 );
             } else {
@@ -469,94 +508,62 @@ where
             outlines_count += 1.0;
         }
 
-        if let Some(label) = label {
-            let x = (x_offset_length / 2.0) + x_offset_left + x_padding_left;
-            let y = bottom_text_y;
-            let label_position = Point::new(x, y);
-            let label_size = data.label_size;
+        let step = match (prev, prev_prev) {
+            (Data::Float(x), Data::Float(y)) => f32::abs(x - y),
+            (Data::Integer(x), Data::Integer(y)) => i32::abs(x - y) as f32,
+            (Data::Number(x), Data::Number(y)) => isize::abs(x - y) as f32,
+            _ => 0.0,
+        };
 
-            let text = Text {
-                content: label.clone(),
-                position: label_position,
-                horizontal_alignment: Horizontal::Center,
-                vertical_alignment: Vertical::Center,
-                size: label_size,
-                color: label_color,
-                ..Default::default()
-            };
-
-            frame.fill_text(text);
+        DrawnOutput {
+            record,
+            step,
+            axis_pos: axis_pos - Self::AXIS_THICKNESS,
+            spacing: x_dist,
         }
-
-        if let Some(caption) = caption {
-            let x = (x_offset_length * 0.80) + x_padding_left + x_offset_left;
-            let y = bottom_text_y;
-            let caption_position = Point::new(x, y);
-            let caption_size = data.caption_size;
-
-            let text = Text {
-                content: caption.clone(),
-                position: caption_position,
-                horizontal_alignment: Horizontal::Center,
-                vertical_alignment: Vertical::Center,
-                size: caption_size,
-                color: label_color,
-                font: font::Font {
-                    style: font::Style::Italic,
-                    ..Default::default()
-                },
-                ..Default::default()
-            };
-            frame.fill_text(text);
-        }
-
-        (axis_pos - Self::AXIS_THICKNESS, record)
     }
 
-    #[allow(unused_variables)]
     fn draw_base_vertical(
         frame: &mut Frame,
-        theme: &Theme,
-        points: &[T],
-        x_fraction: f32,
+        points: &[Data],
+        axis_data: AxisData,
         clean: bool,
-    ) -> (f32, HashMap<T, f32>) {
+    ) -> DrawnOutput {
         let mut record = HashMap::new();
-        let data = AxisData::new(frame, theme);
         let points_len = points.len();
 
-        let axis_color = data.axis_color;
-        let label_color = data.label_color;
-        let text_color = data.text_color;
-        let outlines_color = data.outlines_color;
+        let axis_color = axis_data.axis_color;
+        let label_color = axis_data.label_color;
+        let text_color = axis_data.text_color;
+        let outlines_color = axis_data.outlines_color;
 
-        let point_size = data.point_size;
+        let point_size = axis_data.point_size;
 
-        let x_padding_left = data.x_padding_left;
-        let x_padding_right = data.x_padding_right;
-        let true_x_length = data.true_x_length;
-        let x_offset_right = data.x_offset_right;
-        let x_offset_left = data.x_offset_left;
-        let x_offset_length = data.x_offset_length;
+        let x_padding_left = axis_data.x_padding_left;
+        let x_padding_right = axis_data.x_padding_right;
+        let true_x_length = axis_data.true_x_length;
+        let x_offset_right = axis_data.x_offset_right;
+        let x_offset_left = axis_data.x_offset_left;
+        let x_offset_length = axis_data.x_offset_length;
 
-        let y_padding_top = data.y_padding_top;
-        let y_padding_bottom = data.y_padding_bottom;
-        let true_y_length = data.true_y_length;
+        let y_padding_top = axis_data.y_padding_top;
+        let y_padding_bottom = axis_data.y_padding_bottom;
+        let true_y_length = axis_data.true_y_length;
 
-        let y_offset_top = data.y_offset_top;
-        let y_offset_bottom = data.y_offset_bottom;
-        let y_offset_length = data.y_offset_length;
-        let bottom_text_y = data.bottom_text_y;
+        let y_offset_top = axis_data.y_offset_top;
+        let y_offset_bottom = axis_data.y_offset_bottom;
+        let y_offset_length = axis_data.y_offset_length;
+        let bottom_text_y = axis_data.bottom_text_y;
 
-        let x_left = (1.0 - x_fraction) * x_offset_length;
-        let x_right = x_offset_length - x_left;
+        let x_left = axis_data.x_left;
+        let x_right = axis_data.x_right;
 
         let x = x_padding_left + x_offset_left + x_left;
         let y = y_padding_top;
         let axis_pos = x;
 
         let axis_start = Point::new(x, y);
-        let axis_end = Point::new(x, y + true_y_length);
+        let axis_end = Point::new(x, y + true_y_length - (0.75 * y_offset_bottom));
 
         let line = Path::line(axis_start, axis_end);
         frame.stroke(
@@ -568,6 +575,10 @@ where
 
         let x = x_padding_left + (0.5 * x_offset_left);
         let y = y_padding_top + y_offset_top;
+        let mut prev_y = y;
+        let mut y_dist = 0.0;
+        let mut prev = Data::None;
+        let mut prev_prev = Data::None;
 
         let dy = y_offset_length / (points_len as f32);
         let outlines_number = match dy {
@@ -587,10 +598,28 @@ where
             let offset_end = x + (0.5 * x_offset_left) + x_offset_length + x_offset_right;
 
             if (outlines_count as i32) % outlines_number == 0 && point_count <= points_len {
+                y_dist = y - prev_y;
+                prev_y = y;
                 point_count += 1;
 
                 if let Some(point) = points.next() {
                     record.insert(point.clone(), y);
+
+                    if prev_prev == Data::None {
+                        match point {
+                            Data::Float(f) => prev_prev = Data::Float(*f),
+                            Data::Integer(i) => prev_prev = Data::Integer(*i),
+                            Data::Number(n) => prev_prev = Data::Number(*n),
+                            _ => {}
+                        }
+                    } else if prev == Data::None {
+                        match point {
+                            Data::Float(f) => prev = Data::Float(*f),
+                            Data::Integer(i) => prev = Data::Integer(*i),
+                            Data::Number(n) => prev = Data::Number(*n),
+                            _ => {}
+                        }
+                    };
 
                     let text_position = Point::new(x, y);
                     let text = Text {
@@ -613,7 +642,7 @@ where
                 frame.stroke(
                     &outline,
                     Stroke::default()
-                        .with_width(Self::OUTLINES_THICKNESS)
+                        .with_width(Self::POINT_THICKNESS)
                         .with_color(outlines_color),
                 );
             } else {
@@ -634,65 +663,532 @@ where
             outlines_count += 1.0;
         }
 
-        (axis_pos + Self::AXIS_THICKNESS, record)
+        let step = match (prev, prev_prev) {
+            (Data::Float(x), Data::Float(y)) => f32::abs(x - y),
+            (Data::Integer(x), Data::Integer(y)) => i32::abs(x - y) as f32,
+            (Data::Number(x), Data::Number(y)) => isize::abs(x - y) as f32,
+            _ => 0.0,
+        };
+
+        DrawnOutput {
+            record,
+            axis_pos: axis_pos + Self::AXIS_THICKNESS,
+            spacing: y_dist,
+            step,
+        }
     }
 
-    fn draw_split_vertical(_frame: &mut Frame, _theme: &Theme) -> (f32, HashMap<T, f32>) {
-        todo!()
-    }
-
-    fn draw_split_horizontal(_frame: &mut Frame, _theme: &Theme) -> (f32, HashMap<T, f32>) {
-        todo!()
-    }
-
-    fn draw(
-        &self,
+    fn draw_split_vertical(
         frame: &mut Frame,
-        theme: &Theme,
-        label: Option<String>,
-        caption: Option<String>,
+        pos_points: &[Data],
+        neg_points: &[Data],
+        axis_data: AxisData,
         clean: bool,
-        fraction: f32,
-    ) -> (f32, HashMap<T, f32>) {
+    ) -> DrawnOutput {
+        let mut record = HashMap::new();
+        let pos_points_len = pos_points.len();
+        let neg_points_len = neg_points.len();
+
+        let axis_color = axis_data.axis_color;
+        let label_color = axis_data.label_color;
+        let text_color = axis_data.text_color;
+        let outlines_color = axis_data.outlines_color;
+
+        let point_size = axis_data.point_size;
+
+        let x_padding_left = axis_data.x_padding_left;
+        let x_padding_right = axis_data.x_padding_right;
+        let true_x_length = axis_data.true_x_length;
+        let x_offset_right = axis_data.x_offset_right;
+        let x_offset_left = axis_data.x_offset_left;
+        let x_offset_length = axis_data.x_offset_length;
+
+        let y_padding_top = axis_data.y_padding_top;
+        let y_padding_bottom = axis_data.y_padding_bottom;
+        let true_y_length = axis_data.true_y_length;
+
+        let y_offset_top = axis_data.y_offset_top;
+        let y_offset_bottom = axis_data.y_offset_bottom;
+        let y_offset_length = axis_data.y_offset_length;
+        let bottom_text_y = axis_data.bottom_text_y;
+
+        let x_left = axis_data.x_left;
+
+        let y_top = axis_data.y_top;
+        let y_bottom = axis_data.y_bottom;
+
+        let x = x_padding_left + x_offset_left + x_left;
+        let y = y_padding_top;
+        let axis_pos = x;
+
+        let axis_start = Point::new(x, y);
+        let axis_end = Point::new(x, y + true_y_length);
+
+        let line = Path::line(axis_start, axis_end);
+        frame.stroke(
+            &line,
+            Stroke::default()
+                .with_color(axis_color)
+                .with_width(Self::AXIS_THICKNESS),
+        );
+
+        let x = x_padding_left + (0.5 * x_offset_left);
+        let y = y_padding_top + y_offset_top + y_top;
+        let mut prev_y = y;
+        let mut y_dist = 0.0;
+        let mut prev_prev = Data::None;
+        let mut prev = Data::None;
+
+        let dy = y_offset_length / (pos_points_len + neg_points_len - 1) as f32;
+        let outlines_number = match dy {
+            0.0..50.0 => 1,
+            50.0..250.0 => 5,
+            _ => 10,
+        };
+        let offset_end = x + (0.5 * x_offset_left) + x_offset_length + x_offset_right;
+
+        let outlines_height = (dy * 0.85) / outlines_number as f32;
+
+        let has_zero = match pos_points.get(0).unwrap_or(&Data::None) {
+            Data::Integer(0) | Data::Number(0) | Data::Float(0.0) => true,
+            _ => false,
+        };
+
+        let mut outlines_count = if has_zero { 0.0 } else { 1.0 };
+        let mut point_count = 0;
+
+        let mut points = pos_points.iter();
+
+        while (outlines_height * outlines_count) <= y_top {
+            let y = y - outlines_height * outlines_count;
+
+            if (outlines_count as i32) % outlines_number == 0 && point_count <= pos_points_len {
+                y_dist = prev_y - y;
+                prev_y = y;
+                point_count += 1;
+
+                if let Some(point) = points.next() {
+                    record.insert(point.clone(), y);
+
+                    if prev_prev == Data::None {
+                        match point {
+                            Data::Float(f) => prev_prev = Data::Float(*f),
+                            Data::Integer(i) => prev_prev = Data::Integer(*i),
+                            Data::Number(n) => prev_prev = Data::Number(*n),
+                            _ => {}
+                        }
+                    } else if prev == Data::None {
+                        match point {
+                            Data::Float(f) => prev = Data::Float(*f),
+                            Data::Integer(i) => prev = Data::Integer(*i),
+                            Data::Number(n) => prev = Data::Number(*n),
+                            _ => {}
+                        }
+                    };
+
+                    let text_position = Point::new(x, y);
+                    let text = Text {
+                        content: point.clone().to_string(),
+                        position: text_position,
+                        horizontal_alignment: Horizontal::Center,
+                        vertical_alignment: Vertical::Center,
+                        color: text_color,
+                        size: point_size,
+                        ..Default::default()
+                    };
+                    frame.fill_text(text);
+                }
+
+                let outline = Path::line(
+                    [x + (0.5 * x_offset_left), y].into(),
+                    [offset_end, y].into(),
+                );
+
+                frame.stroke(
+                    &outline,
+                    Stroke::default()
+                        .with_width(Self::POINT_THICKNESS)
+                        .with_color(outlines_color),
+                );
+            } else {
+                if !clean {
+                    let outline = Path::line(
+                        [x + (0.5 * x_offset_left), y].into(),
+                        [offset_end, y].into(),
+                    );
+                    frame.stroke(
+                        &outline,
+                        Stroke::default()
+                            .with_color(outlines_color)
+                            .with_width(Self::OUTLINES_THICKNESS),
+                    );
+                }
+            }
+
+            outlines_count += 1.0;
+        }
+
+        let mut outlines_count = 1.0;
+        let mut point_count = 0;
+        let mut points = neg_points.iter().rev();
+
+        let set_y_dist = y_dist == 0.0;
+        let set_prev = prev_prev == Data::None;
+
+        while (outlines_height * outlines_count) <= y_bottom {
+            let y = y + outlines_height * outlines_count;
+
+            if (outlines_count as i32) % outlines_number == 0 && point_count <= neg_points_len {
+                if set_y_dist {
+                    y_dist = y - prev_y;
+                    prev_y = y;
+                }
+
+                point_count += 1;
+
+                if let Some(point) = points.next() {
+                    record.insert(point.clone(), y);
+
+                    if set_prev {
+                        if prev_prev == Data::None {
+                            match point {
+                                Data::Float(f) => prev_prev = Data::Float(*f),
+                                Data::Integer(i) => prev_prev = Data::Integer(*i),
+                                Data::Number(n) => prev_prev = Data::Number(*n),
+                                _ => {}
+                            }
+                        } else if prev == Data::None {
+                            match point {
+                                Data::Float(f) => prev = Data::Float(*f),
+                                Data::Integer(i) => prev = Data::Integer(*i),
+                                Data::Number(n) => prev = Data::Number(*n),
+                                _ => {}
+                            }
+                        };
+                    }
+
+                    let text_position = Point::new(x, y);
+                    let text = Text {
+                        content: point.clone().to_string(),
+                        position: text_position,
+                        horizontal_alignment: Horizontal::Center,
+                        vertical_alignment: Vertical::Center,
+                        color: text_color,
+                        size: point_size,
+                        ..Default::default()
+                    };
+                    frame.fill_text(text);
+                }
+
+                let outline = Path::line(
+                    [x + (0.5 * x_offset_left), y].into(),
+                    [offset_end, y].into(),
+                );
+
+                frame.stroke(
+                    &outline,
+                    Stroke::default()
+                        .with_width(Self::POINT_THICKNESS)
+                        .with_color(outlines_color),
+                );
+            } else {
+                if !clean {
+                    let outline = Path::line(
+                        [x + (0.5 * x_offset_left), y].into(),
+                        [offset_end, y].into(),
+                    );
+                    frame.stroke(
+                        &outline,
+                        Stroke::default()
+                            .with_color(outlines_color)
+                            .with_width(Self::OUTLINES_THICKNESS),
+                    );
+                }
+            }
+
+            outlines_count += 1.0;
+        }
+
+        let step = match (prev, prev_prev) {
+            (Data::Float(x), Data::Float(y)) => f32::abs(x - y),
+            (Data::Integer(x), Data::Integer(y)) => i32::abs(x - y) as f32,
+            (Data::Number(x), Data::Number(y)) => isize::abs(x - y) as f32,
+            _ => 0.0,
+        };
+
+        DrawnOutput {
+            record,
+            axis_pos: axis_pos + Self::AXIS_THICKNESS,
+            spacing: y_dist,
+            step,
+        }
+    }
+
+    fn draw_split_horizontal(
+        frame: &mut Frame,
+        pos_points: &[Data],
+        neg_points: &[Data],
+        axis_data: AxisData,
+        clean: bool,
+    ) -> DrawnOutput {
+        let mut record: HashMap<Data, f32> = HashMap::new();
+        let pos_points_len = pos_points.len();
+        let neg_points_len = neg_points.len();
+
+        let axis_color = axis_data.axis_color;
+        let label_color = axis_data.label_color;
+        let text_color = axis_data.text_color;
+        let outlines_color = axis_data.outlines_color;
+
+        let point_size = axis_data.point_size;
+        let x_point_padding = axis_data.x_point_padding;
+
+        let x_padding_left = axis_data.x_padding_left;
+        let x_padding_right = axis_data.x_padding_right;
+        let true_x_length = axis_data.true_x_length;
+        let x_offset_right = axis_data.x_offset_right;
+        let x_offset_left = axis_data.x_offset_left;
+        let x_offset_length = axis_data.x_offset_length;
+
+        let y_padding_top = axis_data.y_padding_top;
+        let y_padding_bottom = axis_data.y_padding_bottom;
+        let true_y_length = axis_data.true_y_length;
+
+        let y_offset_top = axis_data.y_offset_top;
+        let y_offset_bottom = axis_data.y_offset_bottom;
+        let y_offset_length = axis_data.y_offset_length;
+        let bottom_text_y = axis_data.bottom_text_y;
+
+        let y_top = axis_data.y_top;
+        let y_bottom = axis_data.y_bottom;
+
+        let x_left = axis_data.x_left;
+        let x_right = axis_data.x_right;
+
+        let x = x_padding_left + (0.75 * x_offset_left);
+        let y = y_padding_top + y_offset_top + y_top;
+        let axis_pos = y;
+
+        let axis_start = Point::new(x, y);
+        let axis_end = Point::new(x + true_x_length, y);
+
+        let line = Path::line(axis_start, axis_end);
+        frame.stroke(
+            &line,
+            Stroke::default()
+                .with_color(axis_color)
+                .with_width(Self::AXIS_THICKNESS),
+        );
+
+        let x = x_padding_left + x_offset_left + x_left;
+        let y = y + y_bottom;
+        let mut prev_x = x;
+        let mut x_dist = 0.0;
+        let mut prev = Data::None;
+        let mut prev_prev = Data::None;
+
+        let dx = x_offset_length / (pos_points_len + neg_points_len - 1) as f32;
+        let outlines_number = match dx {
+            0.0..50.0 => 1,
+            50.0..250.0 => 5,
+            _ => 10,
+        };
+        let outlines_width = (dx * 0.85) / (outlines_number as f32);
+        let has_zero = match pos_points.get(0).unwrap_or(&Data::None) {
+            Data::Integer(0) | Data::Number(0) | Data::Float(0.0) => true,
+            _ => false,
+        };
+
+        let mut outlines_count = if has_zero { 0.0 } else { 1.0 };
+        let mut points_count = 0;
+
+        let mut points = pos_points.iter();
+
+        while (outlines_width * outlines_count) <= x_right {
+            let x = x + outlines_width * outlines_count;
+
+            if (outlines_count as i32) % outlines_number == 0 && points_count < pos_points_len {
+                x_dist = prev_x - x;
+                prev_x = x;
+                points_count += 1;
+
+                if let Some(point) = points.next() {
+                    record.insert(point.clone(), x);
+
+                    if prev_prev == Data::None {
+                        match point {
+                            Data::Float(f) => prev_prev = Data::Float(*f),
+                            Data::Integer(i) => prev_prev = Data::Integer(*i),
+                            Data::Number(n) => prev_prev = Data::Number(*n),
+                            _ => {}
+                        }
+                    } else if prev == Data::None {
+                        match point {
+                            Data::Float(f) => prev = Data::Float(*f),
+                            Data::Integer(i) => prev = Data::Integer(*i),
+                            Data::Number(n) => prev = Data::Number(*n),
+                            _ => {}
+                        }
+                    };
+
+                    let text_position = Point::new(x, y + x_point_padding);
+                    let text = Text {
+                        content: point.clone().to_string(),
+                        position: text_position,
+                        horizontal_alignment: Horizontal::Center,
+                        color: text_color,
+                        size: point_size,
+                        ..Default::default()
+                    };
+
+                    frame.fill_text(text);
+                }
+
+                let outline = Path::line([x, y].into(), [x, y_offset_top].into());
+                frame.stroke(
+                    &outline,
+                    Stroke::default()
+                        .with_width(Self::POINT_THICKNESS)
+                        .with_color(outlines_color),
+                );
+            } else {
+                if !clean {
+                    let outline = Path::line([x, y].into(), [x, y_offset_top].into());
+                    frame.stroke(
+                        &outline,
+                        Stroke::default()
+                            .with_color(outlines_color)
+                            .with_width(Self::OUTLINES_THICKNESS),
+                    );
+                }
+            }
+
+            outlines_count += 1.0;
+        }
+
+        let mut outlines_count = 1.0;
+        let mut points_count = 0;
+        let mut points = neg_points.iter().rev();
+
+        let set_x_dist = x_dist == 0.0;
+        let set_prev = prev_prev == Data::None;
+
+        while (outlines_width * outlines_count) <= x_left {
+            let x = x - outlines_width * outlines_count;
+
+            if (outlines_count as i32) % outlines_number == 0 && points_count < pos_points_len {
+                if set_x_dist {
+                    x_dist = x - prev_x;
+                    prev_x = x;
+                }
+
+                points_count += 1;
+
+                if let Some(point) = points.next() {
+                    record.insert(point.clone(), x);
+
+                    if set_prev {
+                        if prev_prev == Data::None {
+                            match point {
+                                Data::Float(f) => prev_prev = Data::Float(*f),
+                                Data::Integer(i) => prev_prev = Data::Integer(*i),
+                                Data::Number(n) => prev_prev = Data::Number(*n),
+                                _ => {}
+                            }
+                        } else if prev == Data::None {
+                            match point {
+                                Data::Float(f) => prev = Data::Float(*f),
+                                Data::Integer(i) => prev = Data::Integer(*i),
+                                Data::Number(n) => prev = Data::Number(*n),
+                                _ => {}
+                            }
+                        };
+                    }
+
+                    let text_position = Point::new(x, y + x_point_padding);
+                    let text = Text {
+                        content: point.clone().to_string(),
+                        position: text_position,
+                        horizontal_alignment: Horizontal::Center,
+                        color: text_color,
+                        size: point_size,
+                        ..Default::default()
+                    };
+
+                    frame.fill_text(text);
+
+                    let outline = Path::line([x, y].into(), [x, y_offset_top].into());
+                    frame.stroke(
+                        &outline,
+                        Stroke::default()
+                            .with_width(Self::POINT_THICKNESS)
+                            .with_color(outlines_color),
+                    );
+                }
+            } else {
+                if !clean {
+                    let outline = Path::line([x, y].into(), [x, y_offset_top].into());
+                    frame.stroke(
+                        &outline,
+                        Stroke::default()
+                            .with_color(outlines_color)
+                            .with_width(Self::OUTLINES_THICKNESS),
+                    );
+                }
+            }
+
+            outlines_count += 1.0;
+        }
+
+        let step = match (prev, prev_prev) {
+            (Data::Float(x), Data::Float(y)) => f32::abs(x - y),
+            (Data::Integer(x), Data::Integer(y)) => i32::abs(x - y) as f32,
+            (Data::Number(x), Data::Number(y)) => isize::abs(x - y) as f32,
+            _ => 0.0,
+        };
+
+        DrawnOutput {
+            record,
+            step,
+            axis_pos: axis_pos - Self::AXIS_THICKNESS,
+            spacing: x_dist,
+        }
+    }
+
+    fn draw(&self, frame: &mut Frame, axis_data: AxisData, clean: bool) -> DrawnOutput {
         match self {
             Self::BaseHorizontal(points) => {
-                Self::draw_base_horizontal(frame, theme, points, label, caption, fraction, clean)
+                Self::draw_base_horizontal(frame, points, axis_data, clean)
             }
-            Self::BaseVertical(points) => {
-                Self::draw_base_vertical(frame, theme, points, fraction, clean)
+            Self::BaseVertical(points) => Self::draw_base_vertical(frame, points, axis_data, clean),
+            Self::SplitVertical(pos, neg) => {
+                Self::draw_split_vertical(frame, pos, neg, axis_data, clean)
             }
-            Self::SplitVertical(pos, neg) => Self::draw_split_vertical(frame, theme),
-            Self::SplitHorizontal(pos, neg) => Self::draw_split_horizontal(frame, theme),
+            Self::SplitHorizontal(pos, neg) => {
+                Self::draw_split_horizontal(frame, pos, neg, axis_data, clean)
+            }
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Axis<T = Data> {
+pub struct Axis {
     label: Option<String>,
-    caption: Option<String>,
     clean: bool,
-    kind: AxisKind<T>,
-    fraction: f32,
+    kind: AxisKind,
+    axis_pos: f32,
+    alt_axis_pos: f32,
 }
 
-impl<T> Axis<T>
-where
-    T: Hash + Eq + Clone + Display,
-{
-    pub fn new(kind: AxisKind<T>, fraction: f32) -> Self {
+impl Axis {
+    pub fn new(kind: AxisKind, axis_pos: f32, alt_axis_pos: f32) -> Self {
         Self {
             kind,
-            fraction,
+            axis_pos,
+            alt_axis_pos,
             label: None,
-            caption: None,
             clean: false,
         }
-    }
-
-    pub fn caption(mut self, caption: impl Into<String>) -> Self {
-        self.caption = Some(caption.into());
-        self
     }
 
     pub fn label(mut self, label: impl Into<String>) -> Self {
@@ -705,222 +1201,32 @@ where
         self
     }
 
-    fn draw(&self, frame: &mut Frame, theme: &Theme) -> (f32, HashMap<T, f32>) {
-        self.kind.draw(
-            frame,
-            theme,
-            self.label.clone(),
-            self.caption.clone(),
-            self.clean,
-            self.fraction,
-        )
+    fn draw(&self, frame: &mut Frame, axis_data: AxisData) -> DrawnOutput {
+        self.kind.draw(frame, axis_data, self.clean)
     }
-
-    //fn draw(&self, frame: &mut Frame, theme: &Theme) -> (f32, HashMap<T, f32>) {
-    //    let mut record = HashMap::new();
-    //
-    //    let background = theme.extended_palette().background;
-    //    let axis_color = background.base.color;
-    //    let label_color = theme.extended_palette().secondary.strong.text;
-    //    let text_color = background.strong.text;
-    //    let outlines_color = theme.extended_palette().background.weak.color;
-    //
-    //    let height = frame.height();
-    //    let width = frame.width();
-    //    let point_size = 14.0.into();
-    //
-    //    let x_padding_left = 0.05 * width;
-    //    let x_padding_right = x_padding_left;
-    //    let true_x_length = width - x_padding_left - x_padding_right;
-    //    let x_offset_right = 0.025 * true_x_length;
-    //    let x_offset_left = 0.075 * true_x_length;
-    //    let x_offset_length = true_x_length - x_offset_left - x_offset_right;
-    //
-    //    let y_padding_top = 0.025 * height;
-    //    let y_padding_bottom = 2.5 * y_padding_top;
-    //    let true_y_length = height - y_padding_top - y_padding_bottom;
-    //
-    //    let y_offset_top = 0.025 * true_y_length;
-    //    let y_offset_bottom = y_offset_top;
-    //    let y_offset_length = true_y_length - y_offset_top - y_offset_bottom;
-    //
-    //    let y_top = (self.positives as f32 / self.points.len() as f32) * y_offset_length;
-    //    let y_bottom = y_offset_length - y_top;
-    //
-    //    #[allow(unused_assignments)]
-    //    let mut axis_pos = 0.0;
-    //
-    //    if self.is_x_axis {
-    //        let x = x_padding_left;
-    //        let y = y_padding_top + y_offset_top + y_top;
-    //        axis_pos = y;
-    //
-    //        let axis_start = Point::new(x, y);
-    //        let axis_end = Point::new(x + true_x_length, y);
-    //
-    //        let line = Path::line(axis_start, axis_end);
-    //        frame.stroke(
-    //            &line,
-    //            Stroke::default()
-    //                .with_width(Self::AXIS_THICKNESS)
-    //                .with_color(axis_color),
-    //        );
-    //
-    //        let x = x_padding_left + x_offset_left;
-    //
-    //        let dx = x_offset_length / (self.points.len() as f32);
-    //
-    //        let outlines_number = match dx {
-    //            0.0..50.0 => 1,
-    //            50.0..250.0 => 5,
-    //            _ => 10,
-    //        };
-    //        let outlines_width = (dx * 0.85) / (outlines_number as f32);
-    //        let mut outlines_count = 1.0;
-    //        let mut point_count = 0;
-    //
-    //        let mut points = self.points.iter();
-    //        let y = y + y_bottom;
-    //
-    //        while (outlines_width * outlines_count) <= x_offset_length {
-    //            let x = x + outlines_width * outlines_count;
-    //
-    //            if outlines_count as i32 % outlines_number == 0 && point_count < self.points.len() {
-    //                point_count += 1;
-    //
-    //                if let Some(point) = points.next() {
-    //                    record.insert(point.clone(), x);
-    //
-    //                    let text_position = Point::new(x, y);
-    //                    let text = Text {
-    //                        content: point.clone().to_string(),
-    //                        position: text_position,
-    //                        horizontal_alignment: Horizontal::Center,
-    //                        color: text_color,
-    //                        size: point_size,
-    //                        ..Default::default()
-    //                    };
-    //
-    //                    frame.fill_text(text);
-    //                }
-    //
-    //                let outline = Path::line([x, y].into(), [x, y_offset_top].into());
-    //                frame.stroke(
-    //                    &outline,
-    //                    Stroke::default()
-    //                        .with_width(Self::OUTLINES_THICKNESS)
-    //                        .with_color(outlines_color),
-    //                );
-    //            } else {
-    //                if !self.clean {
-    //                    let outline = Path::line([x, y].into(), [x, y_offset_top].into());
-    //                    frame.stroke(
-    //                        &outline,
-    //                        Stroke::default()
-    //                            .with_color(outlines_color)
-    //                            .with_width(Self::OUTLINES_THICKNESS),
-    //                    );
-    //                }
-    //            }
-    //
-    //            outlines_count += 1.0;
-    //        }
-    //
-    //        if let Some(label) = &self.label {
-    //            let y = y_padding_top + true_y_length;
-    //            let x = (x_offset_length / 2.0) + x_offset_left + x_padding_left;
-    //            let label_position = Point::new(x, y);
-    //            let label_size = 16.0;
-    //
-    //            let text = Text {
-    //                content: label.clone(),
-    //                position: label_position,
-    //                horizontal_alignment: Horizontal::Center,
-    //                vertical_alignment: Vertical::Center,
-    //                size: label_size.into(),
-    //                color: label_color,
-    //                ..Default::default()
-    //            };
-    //
-    //            frame.fill_text(text);
-    //        }
-    //
-    //        if let Some(caption) = &self.caption {
-    //            let y = y_padding_top + true_y_length;
-    //            let x = (x_offset_length * 0.80) + x_padding_left + x_offset_left;
-    //            let caption_position = Point::new(x, y);
-    //            let caption_size = 14.0;
-    //
-    //            let text = Text {
-    //                content: caption.clone(),
-    //                position: caption_position,
-    //                horizontal_alignment: Horizontal::Center,
-    //                vertical_alignment: Vertical::Center,
-    //                size: caption_size.into(),
-    //                color: label_color,
-    //                font: font::Font {
-    //                    style: font::Style::Italic,
-    //                    ..Default::default()
-    //                },
-    //                ..Default::default()
-    //            };
-    //            frame.fill_text(text);
-    //        }
-    //    } else {
-    //        let x = x_padding_left + x_offset_left;
-    //        let y = y_padding_top;
-    //        axis_pos = x;
-    //
-    //        let axis_start = Point::new(x, y);
-    //        let axis_end = Point::new(x, y + true_y_length);
-    //
-    //        let line = Path::line(axis_start, axis_end);
-    //        frame.stroke(
-    //            &line,
-    //            Stroke::default()
-    //                .with_color(axis_color)
-    //                .with_width(Self::AXIS_THICKNESS),
-    //        );
-    //
-    //        let dy = y_offset_length / (self.points.len() as f32);
-    //        let dty = y_top / (self.positives as f32);
-    //        let dby = y_bottom / (self.points.len() - self.positives) as f32;
-    //        let stump_width = 0.005 * height;
-    //
-    //        let outlines_number = if dy < 50.0 { 1 } else { 5 };
-    //        let outlines_height = (dy * 0.9) / (outlines_number as f32);
-    //        let mut outlines_count = 1.0;
-    //        let mut point_count = 0;
-    //    }
-    //
-    //    (axis_pos - (Self::AXIS_THICKNESS / 2.0), record)
-    //}
 }
 
-pub struct Graph<'a, G, X = Data, Y = Data>
+pub struct Graph<'a, G>
 where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-    G: Graphable<X, Y>,
+    G: Graphable,
 {
-    x_axis: &'a Axis<X>,
-    y_axis: &'a Axis<Y>,
+    x_axis: &'a Axis,
+    y_axis: &'a Axis,
     cache: &'a canvas::Cache,
     graphables: &'a [G],
-    data: <G as Graphable<X, Y>>::Data,
+    data: <G as Graphable>::Data,
     legend_position: LegendPosition,
     labels_len: usize,
+    caption: Option<&'a String>,
 }
 
-impl<'a, X, Y, G> Graph<'a, G, X, Y>
+impl<'a, G> Graph<'a, G>
 where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-    G: Graphable<X, Y>,
+    G: Graphable,
 {
     pub fn new(
-        x_axis: &'a Axis<X>,
-        y_axis: &'a Axis<Y>,
+        x_axis: &'a Axis,
+        y_axis: &'a Axis,
         graphables: &'a [G],
         cache: &'a canvas::Cache,
     ) -> Self {
@@ -929,19 +1235,25 @@ where
             y_axis,
             cache,
             graphables,
-            data: <G as Graphable<X, Y>>::Data::default(),
+            data: <G as Graphable>::Data::default(),
             legend_position: LegendPosition::default(),
             labels_len: 0,
+            caption: None,
         }
     }
 
-    pub fn data(mut self, data: <G as Graphable<X, Y>>::Data) -> Self {
+    pub fn data(mut self, data: <G as Graphable>::Data) -> Self {
         self.data = data;
         self
     }
 
     pub fn legend(mut self, legend: LegendPosition) -> Self {
         self.legend_position = legend;
+        self
+    }
+
+    pub fn caption(mut self, caption: Option<&'a String>) -> Self {
+        self.caption = caption;
         self
     }
 
@@ -1015,11 +1327,9 @@ where
     }
 }
 
-impl<'a, G, X, Y, Message> canvas::Program<Message> for Graph<'a, G, X, Y>
+impl<'a, G, Message> canvas::Program<Message> for Graph<'a, G>
 where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-    G: Graphable<X, Y>,
+    G: Graphable,
 {
     type State = ();
 
@@ -1032,15 +1342,57 @@ where
         _cursor: iced::advanced::mouse::Cursor,
     ) -> Vec<Geometry> {
         let content = self.cache.draw(renderer, bounds.size(), |frame| {
-            let (x_axis, x_record) = self.x_axis.draw(frame, theme);
-            let (y_axis, y_record) = self.y_axis.draw(frame, theme);
+            let data = AxisData::new(frame, theme, self.x_axis.axis_pos, self.y_axis.axis_pos);
+
+            let x_output = self.x_axis.draw(frame, data);
+            let y_output = self.y_axis.draw(frame, data);
 
             self.graphables.iter().for_each(|graphable| {
-                graphable.draw(frame, &x_record, x_axis, &y_record, y_axis, &self.data);
+                graphable.draw(frame, &x_output, &y_output, &self.data);
             });
 
+            if let Some(label) = self.x_axis.label.clone() {
+                let x = (data.x_offset_length / 2.0) + data.x_offset_left + data.x_padding_left;
+                let y = data.bottom_text_y;
+                let label_position = Point::new(x, y);
+                let label_size = data.label_size;
+
+                let text = Text {
+                    content: label.clone(),
+                    position: label_position,
+                    horizontal_alignment: Horizontal::Center,
+                    vertical_alignment: Vertical::Center,
+                    size: label_size,
+                    color: data.label_color,
+                    ..Default::default()
+                };
+
+                frame.fill_text(text);
+            }
+
+            if let Some(caption) = self.caption {
+                let x = (data.x_offset_length * 0.80) + data.x_padding_left + data.x_offset_left;
+                let y = data.bottom_text_y;
+                let caption_position = Point::new(x, y);
+                let caption_size = data.caption_size;
+
+                let text = Text {
+                    content: caption.clone(),
+                    position: caption_position,
+                    horizontal_alignment: Horizontal::Center,
+                    vertical_alignment: Vertical::Center,
+                    size: caption_size,
+                    color: data.label_color,
+                    font: font::Font {
+                        style: font::Style::Italic,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                frame.fill_text(text);
+            }
+
             if let Some(label) = self.y_axis.label.clone() {
-                let data = AxisData::new(frame, theme);
                 let x_padding = 0.5 * data.x_padding_left;
                 let y_padding = data.y_padding_top + (0.5 * data.true_y_length);
 

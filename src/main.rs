@@ -198,7 +198,7 @@ impl Flags {
             .tab_padding([5, 7]);
         let toast_timeout = 2;
         let dialog_view = DialogView::default();
-        let default_log_file = PathBuf::from("./modav.log");
+        let default_log_file = PathBuf::from("~/.local/share/modav.log");
         match self {
             Self::Prod(log_file) => Modav {
                 file_path: None,
@@ -281,7 +281,7 @@ impl Flags {
             Self::Stacked => {
                 use modav_core::repr::sheet::utils::StackedBarChartAxisLabelStrategy;
 
-                let file_path = PathBuf::from("../../../stacked.csv");
+                let file_path = PathBuf::from("../../../stacked_neg.csv");
                 let current_view = ViewType::StackedBarChart;
 
                 {
@@ -289,7 +289,7 @@ impl Flags {
                         x_col: 0,
                         acc_cols: vec![1, 2, 3, 4],
                         axis_label: StackedBarChartAxisLabelStrategy::Header("Total Cost".into()),
-                        is_horizontal: false,
+                        is_horizontal: true,
                         caption: Some("Caption where?".into()),
                         title: "Stacked Bar Chart".into(),
                         ..Default::default()

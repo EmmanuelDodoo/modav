@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
-    fmt::{self, Debug, Display},
-    hash::Hash,
+    fmt::{self, Debug},
     path::PathBuf,
     rc::Rc,
 };
@@ -78,22 +77,14 @@ impl ToolbarOption for GraphType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct GraphLine<X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    points: Vec<GraphPoint<X, Y>>,
+pub struct GraphLine {
+    points: Vec<GraphPoint>,
     label: Option<String>,
     color: Color,
 }
 
-impl<X, Y> GraphLine<X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    pub fn new(points: Vec<GraphPoint<X, Y>>, label: Option<String>, color: Color) -> Self {
+impl GraphLine {
+    pub fn new(points: Vec<GraphPoint>, label: Option<String>, color: Color) -> Self {
         Self {
             points,
             color,
@@ -109,8 +100,8 @@ where
     fn draw(
         line: &Self,
         frame: &mut Frame,
-        x_record: &HashMap<X, f32>,
-        y_record: &HashMap<Y, f32>,
+        x_record: &HashMap<Data, f32>,
+        y_record: &HashMap<Data, f32>,
         kind: GraphType,
     ) {
         line.points.iter().fold(None, |prev, point| {
@@ -179,20 +170,16 @@ where
     }
 }
 
-impl<X, Y> Graphable<X, Y> for GraphLine<X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
+impl Graphable for GraphLine {
     type Data = GraphType;
 
     fn draw(
         &self,
         frame: &mut Frame,
         _cursor: mouse::Cursor,
-        x_points: &HashMap<X, f32>,
+        x_points: &HashMap<Data, f32>,
         _x_axis: f32,
-        y_points: &HashMap<Y, f32>,
+        y_points: &HashMap<Data, f32>,
         _y_axis: f32,
         data: &Self::Data,
     ) {
@@ -222,24 +209,16 @@ pub struct GraphState {
 }
 
 #[derive(Debug)]
-pub struct LineGraph<'a, Message, X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    x_axis: Axis<X>,
-    y_axis: Axis<Y>,
-    lines: &'a Vec<GraphLine<X, Y>>,
+pub struct LineGraph<'a, Message> {
+    x_axis: Axis,
+    y_axis: Axis,
+    lines: &'a Vec<GraphLine>,
     cache: canvas::Cache,
     on_open_editor: Option<Message>,
 }
 
-impl<'a, Message, X, Y> LineGraph<'a, Message, X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    pub fn new(x_axis: Axis<X>, y_axis: Axis<Y>, lines: &'a Vec<GraphLine<X, Y>>) -> Self {
+impl<'a, Message> LineGraph<'a, Message> {
+    pub fn new(x_axis: Axis, y_axis: Axis, lines: &'a Vec<GraphLine>) -> Self {
         Self {
             x_axis,
             y_axis,
@@ -348,10 +327,8 @@ where
     }
 }
 
-impl<'a, Message, X, Y> Component<Message> for LineGraph<'a, Message, X, Y>
+impl<'a, Message> Component<Message> for LineGraph<'a, Message>
 where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
     Message: Clone,
 {
     type Event = GraphMessage;
@@ -373,14 +350,9 @@ where
 
     fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
         let canvas = Canvas::new(
-            GraphCanvas::<GraphLine<X, Y>, X, Y>::new(
-                &self.x_axis,
-                &self.y_axis,
-                &self.lines,
-                &self.cache,
-            )
-            .legend_position(state.legend_position)
-            .graph_data(state.graph_type),
+            GraphCanvas::<GraphLine>::new(&self.x_axis, &self.y_axis, &self.lines, &self.cache)
+                .legend_position(state.legend_position)
+                .graph_data(state.graph_type),
         )
         .height(Length::Fill)
         .width(Length::FillPortion(24));
@@ -398,13 +370,11 @@ where
     }
 }
 
-impl<'a, Message, X, Y> From<LineGraph<'a, Message, X, Y>> for Element<'a, Message>
+impl<'a, Message> From<LineGraph<'a, Message>> for Element<'a, Message>
 where
     Message: 'a + Clone + Debug,
-    X: 'a + Clone + Display + Hash + Eq + Debug,
-    Y: 'a + Clone + Display + Hash + Eq + Debug,
 {
-    fn from(value: LineGraph<'a, Message, X, Y>) -> Self {
+    fn from(value: LineGraph<'a, Message>) -> Self {
         component(value)
     }
 }
@@ -414,7 +384,7 @@ pub struct LineTabData {
     file: PathBuf,
     title: String,
     theme: Theme,
-    line: line::LineGraph<String, Data>,
+    line: line::LineGraph,
     caption: Option<String>,
 }
 
@@ -477,17 +447,17 @@ pub enum ModelMessage {
 pub struct LineGraphTab {
     file: PathBuf,
     title: String,
-    x_scale: Scale<String>,
-    y_scale: Scale<Data>,
+    x_scale: Scale,
+    y_scale: Scale,
     x_label: Option<String>,
     y_label: Option<String>,
-    lines: Vec<GraphLine<String, Data>>,
+    lines: Vec<GraphLine>,
     theme: Theme,
     caption: Option<String>,
 }
 
 impl LineGraphTab {
-    fn graph(&self) -> LineGraph<ModelMessage, String, Data> {
+    fn graph(&self) -> LineGraph<ModelMessage> {
         let mut x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
 
         if let Some(caption) = self.caption.clone() {

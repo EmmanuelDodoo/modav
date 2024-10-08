@@ -37,7 +37,7 @@ const DEFAULT_WIDTH: f32 = 50.0;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GraphBar {
-    point: GraphPoint<Data, Data>,
+    point: GraphPoint,
     label: Option<String>,
     color: Color,
 }
@@ -57,15 +57,15 @@ impl GraphBar {
     }
 }
 
-impl From<Bar<Data, Data>> for GraphBar {
-    fn from(value: Bar<Data, Data>) -> Self {
+impl From<Bar> for GraphBar {
+    fn from(value: Bar) -> Self {
         let Bar { point, label } = value;
 
         Self::new(point, label, Color::BLACK)
     }
 }
 
-impl Graphable<Data, Data> for GraphBar {
+impl Graphable for GraphBar {
     type Data = bool;
 
     fn label(&self) -> Option<&String> {
@@ -176,8 +176,8 @@ pub struct BarChartGraphState {
 }
 
 pub struct BarChartGraph<'a, Message> {
-    x_axis: Axis<Data>,
-    y_axis: Axis<Data>,
+    x_axis: Axis,
+    y_axis: Axis,
     bars: &'a Vec<GraphBar>,
     cache: canvas::Cache,
     on_open_editor: Option<Message>,
@@ -185,7 +185,7 @@ pub struct BarChartGraph<'a, Message> {
 }
 
 impl<'a, Message> BarChartGraph<'a, Message> {
-    fn new(x_axis: Axis<Data>, y_axis: Axis<Data>, bars: &'a Vec<GraphBar>) -> Self {
+    fn new(x_axis: Axis, y_axis: Axis, bars: &'a Vec<GraphBar>) -> Self {
         Self {
             x_axis,
             y_axis,
@@ -300,14 +300,9 @@ where
 
     fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
         let canvas = Canvas::new(
-            GraphCanvas::<GraphBar, Data, Data>::new(
-                &self.x_axis,
-                &self.y_axis,
-                &self.bars,
-                &self.cache,
-            )
-            .graph_data(self.is_horizontal)
-            .legend_position(state.legend),
+            GraphCanvas::<GraphBar>::new(&self.x_axis, &self.y_axis, &self.bars, &self.cache)
+                .graph_data(self.is_horizontal)
+                .legend_position(state.legend),
         )
         .width(Length::FillPortion(24))
         .height(Length::Fill);
@@ -335,7 +330,7 @@ where
 pub struct BarChartTabData {
     file: PathBuf,
     title: String,
-    barchart: BarChart<Data, Data>,
+    barchart: BarChart,
     theme: Theme,
     order: bool,
     is_horizontal: bool,
@@ -399,8 +394,8 @@ pub enum BarChartMessage {
 pub struct BarChartTab {
     file: PathBuf,
     title: String,
-    x_scale: Scale<Data>,
-    y_scale: Scale<Data>,
+    x_scale: Scale,
+    y_scale: Scale,
     x_label: Option<String>,
     y_label: Option<String>,
     bars: Vec<GraphBar>,
