@@ -367,7 +367,7 @@ pub mod icons {
     pub const ANGLE_UP: char = '\u{F106}';
     pub const ANGLE_DOWN: char = '\u{F107}';
     pub const CHART: char = '\u{E802}';
-    pub const BARCHART: char = '\u{E80C}';
+    pub const BARCHART: char = '\u{E80E}';
     pub const SETTINGS: char = '\u{E800}';
     pub const INFO: char = '\u{E80A}';
     pub const HELP: char = '\u{E807}';
@@ -376,6 +376,7 @@ pub mod icons {
     pub const WARN: char = '\u{E808}';
     pub const ERROR: char = '\u{E809}';
     pub const CLOSE: char = '\u{E806}';
+    pub const TOOLS: char = '\u{E80D}';
 
     fn icon_maker(unicode: char, name: &'static str) -> Text<'static> {
         let fnt: Font = Font::with_name(name);
