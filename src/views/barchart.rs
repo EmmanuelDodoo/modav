@@ -1,10 +1,10 @@
-use std::{collections::HashMap, fmt::Debug, path::PathBuf, rc::Rc};
+use std::{fmt::Debug, path::PathBuf};
 
 use iced::{
     alignment, theme,
     widget::{
-        button, canvas, column, component, container, horizontal_space, row, text, Canvas,
-        Component, Tooltip,
+        button, canvas, checkbox, column, container, horizontal_space, row, text, text_input,
+        vertical_space, Canvas, Tooltip,
     },
     Alignment, Color, Element, Font, Length, Point, Renderer, Size, Theme,
 };
@@ -19,21 +19,22 @@ use modav_core::{
 use tracing::warn;
 
 use crate::{
-    utils::{coloring::ColorEngine, icons, AppError},
-    widgets::{toolbar::ToolbarMenu, wizard::BarChartConfigState},
+    utils::{coloring::ColorEngine, icons, tooltip, AppError},
+    widgets::{
+        modal::Modal,
+        style::dialog_container,
+        toolbar::{ToolBarOrientation, ToolbarMenu},
+        wizard::BarChartConfigState,
+    },
     Message, ToolTipContainerStyle,
 };
 
 use super::{
-    shared::{
-        Axis, ContentAreaContainer, EditorButtonStyle, GraphCanvas, Graphable, LegendPosition,
-        ToolbarContainerStyle, ToolbarMenuStyle, ToolbarStyle,
-    },
+    shared::{tools_button, ContentAreaContainer, EditorButtonStyle},
+    stacked_barchart::graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition},
     tabs::TabLabel,
     Viewable,
 };
-
-const DEFAULT_WIDTH: f32 = 50.0;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GraphBar {
@@ -72,257 +73,105 @@ impl Graphable for GraphBar {
         self.label.as_ref()
     }
 
-    fn color(&self) -> Color {
-        self.color
+    fn draw_legend_filter(&self, _data: &Self::Data) -> bool {
+        self.label.is_some()
+    }
+
+    fn draw_legend(
+        &self,
+        frame: &mut canvas::Frame,
+        bounds: iced::Rectangle,
+        color: Color,
+        idx: usize,
+        _data: &Self::Data,
+    ) {
+        if idx > 4 {
+            return;
+        }
+
+        let y_padding = bounds.height / (5.0);
+        let spacing = 5.0;
+        let text_size = 12.0;
+        let color_size = Size::new(12.0, 12.0);
+
+        let x = bounds.x;
+        let y = bounds.position().y + (idx as f32 * y_padding);
+        let position = Point::new(x, y);
+
+        frame.fill_rectangle(position, color_size, self.color);
+
+        let position = Point::new(x + spacing + color_size.width, y + 0.5 * color_size.height);
+
+        let label = canvas::Text {
+            content: self.label.clone().unwrap_or_default(),
+            position,
+            color,
+            size: text_size.into(),
+            vertical_alignment: alignment::Vertical::Center,
+            ..Default::default()
+        };
+
+        frame.fill_text(label);
     }
 
     fn draw(
         &self,
         frame: &mut canvas::Frame,
-        _cursor: iced::mouse::Cursor,
-        x_points: &HashMap<Data, f32>,
-        x_axis: f32,
-        y_points: &HashMap<Data, f32>,
-        y_axis: f32,
+        x_output: &DrawnOutput,
+        y_output: &DrawnOutput,
         data: &Self::Data,
     ) {
-        let width = |base: &HashMap<Data, f32>| {
-            let (x, y) = base
-                .values()
-                .into_iter()
-                .fold((None, None), |acc, curr| match acc {
-                    (None, None) => (Some(curr), None),
-                    (Some(pp), None) | (None, Some(pp)) => {
-                        if pp < curr {
-                            (Some(pp), Some(curr))
-                        } else {
-                            (Some(curr), Some(pp))
-                        }
-                    }
-                    (Some(pp), Some(p)) => {
-                        if pp < curr && curr < p {
-                            (Some(pp), Some(curr))
-                        } else if curr < pp {
-                            (Some(curr), Some(pp))
-                        } else {
-                            (Some(pp), Some(p))
-                        }
-                    }
-                });
-            match y {
-                Some(y) => {
-                    let width = f32::abs(
-                        x.expect("BarChart draw: Empty Bar charts should not be possible") - y,
-                    ) / 2.0;
+        let is_horizontal = *data;
 
-                    width.min(DEFAULT_WIDTH)
-                }
-                None => DEFAULT_WIDTH,
+        let mut x_output = x_output;
+        let mut y_output = y_output;
+
+        if is_horizontal {
+            let temp = x_output;
+            x_output = y_output;
+            y_output = temp;
+        }
+
+        let x = match x_output.get_closest(&self.point.x, true) {
+            Some(x) => x,
+            None => {
+                warn!("BartChart x point, {} not found", &self.point.x);
+                return;
             }
         };
 
-        if *data {
-            let height = width(y_points);
-            let x = *x_points.get(&self.point.y).unwrap_or(&-1.0);
-            if x < 0.0 {
-                warn!("Bar char x point, {} not found", &self.point.y);
+        let y = match y_output.get_closest(&self.point.y, false) {
+            Some(y) => y,
+            None => {
+                warn!("BarChart y point, {} not found", &self.point.y);
                 return;
             }
-            let y = *y_points.get(&self.point.x).unwrap_or(&-1.0);
+        };
 
-            if y < 0.0 {
-                warn!("Bar char x point, {} not found", &self.point.x);
-                return;
-            }
+        let DrawnOutput {
+            axis_pos: x_axis,
+            spacing: x_spacing,
+            ..
+        } = x_output;
 
-            let top_left = Point::new(y_axis + 2.5, y - (height / 2.0));
-            let size = Size::new(x - y_axis, height);
+        if is_horizontal {
+            let height = x_spacing / 2.0;
 
-            frame.fill_rectangle(top_left, size, self.color);
+            let base = *x_axis;
+
+            let top_left = Point::new(f32::min(base, y), x - (height / 2.0));
+            let size = Size::new(f32::abs(base - y), height);
+
+            frame.fill_rectangle(top_left, size, self.color)
         } else {
-            let width = width(x_points);
+            let width = x_spacing / 2.0;
+            let base = *x_axis;
 
-            let x = *x_points.get(&self.point.x).unwrap_or(&-1.0);
-
-            if x < 0.0 {
-                warn!("Bart char x point, {} not found", &self.point.x);
-                return;
-            }
-
-            let y = *y_points.get(&self.point.y).unwrap_or(&-1.0);
-
-            if y < 0.0 {
-                warn!("Bart char x point, {} not found", &self.point.y);
-                return;
-            }
-
-            let top_left = Point::new(x - (width / 2.0), y);
-            let size = Size::new(width, x_axis - y);
+            let top_left = Point::new(x - (width / 2.0), f32::min(y, base));
+            let size = Size::new(width, f32::abs(base - y));
 
             frame.fill_rectangle(top_left, size, self.color);
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum BarChartGraphMessage {
-    Legend(LegendPosition),
-    OpenEditor,
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct BarChartGraphState {
-    legend: LegendPosition,
-}
-
-pub struct BarChartGraph<'a, Message> {
-    x_axis: Axis,
-    y_axis: Axis,
-    bars: &'a Vec<GraphBar>,
-    cache: canvas::Cache,
-    on_open_editor: Option<Message>,
-    is_horizontal: bool,
-}
-
-impl<'a, Message> BarChartGraph<'a, Message> {
-    fn new(x_axis: Axis, y_axis: Axis, bars: &'a Vec<GraphBar>) -> Self {
-        Self {
-            x_axis,
-            y_axis,
-            bars,
-            cache: canvas::Cache::default(),
-            is_horizontal: false,
-            on_open_editor: None,
-        }
-    }
-
-    fn toolbar(
-        &self,
-        legend: LegendPosition,
-    ) -> Element<'_, BarChartGraphMessage, Theme, Renderer> {
-        let style = ToolbarStyle;
-        let menu_style = ToolbarMenuStyle;
-
-        let legend = {
-            let icons = Font::with_name("legend-icons");
-
-            let menu = ToolbarMenu::new(
-                LegendPosition::ALL,
-                legend,
-                BarChartGraphMessage::Legend,
-                icons,
-            )
-            .padding([4, 4])
-            .menu_padding([4, 10, 4, 8])
-            .spacing(5.0)
-            .menu_style(theme::Menu::Custom(Rc::new(menu_style)))
-            .style(theme::PickList::Custom(Rc::new(style), Rc::new(menu_style)));
-
-            let tooltip = container(text("Legend Position").size(12.0))
-                .max_width(200.0)
-                .padding([6, 8])
-                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
-                .height(Length::Shrink);
-
-            let menu = Tooltip::new(menu, tooltip, iced::widget::tooltip::Position::Bottom)
-                .gap(2.0)
-                .snap_within_viewport(true);
-
-            menu
-        };
-
-        let editor = {
-            let font = Font::with_name(icons::NAME);
-
-            let btn = button(
-                text(icons::EDITOR)
-                    .font(font)
-                    .width(18.0)
-                    .vertical_alignment(alignment::Vertical::Center)
-                    .horizontal_alignment(alignment::Horizontal::Center),
-            )
-            .on_press(BarChartGraphMessage::OpenEditor)
-            .style(theme::Button::Custom(Box::new(EditorButtonStyle)))
-            .padding([4, 4]);
-
-            let tooltip = container(text("Open in Editor").size(12.0))
-                .max_width(200.0)
-                .padding([6, 8])
-                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
-                .height(Length::Shrink);
-
-            let menu = Tooltip::new(btn, tooltip, iced::widget::tooltip::Position::Bottom)
-                .gap(2.0)
-                .snap_within_viewport(true);
-
-            menu
-        };
-
-        container(
-            column!(legend, editor)
-                .width(Length::Fill)
-                .align_items(Alignment::Center)
-                .spacing(8.0),
-        )
-        .width(Length::Fixed(40.0))
-        .padding([6.0, 2.0])
-        .style(theme::Container::Custom(Box::new(ToolbarContainerStyle)))
-        .into()
-    }
-
-    pub fn on_editor(mut self, message: Message) -> Self {
-        self.on_open_editor = Some(message);
-        self
-    }
-
-    pub fn is_horizontal(mut self, flag: bool) -> Self {
-        self.is_horizontal = flag;
-        self
-    }
-}
-
-impl<'a, Message> Component<Message> for BarChartGraph<'a, Message>
-where
-    Message: Debug + Clone,
-{
-    type State = BarChartGraphState;
-    type Event = BarChartGraphMessage;
-
-    fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
-        match event {
-            BarChartGraphMessage::OpenEditor => self.on_open_editor.clone(),
-            BarChartGraphMessage::Legend(legend) => {
-                state.legend = legend;
-                None
-            }
-        }
-    }
-
-    fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
-        let canvas = Canvas::new(
-            GraphCanvas::<GraphBar>::new(&self.x_axis, &self.y_axis, &self.bars, &self.cache)
-                .graph_data(self.is_horizontal)
-                .legend_position(state.legend),
-        )
-        .width(Length::FillPortion(24))
-        .height(Length::Fill);
-
-        let toolbar = self.toolbar(if self.bars.iter().any(|bar| bar.label.is_some()) {
-            state.legend
-        } else {
-            LegendPosition::None
-        });
-
-        row!(canvas, toolbar).into()
-    }
-}
-
-impl<'a, Message> From<BarChartGraph<'a, Message>> for Element<'a, Message>
-where
-    Message: 'a + Debug + Clone,
-{
-    fn from(value: BarChartGraph<'a, Message>) -> Self {
-        component(value)
     }
 }
 
@@ -385,49 +234,256 @@ impl BarChartTabData {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum BarChartMessage {
     OpenEditor,
+    ToggleConfig,
+    TitleChanged(String),
+    SequentialX(bool),
+    SequentialY(bool),
+    Clean(bool),
+    Horizontal(bool),
+    CaptionChange(String),
+    XLabelChanged(String),
+    YLabelChanged(String),
+    Legend(LegendPosition),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug)]
 pub struct BarChartTab {
     file: PathBuf,
     title: String,
-    x_scale: Scale,
-    y_scale: Scale,
+    x_axis: Scale,
+    y_axis: Scale,
     x_label: Option<String>,
     y_label: Option<String>,
     bars: Vec<GraphBar>,
     caption: Option<String>,
     is_horizontal: bool,
+    config_shown: bool,
+    sequential_x: bool,
+    sequential_y: bool,
+    clean: bool,
+    cache: canvas::Cache,
+    legend: LegendPosition,
 }
 
 impl BarChartTab {
-    fn graph(&self) -> BarChartGraph<'_, BarChartMessage> {
-        if self.is_horizontal {
-            let mut x_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone(), false);
+    fn tools(&self) -> Element<'_, BarChartMessage> {
+        let header = {
+            let header = text("Model Config").size(17.0);
 
-            if let Some(caption) = self.caption.clone() {
-                x_axis = x_axis.caption(caption);
-            }
+            row!(horizontal_space(), header, horizontal_space())
+                .padding([2, 0])
+                .align_items(Alignment::Center)
+        };
 
-            let y_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
+        let title =
+            text_input("Graph Title", self.title.as_str()).on_input(BarChartMessage::TitleChanged);
 
-            BarChartGraph::new(x_axis, y_axis, &self.bars)
-                .on_editor(BarChartMessage::OpenEditor)
-                .is_horizontal(self.is_horizontal)
+        let x_label = text_input(
+            "X axis label",
+            self.x_label
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_default(),
+        )
+        .on_input(BarChartMessage::XLabelChanged);
+
+        let y_label = text_input(
+            "Y axis label",
+            self.y_label
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_default(),
+        )
+        .on_input(BarChartMessage::YLabelChanged);
+
+        let caption = text_input(
+            "Graph Caption",
+            self.caption
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_default(),
+        )
+        .on_input(BarChartMessage::CaptionChange);
+
+        let sequential = {
+            let x = {
+                let check = checkbox("Ranged X axis", self.sequential_x)
+                    .on_toggle(BarChartMessage::SequentialX);
+
+                let tip = tooltip("Each point on the axis is produced consecutively");
+
+                row!(check, tip).spacing(10.0)
+            };
+
+            let y = {
+                let check = checkbox("Ranged Y axis", self.sequential_y)
+                    .on_toggle(BarChartMessage::SequentialY);
+
+                let tip = tooltip("Each point on the axis is produced consecutively");
+
+                row!(check, tip).spacing(10.0)
+            };
+
+            row!(x, horizontal_space(), y).align_items(Alignment::Center)
+        };
+
+        let clean = {
+            let check = checkbox("Clean graph", self.clean).on_toggle(BarChartMessage::Clean);
+
+            let tip = tooltip("Only points on the axes have their outline drawn");
+
+            row!(check, tip).spacing(10.0)
+        };
+
+        let horizontal = {
+            let check = checkbox("Horizontal bars", self.is_horizontal)
+                .on_toggle(BarChartMessage::Horizontal);
+
+            let tip = tooltip("The bars are drawn horizontally");
+
+            row!(check, tip).spacing(10.0)
+        };
+
+        let clean_horizontal =
+            row!(clean, horizontal_space(), horizontal).align_items(Alignment::Center);
+
+        let legend = {
+            let icons = Font::with_name("legend-icons");
+
+            let menu = ToolbarMenu::new(
+                LegendPosition::ALL,
+                self.legend,
+                BarChartMessage::Legend,
+                icons,
+            )
+            .orientation(ToolBarOrientation::Both)
+            .padding([4, 4])
+            .menu_padding([4, 10, 4, 8])
+            .spacing(5.0);
+
+            let tooltip = container(text("Legend Position").size(12.0))
+                .max_width(200.0)
+                .padding([6, 8])
+                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
+                .height(Length::Shrink);
+
+            let menu = Tooltip::new(menu, tooltip, iced::widget::tooltip::Position::Bottom)
+                .gap(2.0)
+                .snap_within_viewport(true);
+
+            let text = text("Legend Position");
+
+            row!(menu, text)
+                .spacing(10.0)
+                .align_items(Alignment::Center)
+        };
+
+        let editor = {
+            let font = Font::with_name(icons::NAME);
+
+            let btn = button(
+                text(icons::EDITOR)
+                    .font(font)
+                    .width(16.0)
+                    .vertical_alignment(alignment::Vertical::Center)
+                    .horizontal_alignment(alignment::Horizontal::Center),
+            )
+            .on_press(BarChartMessage::OpenEditor)
+            .style(theme::Button::Custom(Box::new(EditorButtonStyle)))
+            .padding([4, 4]);
+
+            let tooltip = container(text("Open in Editor").size(12.0))
+                .max_width(200.0)
+                .padding([6, 8])
+                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
+                .height(Length::Shrink);
+
+            let menu = Tooltip::new(btn, tooltip, iced::widget::tooltip::Position::Bottom)
+                .gap(2.0)
+                .snap_within_viewport(true);
+
+            let text = text("Open in Editor");
+
+            row!(menu, text)
+                .spacing(10.0)
+                .align_items(Alignment::Center)
+        };
+
+        let legend_editor = row!(legend, horizontal_space(), editor).align_items(Alignment::Center);
+
+        let content = column!(
+            header,
+            title,
+            x_label,
+            y_label,
+            caption,
+            sequential,
+            clean_horizontal,
+            legend_editor,
+        )
+        .spacing(30.0);
+
+        dialog_container(content)
+            .width(450.0)
+            .height(Length::Shrink)
+            .into()
+    }
+
+    fn create_axis(&self) -> (Axis, Axis) {
+        let (x_scale, y_scale) = if self.is_horizontal {
+            (&self.y_axis, &self.x_axis)
         } else {
-            let mut x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
+            (&self.x_axis, &self.y_axis)
+        };
 
-            if let Some(caption) = self.caption.clone() {
-                x_axis = x_axis.caption(caption);
-            }
+        let (x_axis, y_axis) = create_axis(
+            x_scale,
+            y_scale,
+            self.sequential_x,
+            self.sequential_y,
+            self.clean,
+        );
 
-            let y_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone(), false);
+        let (x_label, y_label) = if self.is_horizontal {
+            (self.y_label.clone(), self.x_label.clone())
+        } else {
+            (self.x_label.clone(), self.y_label.clone())
+        };
 
-            BarChartGraph::new(x_axis, y_axis, &self.bars).on_editor(BarChartMessage::OpenEditor)
-        }
+        return (x_axis.label(x_label), y_axis.label(y_label));
+    }
+
+    fn graph(&self) -> Element<'_, BarChartMessage> {
+        let (x_axis, y_axis) = self.create_axis();
+
+        let content = Canvas::new(
+            Graph::new(x_axis, y_axis, &self.bars, &self.cache)
+                .caption(self.caption.as_ref())
+                .labels_len(self.bars.iter().filter(|bar| bar.label.is_some()).count())
+                .legend(self.legend)
+                .data(self.is_horizontal),
+        )
+        .width(Length::FillPortion(24))
+        .height(Length::Fill);
+
+        content.into()
+    }
+
+    fn content(&self) -> Element<'_, BarChartMessage> {
+        let graph = self.graph();
+
+        let toolbar = tools_button().on_press(BarChartMessage::ToggleConfig);
+
+        row!(
+            graph,
+            column!(vertical_space(), toolbar, vertical_space())
+                .padding([0, 5, 0, 0])
+                .align_items(Alignment::Center)
+        )
+        .into()
     }
 }
 
@@ -469,13 +525,19 @@ impl Viewable for BarChartTab {
         Self {
             file,
             title,
-            x_scale,
+            x_axis: x_scale,
             x_label,
-            y_scale,
+            y_axis: y_scale,
             y_label,
             caption,
             bars,
             is_horizontal,
+            config_shown: false,
+            sequential_x: false,
+            sequential_y: false,
+            clean: false,
+            legend: LegendPosition::default(),
+            cache: canvas::Cache::default(),
         }
     }
 
@@ -524,6 +586,57 @@ impl Viewable for BarChartTab {
     fn update(&mut self, message: Self::Event) -> Option<Message> {
         match message {
             BarChartMessage::OpenEditor => Some(Message::OpenEditor(Some(self.file.clone()))),
+            BarChartMessage::ToggleConfig => {
+                self.config_shown = !self.config_shown;
+                None
+            }
+            BarChartMessage::TitleChanged(title) => {
+                self.title = title;
+                None
+            }
+            BarChartMessage::SequentialX(seq) => {
+                self.sequential_x = seq;
+                self.cache.clear();
+                None
+            }
+            BarChartMessage::SequentialY(seq) => {
+                self.sequential_y = seq;
+                self.cache.clear();
+                None
+            }
+            BarChartMessage::Clean(clean) => {
+                self.clean = clean;
+                self.cache.clear();
+                None
+            }
+            BarChartMessage::Horizontal(is_horizontal) => {
+                self.is_horizontal = is_horizontal;
+                self.cache.clear();
+                None
+            }
+            BarChartMessage::CaptionChange(caption) => {
+                self.caption = if caption.is_empty() {
+                    None
+                } else {
+                    Some(caption)
+                };
+                self.cache.clear();
+                None
+            }
+            BarChartMessage::XLabelChanged(label) => {
+                self.x_label = if label.is_empty() { None } else { Some(label) };
+                self.cache.clear();
+                None
+            }
+            BarChartMessage::YLabelChanged(label) => {
+                self.y_label = if label.is_empty() { None } else { Some(label) };
+                self.cache.clear();
+                None
+            }
+            BarChartMessage::Legend(legend) => {
+                self.legend = legend;
+                None
+            }
         }
     }
 
@@ -540,7 +653,7 @@ impl Viewable for BarChartTab {
         }
         .height(Length::Shrink);
 
-        let content_area = container(self.graph())
+        let content_area = container(self.content())
             .max_width(1450)
             // .padding([5, 10])
             .width(Length::Fill)
@@ -552,6 +665,14 @@ impl Viewable for BarChartTab {
             .spacing(20)
             .height(Length::Fill)
             .width(Length::Fill);
+
+        let content: Element<Self::Event, Theme, Renderer> = if self.config_shown {
+            Modal::new(content, self.tools())
+                .on_blur(BarChartMessage::ToggleConfig)
+                .into()
+        } else {
+            content.into()
+        };
 
         let content: Element<Self::Event, Theme, Renderer> = container(content)
             .padding([10, 30, 30, 15])
