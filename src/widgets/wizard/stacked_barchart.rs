@@ -6,7 +6,7 @@ use std::{
 use super::sheet::SheetConfigState;
 
 use crate::{
-    utils::{tooltip, AppError},
+    utils::{parse_ints, tooltip, AppError},
     views::{StackedBarChartTabData, View},
 };
 use iced::{
@@ -104,13 +104,7 @@ impl StackedBarChartConfigState {
     }
 
     fn submit(&self) -> Self {
-        let input = self
-            .acc_cols_str
-            .trim()
-            .split(",")
-            .map(|num| num.trim())
-            .filter_map(|num| num.parse::<usize>().ok())
-            .collect();
+        let input = parse_ints(&self.acc_cols_str);
         Self {
             use_previous: true,
             acc_cols: input,

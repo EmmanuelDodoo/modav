@@ -563,3 +563,40 @@ pub async fn save_file(
 
     Ok((path, content))
 }
+
+/// Parses a string of ints.
+///
+/// The range syntax `x:y` representing `x<= i < y` is supported
+pub fn parse_ints(input: &str) -> Vec<usize> {
+    let mut rng = Vec::new();
+    let mut output = Vec::new();
+
+    for num in input.trim().split(",").map(|num| num.trim()) {
+        if num.contains(":") {
+            rng.push(num);
+            continue;
+        }
+
+        if let Some(num) = num.parse::<usize>().ok() {
+            output.push(num);
+        }
+    }
+
+    for r in rng
+        .into_iter()
+        .map(|r| r.split(":").filter_map(|r| r.parse::<usize>().ok()))
+    {
+        let temp: Vec<usize> = r.collect();
+
+        if temp.len() != 2 {
+            continue;
+        }
+
+        let x = temp[0];
+        let y = temp[1];
+
+        (x..y).for_each(|i| output.push(i));
+    }
+
+    output
+}
