@@ -9,7 +9,6 @@ use crate::utils::icons;
 pub mod graph;
 pub mod styles;
 
-pub use graph::*;
 pub use styles::*;
 
 pub fn tools_button<'a, Message>() -> Button<'a, Message> {

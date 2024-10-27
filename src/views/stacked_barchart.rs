@@ -29,11 +29,11 @@ use crate::{
     Message, ToolTipContainerStyle,
 };
 
-pub mod graph;
-use graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition};
-
 use super::{
-    shared::{tools_button, ContentAreaContainer, EditorButtonStyle},
+    shared::{
+        graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition},
+        tools_button, ContentAreaContainer, EditorButtonStyle,
+    },
     tabs::TabLabel,
     Viewable,
 };

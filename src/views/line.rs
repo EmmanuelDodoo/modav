@@ -35,8 +35,10 @@ use crate::{
 };
 
 use super::{
-    shared::ContentAreaContainer,
-    stacked_barchart::graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition},
+    shared::{
+        graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition},
+        ContentAreaContainer,
+    },
     TabLabel, Viewable,
 };
 

@@ -30,8 +30,10 @@ use crate::{
 };
 
 use super::{
-    shared::{tools_button, ContentAreaContainer, EditorButtonStyle},
-    stacked_barchart::graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition},
+    shared::{
+        graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition},
+        tools_button, ContentAreaContainer, EditorButtonStyle,
+    },
     tabs::TabLabel,
     Viewable,
 };
