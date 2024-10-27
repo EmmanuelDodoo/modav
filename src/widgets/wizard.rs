@@ -1,6 +1,5 @@
 use std::{fmt::Debug, path::PathBuf};
 
-use barchart::BarChartConfig;
 use iced::{
     alignment::{Alignment, Horizontal, Vertical},
     color, theme,
@@ -11,7 +10,9 @@ use iced::{
     Border, Element, Length, Theme,
 };
 
-use crate::views::{BarChartTabData, EditorTabData, FileType, LineTabData, View};
+use crate::views::{
+    BarChartTabData, EditorTabData, FileType, LineTabData, StackedBarChartTabData, View,
+};
 
 use crate::utils::{icons, AppError};
 use crate::ViewType;
@@ -23,12 +24,15 @@ pub use line::LineConfigState;
 use line::LineGraphConfig;
 
 mod barchart;
+use barchart::BarChartConfig;
 pub use barchart::BarChartConfigState;
 
 mod sheet;
 use sheet::{SheetConfig, SheetConfigState};
 
-pub mod shared;
+mod stacked_barchart;
+use stacked_barchart::StackedBarChartConfig;
+pub use stacked_barchart::StackedBarChartConfigState;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum Portal {
@@ -46,6 +50,7 @@ pub struct Hex {
     sheet_config: SheetConfigState,
     line_config: Option<LineConfigState>,
     bar_config: Option<BarChartConfigState>,
+    stacked_bar_config: Option<StackedBarChartConfigState>,
     error: Option<String>,
 }
 
@@ -56,6 +61,7 @@ impl Default for Hex {
             current_view: Portal::FileSelection,
             config: View::Editor(EditorTabData::default()),
             sheet_config: SheetConfigState::default(),
+            stacked_bar_config: None,
             line_config: None,
             bar_config: None,
             error: None,
@@ -75,6 +81,7 @@ pub enum Charm {
     SheetPrevious(SheetConfigState),
     LinePrevious(LineConfigState),
     BarChartPrevious(BarChartConfigState),
+    StackedBarChartPrevious(StackedBarChartConfigState),
     Error(AppError),
     Submit,
     ClearError,
@@ -154,6 +161,22 @@ where
 
                 if let Some(barchart_config) = state.bar_config.clone() {
                     content = content.previous_state(barchart_config);
+                }
+
+                content.into()
+            }
+            ViewType::StackedBarChart => {
+                let mut content = StackedBarChartConfig::new(
+                    &self.file,
+                    state.sheet_config.clone(),
+                    Charm::ConfigSubmit,
+                    Charm::Error,
+                    Charm::StackedBarChartPrevious,
+                    Charm::Cancel,
+                    Charm::ClearError,
+                );
+                if let Some(stacked_config) = state.stacked_bar_config.clone() {
+                    content = content.previous_state(stacked_config);
                 }
 
                 content.into()
@@ -267,6 +290,11 @@ where
                 state.current_view = Portal::SheetConfig;
                 None
             }
+            Charm::StackedBarChartPrevious(barchart) => {
+                state.stacked_bar_config = Some(barchart);
+                state.current_view = Portal::SheetConfig;
+                None
+            }
             Charm::Error(err) => {
                 state.error = Some(err.to_string());
                 Some((self.on_error)(err))
@@ -296,6 +324,11 @@ where
                         BarChartTabData::new(self.file.clone(), BarChartConfigState::default())
                             .and_then(|data| Ok(View::BarChart(data)))
                     }
+                    ViewType::StackedBarChart => StackedBarChartTabData::new(
+                        self.file.clone(),
+                        StackedBarChartConfigState::default(),
+                    )
+                    .and_then(|data| Ok(View::StackedBarChart(data))),
                     ViewType::Editor => {
                         let data = EditorTabData::new(Some(self.file.clone()), String::default());
                         Ok(View::Editor(data))

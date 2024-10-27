@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 use modav_core::repr::sheet::error::Error;
 
+pub use tooltip::tooltip;
+
 #[allow(dead_code)]
 pub mod coloring {
     use rand::{thread_rng, Rng};
@@ -367,7 +369,7 @@ pub mod icons {
     pub const ANGLE_UP: char = '\u{F106}';
     pub const ANGLE_DOWN: char = '\u{F107}';
     pub const CHART: char = '\u{E802}';
-    pub const BARCHART: char = '\u{E80C}';
+    pub const BARCHART: char = '\u{E80E}';
     pub const SETTINGS: char = '\u{E800}';
     pub const INFO: char = '\u{E80A}';
     pub const HELP: char = '\u{E807}';
@@ -376,6 +378,7 @@ pub mod icons {
     pub const WARN: char = '\u{E808}';
     pub const ERROR: char = '\u{E809}';
     pub const CLOSE: char = '\u{E806}';
+    pub const TOOLS: char = '\u{E80D}';
 
     fn icon_maker(unicode: char, name: &'static str) -> Text<'static> {
         let fnt: Font = Font::with_name(name);
@@ -386,6 +389,38 @@ pub mod icons {
 
     pub fn icon(unicode: char) -> Text<'static> {
         icon_maker(unicode, NAME)
+    }
+}
+
+mod tooltip {
+    use crate::{utils::icons, ToolTipContainerStyle};
+
+    use iced::{
+        alignment, theme,
+        widget::{container, text, tooltip::Tooltip},
+        Length,
+    };
+
+    use iced::widget::tooltip as tt;
+
+    pub fn tooltip<'a, Message>(description: impl ToString) -> Tooltip<'a, Message>
+    where
+        Message: 'a,
+    {
+        let text = text(description).size(13.0);
+        let desc = container(text)
+            .max_width(200.0)
+            .padding([6.0, 8.0])
+            .height(Length::Shrink)
+            .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)));
+
+        let icon = icons::icon(icons::HELP)
+            .horizontal_alignment(alignment::Horizontal::Center)
+            .vertical_alignment(alignment::Vertical::Center);
+
+        Tooltip::new(icon, desc, tt::Position::Right)
+            .gap(10.0)
+            .snap_within_viewport(true)
     }
 }
 
@@ -527,4 +562,41 @@ pub async fn save_file(
         .map_err(|err| AppError::FileSaving(err.kind()))?;
 
     Ok((path, content))
+}
+
+/// Parses a string of ints.
+///
+/// The range syntax `x:y` representing `x<= i < y` is supported
+pub fn parse_ints(input: &str) -> Vec<usize> {
+    let mut rng = Vec::new();
+    let mut output = Vec::new();
+
+    for num in input.trim().split(",").map(|num| num.trim()) {
+        if num.contains(":") {
+            rng.push(num);
+            continue;
+        }
+
+        if let Some(num) = num.parse::<usize>().ok() {
+            output.push(num);
+        }
+    }
+
+    for r in rng
+        .into_iter()
+        .map(|r| r.split(":").filter_map(|r| r.parse::<usize>().ok()))
+    {
+        let temp: Vec<usize> = r.collect();
+
+        if temp.len() != 2 {
+            continue;
+        }
+
+        let x = temp[0];
+        let y = temp[1];
+
+        (x..y).for_each(|i| output.push(i));
+    }
+
+    output
 }

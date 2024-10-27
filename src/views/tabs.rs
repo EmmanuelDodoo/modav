@@ -9,14 +9,11 @@ use iced::{
 
 use std::path::PathBuf;
 
-use super::barchart::BarChartTabData;
 use super::{
-    barchart::BarChartMessage,
-    line::{LineGraphTab, LineTabData, ModelMessage},
-};
-use super::{
-    barchart::BarChartTab,
+    barchart::{BarChartMessage, BarChartTab, BarChartTabData},
     editor::{EditorMessage, EditorTab, EditorTabData},
+    line::{LineGraphTab, LineTabData, ModelMessage},
+    stacked_barchart::{StackedBarChartMessage, StackedBarChartTab, StackedBarChartTabData},
 };
 use super::{View, ViewType, Viewable};
 
@@ -35,6 +32,7 @@ pub enum Tab {
     Editor(EditorTab),
     LineGraph(LineGraphTab),
     BarChart(BarChartTab),
+    StackedBarChart(StackedBarChartTab),
 }
 
 impl Tab {
@@ -46,6 +44,8 @@ impl Tab {
             (Tab::LineGraph(_), _) => None,
             (Tab::BarChart(tab), TabMessage::BarChart(tsg)) => tab.update(tsg),
             (Tab::BarChart(_), _) => None,
+            (Tab::StackedBarChart(tab), TabMessage::StackedBarChart(tsg)) => tab.update(tsg),
+            (Tab::StackedBarChart(_), _) => None,
         }
     }
 
@@ -54,6 +54,7 @@ impl Tab {
             Tab::Editor(tab) => tab.is_dirty(),
             Tab::LineGraph(tab) => tab.is_dirty(),
             Tab::BarChart(tab) => tab.is_dirty(),
+            Tab::StackedBarChart(tab) => tab.is_dirty(),
         }
     }
 
@@ -62,6 +63,7 @@ impl Tab {
             Tab::Editor(tab) => tab.label(),
             Tab::LineGraph(tab) => tab.label(),
             Tab::BarChart(tab) => tab.label(),
+            Tab::StackedBarChart(tab) => tab.label(),
         }
     }
 
@@ -70,6 +72,7 @@ impl Tab {
             Tab::Editor(tab) => tab.content(),
             Tab::LineGraph(tab) => tab.content(),
             Tab::BarChart(tab) => tab.content(),
+            Tab::StackedBarChart(tab) => tab.content(),
         }
     }
 
@@ -84,6 +87,9 @@ impl Tab {
             Tab::BarChart(tab) => {
                 tab.view(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::BarChart(msg)))
             }
+            Tab::StackedBarChart(tab) => {
+                tab.view(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::StackedBarChart(msg)))
+            }
         }
     }
 
@@ -97,6 +103,8 @@ impl Tab {
             (Tab::LineGraph(_), _) => {}
             (Tab::BarChart(tab), Refresh::BarChart(data)) => tab.refresh(data),
             (Tab::BarChart(_), _) => {}
+            (Tab::StackedBarChart(tab), Refresh::StackedBarChart(data)) => tab.refresh(data),
+            (Tab::StackedBarChart(_), _) => {}
         }
     }
 
@@ -106,6 +114,7 @@ impl Tab {
             Tab::Editor(_) => ViewType::Editor,
             Tab::LineGraph(_) => ViewType::LineGraph,
             Tab::BarChart(_) => ViewType::BarChart,
+            Tab::StackedBarChart(_) => ViewType::StackedBarChart,
         }
     }
 
@@ -114,6 +123,7 @@ impl Tab {
             Tab::Editor(tab) => tab.modal_msg(),
             Tab::LineGraph(tab) => tab.modal_msg(),
             Tab::BarChart(tab) => tab.modal_msg(),
+            Tab::StackedBarChart(tab) => tab.modal_msg(),
         }
     }
 
@@ -122,6 +132,7 @@ impl Tab {
             Tab::Editor(tab) => tab.path(),
             Tab::LineGraph(tab) => tab.path(),
             Tab::BarChart(tab) => tab.path(),
+            Tab::StackedBarChart(tab) => tab.path(),
         }
     }
 
@@ -130,6 +141,7 @@ impl Tab {
             Tab::Editor(tab) => tab.can_save(),
             Tab::LineGraph(tab) => tab.can_save(),
             Tab::BarChart(tab) => tab.can_save(),
+            Tab::StackedBarChart(tab) => tab.can_save(),
         }
     }
 }
@@ -139,6 +151,7 @@ pub enum TabMessage {
     Editor(EditorMessage),
     LineGraph(ModelMessage),
     BarChart(BarChartMessage),
+    StackedBarChart(StackedBarChartMessage),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -153,6 +166,7 @@ pub enum Refresh {
     Editor(EditorTabData),
     LineGraph(LineTabData),
     BarChart(BarChartTabData),
+    StackedBarChart(StackedBarChartTabData),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -345,6 +359,11 @@ where
             View::BarChart(data) => {
                 let chart = BarChartTab::new(data);
                 let tab = Tab::BarChart(chart);
+                self.push_tab(tab)
+            }
+            View::StackedBarChart(data) => {
+                let chart = StackedBarChartTab::new(data);
+                let tab = Tab::StackedBarChart(chart);
                 self.push_tab(tab)
             }
 

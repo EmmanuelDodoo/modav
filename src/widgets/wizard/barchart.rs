@@ -16,11 +16,11 @@ use modav_core::repr::sheet::utils::{
 };
 
 use crate::{
-    utils::AppError,
+    utils::{tooltip, AppError},
     views::{BarChartTabData, View},
 };
 
-use super::{shared::tooltip, sheet::SheetConfigState};
+use super::sheet::SheetConfigState;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum AxisStrategy {
@@ -409,7 +409,7 @@ where
                 };
 
                 state.diff(self.sheet_config.clone());
-                let data = BarChartTabData::new(self.file.clone(), state.clone());
+                let data = BarChartTabData::new(self.file.clone(), state.submit());
                 match data {
                     Err(error) => Some((self.on_error)(error)),
                     Ok(data) => {

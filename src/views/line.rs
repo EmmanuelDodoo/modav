@@ -1,20 +1,18 @@
 use std::{
-    collections::HashMap,
-    fmt::{self, Debug, Display},
-    hash::Hash,
+    fmt::{self, Debug},
     path::PathBuf,
-    rc::Rc,
 };
 use tracing::warn;
 
 use iced::{
-    alignment, mouse, theme,
+    alignment, theme,
     widget::{
         button,
         canvas::{self, Canvas, Frame, Path, Stroke},
-        column, component, container, horizontal_space, row, text, Component, Tooltip,
+        checkbox, column, container, horizontal_space, row, text, text_input, vertical_space,
+        Tooltip,
     },
-    Alignment, Color, Element, Font, Length, Point, Renderer, Theme,
+    Alignment, Color, Element, Font, Length, Point, Renderer, Size, Theme,
 };
 
 use modav_core::{
@@ -22,24 +20,29 @@ use modav_core::{
         line::{self, Line},
         Point as GraphPoint, Scale,
     },
-    repr::sheet::{builders::SheetBuilder, utils::Data},
+    repr::sheet::builders::SheetBuilder,
 };
 
 use crate::{
-    utils::{coloring::ColorEngine, icons, AppError},
+    utils::{coloring::ColorEngine, icons, tooltip, AppError},
     widgets::{
-        toolbar::{ToolbarMenu, ToolbarOption},
+        modal::Modal,
+        style::dialog_container,
+        toolbar::{ToolBarOrientation, ToolbarMenu, ToolbarOption},
         wizard::LineConfigState,
     },
     Message, ToolTipContainerStyle,
 };
 
-use super::{shared::ContentAreaContainer, TabLabel, Viewable};
-
-use super::shared::{
-    Axis, EditorButtonStyle, GraphCanvas, Graphable, LegendPosition, ToolbarContainerStyle,
-    ToolbarMenuStyle, ToolbarStyle,
+use super::{
+    shared::{
+        graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition},
+        ContentAreaContainer,
+    },
+    TabLabel, Viewable,
 };
+
+use super::shared::{tools_button, EditorButtonStyle};
 
 #[derive(Debug, Clone, Default, Copy, PartialEq)]
 pub enum GraphType {
@@ -78,69 +81,101 @@ impl ToolbarOption for GraphType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct GraphLine<X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    points: Vec<GraphPoint<X, Y>>,
+pub struct GraphLine {
+    points: Vec<GraphPoint>,
     label: Option<String>,
     color: Color,
 }
 
-impl<X, Y> GraphLine<X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    pub fn new(points: Vec<GraphPoint<X, Y>>, label: Option<String>, color: Color) -> Self {
+impl GraphLine {
+    pub fn new(points: Vec<GraphPoint>, label: Option<String>, color: Color) -> Self {
         Self {
             points,
             color,
             label,
         }
     }
+}
 
-    pub fn color(mut self, color: Color) -> Self {
-        self.color = color;
-        self
+impl Graphable for GraphLine {
+    type Data = GraphType;
+
+    fn label(&self) -> Option<&String> {
+        self.label.as_ref()
+    }
+
+    fn draw_legend_filter(&self, _data: &Self::Data) -> bool {
+        self.label().is_some()
+    }
+
+    fn draw_legend(
+        &self,
+        frame: &mut Frame,
+        bounds: iced::Rectangle,
+        color: Color,
+        idx: usize,
+        _data: &Self::Data,
+    ) {
+        if idx > 4 {
+            return;
+        }
+
+        let y_padding = bounds.height / (5.0);
+        let spacing = 5.0;
+        let text_size = 12.0;
+        let color_size = Size::new(12.0, 12.0);
+
+        let x = bounds.x;
+        let y = bounds.position().y + (idx as f32 * y_padding);
+        let position = Point::new(x, y);
+
+        frame.fill_rectangle(position, color_size, self.color);
+
+        let position = Point::new(x + spacing + color_size.width, y + 0.5 * color_size.height);
+
+        let label = canvas::Text {
+            content: self.label.clone().unwrap_or_default(),
+            position,
+            color,
+            size: text_size.into(),
+            vertical_alignment: alignment::Vertical::Center,
+            ..Default::default()
+        };
+
+        frame.fill_text(label);
     }
 
     fn draw(
-        line: &Self,
+        &self,
         frame: &mut Frame,
-        x_record: &HashMap<X, f32>,
-        y_record: &HashMap<Y, f32>,
-        kind: GraphType,
+        x_output: &DrawnOutput,
+        y_output: &DrawnOutput,
+        data: &Self::Data,
     ) {
-        line.points.iter().fold(None, |prev, point| {
-            let x = x_record
-                .get(&point.x)
-                .and_then(|x| Some(x.to_owned()))
-                .unwrap_or(-1.0);
+        self.points.iter().fold(None, |prev, point| {
+            let x = match x_output.get_closest(&point.x, true) {
+                Some(x) => x,
+                None => {
+                    warn!("X Point {:?} not found", point.x);
+                    return prev;
+                }
+            };
 
-            if x < 0.0 {
-                warn!("X Point {:?} not found", point.x);
-                return prev;
-            }
-
-            let y = y_record
-                .get(&point.y)
-                .and_then(|x| Some(x.to_owned()))
-                .unwrap_or(-1.0);
-
-            if y < 0.0 {
-                warn!("Y Point {:?} not found", point.y);
-                return prev;
-            }
+            let y = match y_output.get_closest(&point.y, false) {
+                Some(x) => x,
+                None => {
+                    warn!("Y Point {:?} not found", point.y);
+                    return prev;
+                }
+            };
 
             let point = Point { x, y };
 
-            match kind {
+            match data {
                 GraphType::Point => {
                     let path = Path::circle(point.clone(), 4.5);
 
-                    frame.fill(&path, line.color);
+                    frame.fill(&path, self.color);
                 }
 
                 GraphType::Line => {
@@ -151,7 +186,7 @@ where
                         });
                         frame.stroke(
                             &path,
-                            Stroke::default().with_width(3.0).with_color(line.color),
+                            Stroke::default().with_width(3.0).with_color(self.color),
                         );
                     };
                 }
@@ -159,7 +194,7 @@ where
                 GraphType::LinePoint => {
                     let path = Path::circle(point.clone(), 3.5);
 
-                    frame.fill(&path, line.color);
+                    frame.fill(&path, self.color);
 
                     if let Some(prev) = prev {
                         let path = Path::new(|bdr| {
@@ -168,7 +203,7 @@ where
                         });
                         frame.stroke(
                             &path,
-                            Stroke::default().with_width(3.0).with_color(line.color),
+                            Stroke::default().with_width(3.0).with_color(self.color),
                         );
                     };
                 }
@@ -179,242 +214,12 @@ where
     }
 }
 
-impl<X, Y> Graphable<X, Y> for GraphLine<X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    type Data = GraphType;
-
-    fn draw(
-        &self,
-        frame: &mut Frame,
-        _cursor: mouse::Cursor,
-        x_points: &HashMap<X, f32>,
-        _x_axis: f32,
-        y_points: &HashMap<Y, f32>,
-        _y_axis: f32,
-        data: &Self::Data,
-    ) {
-        Self::draw(self, frame, x_points, y_points, *data)
-    }
-
-    fn label(&self) -> Option<&String> {
-        self.label.as_ref()
-    }
-
-    fn color(&self) -> Color {
-        self.color
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum GraphMessage {
-    Legend(LegendPosition),
-    GraphType(GraphType),
-    OpenEditor,
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct GraphState {
-    legend_position: LegendPosition,
-    graph_type: GraphType,
-}
-
-#[derive(Debug)]
-pub struct LineGraph<'a, Message, X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    x_axis: Axis<X>,
-    y_axis: Axis<Y>,
-    lines: &'a Vec<GraphLine<X, Y>>,
-    cache: canvas::Cache,
-    on_open_editor: Option<Message>,
-}
-
-impl<'a, Message, X, Y> LineGraph<'a, Message, X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-{
-    pub fn new(x_axis: Axis<X>, y_axis: Axis<Y>, lines: &'a Vec<GraphLine<X, Y>>) -> Self {
-        Self {
-            x_axis,
-            y_axis,
-            lines,
-            cache: canvas::Cache::default(),
-            on_open_editor: None,
-        }
-    }
-
-    fn toolbar(
-        &self,
-        legend: LegendPosition,
-        kind: GraphType,
-    ) -> Element<'_, GraphMessage, Theme, Renderer> {
-        let style = ToolbarStyle;
-        let menu_style = ToolbarMenuStyle;
-
-        let legend = {
-            let icons = Font::with_name("legend-icons");
-
-            let menu = ToolbarMenu::new(LegendPosition::ALL, legend, GraphMessage::Legend, icons)
-                .padding([4, 4])
-                .menu_padding([4, 10, 4, 8])
-                .spacing(5.0)
-                .menu_style(theme::Menu::Custom(Rc::new(menu_style)))
-                .style(theme::PickList::Custom(Rc::new(style), Rc::new(menu_style)));
-
-            let tooltip = container(text("Legend Position").size(12.0))
-                .max_width(200.0)
-                .padding([6, 8])
-                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
-                .height(Length::Shrink);
-
-            let menu = Tooltip::new(menu, tooltip, iced::widget::tooltip::Position::Bottom)
-                .gap(2.0)
-                .snap_within_viewport(true);
-
-            menu
-        };
-
-        let kind = {
-            let icons = Font::with_name("line-type-icons");
-
-            let menu = ToolbarMenu::new(GraphType::ALL, kind, GraphMessage::GraphType, icons)
-                .padding([4, 4])
-                .menu_padding([4, 10, 4, 8])
-                .spacing(17.0)
-                .menu_style(theme::Menu::Custom(Rc::new(menu_style)))
-                .style(theme::PickList::Custom(Rc::new(style), Rc::new(menu_style)));
-
-            let tooltip = container(text("Graph Type").size(12.0))
-                .max_width(200.0)
-                .padding([6, 8])
-                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
-                .height(Length::Shrink);
-
-            let menu = Tooltip::new(menu, tooltip, iced::widget::tooltip::Position::Bottom)
-                .gap(2.0)
-                .snap_within_viewport(true);
-
-            menu
-        };
-
-        let editor = {
-            let font = Font::with_name(icons::NAME);
-
-            let btn = button(
-                text(icons::EDITOR)
-                    .font(font)
-                    .width(18.0)
-                    .vertical_alignment(alignment::Vertical::Center)
-                    .horizontal_alignment(alignment::Horizontal::Center),
-            )
-            .on_press(GraphMessage::OpenEditor)
-            .style(theme::Button::Custom(Box::new(EditorButtonStyle)))
-            .padding([4, 4]);
-
-            let tooltip = container(text("Open in Editor").size(12.0))
-                .max_width(200.0)
-                .padding([6, 8])
-                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
-                .height(Length::Shrink);
-
-            let menu = Tooltip::new(btn, tooltip, iced::widget::tooltip::Position::Bottom)
-                .gap(2.0)
-                .snap_within_viewport(true);
-
-            menu
-        };
-
-        container(
-            column!(legend, kind, editor)
-                .width(Length::Fill)
-                .align_items(Alignment::Center)
-                .spacing(8.0),
-        )
-        .width(Length::Fixed(40.0))
-        .padding([6.0, 2.0])
-        .style(theme::Container::Custom(Box::new(ToolbarContainerStyle)))
-        .into()
-    }
-
-    pub fn on_editor(mut self, message: Message) -> Self {
-        self.on_open_editor = Some(message);
-        self
-    }
-}
-
-impl<'a, Message, X, Y> Component<Message> for LineGraph<'a, Message, X, Y>
-where
-    X: Clone + Display + Hash + Eq + Debug,
-    Y: Clone + Display + Hash + Eq + Debug,
-    Message: Clone,
-{
-    type Event = GraphMessage;
-    type State = GraphState;
-
-    fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
-        match event {
-            GraphMessage::Legend(position) => {
-                state.legend_position = position;
-                None
-            }
-            GraphMessage::GraphType(kind) => {
-                state.graph_type = kind;
-                None
-            }
-            GraphMessage::OpenEditor => self.on_open_editor.clone(),
-        }
-    }
-
-    fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
-        let canvas = Canvas::new(
-            GraphCanvas::<GraphLine<X, Y>, X, Y>::new(
-                &self.x_axis,
-                &self.y_axis,
-                &self.lines,
-                &self.cache,
-            )
-            .legend_position(state.legend_position)
-            .graph_data(state.graph_type),
-        )
-        .height(Length::Fill)
-        .width(Length::FillPortion(24));
-
-        let toolbar = self.toolbar(
-            if self.lines.iter().any(|line| line.label.is_some()) {
-                state.legend_position
-            } else {
-                LegendPosition::None
-            },
-            state.graph_type,
-        );
-
-        row!(canvas, toolbar).into()
-    }
-}
-
-impl<'a, Message, X, Y> From<LineGraph<'a, Message, X, Y>> for Element<'a, Message>
-where
-    Message: 'a + Clone + Debug,
-    X: 'a + Clone + Display + Hash + Eq + Debug,
-    Y: 'a + Clone + Display + Hash + Eq + Debug,
-{
-    fn from(value: LineGraph<'a, Message, X, Y>) -> Self {
-        component(value)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct LineTabData {
     file: PathBuf,
     title: String,
     theme: Theme,
-    line: line::LineGraph<String, Data>,
+    line: line::LineGraph,
     caption: Option<String>,
 }
 
@@ -471,32 +276,271 @@ impl LineTabData {
 #[derive(Clone, Debug)]
 pub enum ModelMessage {
     OpenEditor,
+    ToggleConfig,
+    Legend(LegendPosition),
+    GraphType(GraphType),
+    TitleChanged(String),
+    XLabelChanged(String),
+    YLabelChanged(String),
+    CaptionChange(String),
+    SequentialX(bool),
+    SequentialY(bool),
+    Clean(bool),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug)]
 pub struct LineGraphTab {
     file: PathBuf,
     title: String,
-    x_scale: Scale<String>,
-    y_scale: Scale<Data>,
+    x_scale: Scale,
+    y_scale: Scale,
     x_label: Option<String>,
     y_label: Option<String>,
-    lines: Vec<GraphLine<String, Data>>,
+    lines: Vec<GraphLine>,
     theme: Theme,
     caption: Option<String>,
+    sequential_x: bool,
+    sequential_y: bool,
+    clean: bool,
+    config_shown: bool,
+    legend: LegendPosition,
+    graph_type: GraphType,
+    cache: canvas::Cache,
 }
 
 impl LineGraphTab {
-    fn graph(&self) -> LineGraph<ModelMessage, String, Data> {
-        let mut x_axis = Axis::new(self.x_label.clone(), self.x_scale.points().clone(), false);
+    fn create_axis(&self) -> (Axis, Axis) {
+        let (x_axis, y_axis) = create_axis(
+            &self.x_scale,
+            &self.y_scale,
+            self.sequential_x,
+            self.sequential_y,
+            self.clean,
+        );
 
-        if let Some(caption) = self.caption.clone() {
-            x_axis = x_axis.caption(caption);
-        }
+        return (
+            x_axis.label(self.x_label.as_ref()),
+            y_axis.label(self.y_label.as_ref()),
+        );
+    }
 
-        let y_axis = Axis::new(self.y_label.clone(), self.y_scale.points().clone(), false);
+    fn graph(&self) -> Element<'_, ModelMessage> {
+        let (x_axis, y_axis) = self.create_axis();
 
-        LineGraph::new(x_axis, y_axis, &self.lines).on_editor(ModelMessage::OpenEditor)
+        let content = Canvas::new(
+            Graph::new(x_axis, y_axis, &self.lines, &self.cache)
+                .caption(self.caption.as_ref())
+                .labels_len(
+                    self.lines
+                        .iter()
+                        .filter(|line| line.label.is_some())
+                        .count(),
+                )
+                .legend(self.legend)
+                .data(self.graph_type),
+        )
+        .width(Length::FillPortion(24))
+        .height(Length::Fill);
+
+        content.into()
+    }
+
+    fn tools(&self) -> Element<'_, ModelMessage> {
+        let header = {
+            let header = text("Model Config").size(17.0);
+
+            row!(horizontal_space(), header, horizontal_space())
+                .padding([2, 0])
+                .align_items(Alignment::Center)
+        };
+
+        let title =
+            text_input("Graph Title", self.title.as_str()).on_input(ModelMessage::TitleChanged);
+
+        let x_label = text_input(
+            "X axis label",
+            self.x_label
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_default(),
+        )
+        .on_input(ModelMessage::XLabelChanged);
+
+        let y_label = text_input(
+            "Y axis label",
+            self.y_label
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_default(),
+        )
+        .on_input(ModelMessage::YLabelChanged);
+
+        let caption = text_input(
+            "Graph Caption",
+            self.caption
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_default(),
+        )
+        .on_input(ModelMessage::CaptionChange);
+
+        let sequential = {
+            let x = {
+                let check = checkbox("Ranged X axis", self.sequential_x)
+                    .on_toggle(ModelMessage::SequentialX);
+
+                let tip = tooltip("Each point on the axis is produced consecutively");
+
+                row!(check, tip).spacing(10.0)
+            };
+
+            let y = {
+                let check = checkbox("Ranged Y axis", self.sequential_y)
+                    .on_toggle(ModelMessage::SequentialY);
+
+                let tip = tooltip("Each point on the axis is produced consecutively");
+
+                row!(check, tip).spacing(10.0)
+            };
+
+            row!(x, horizontal_space(), y).align_items(Alignment::Center)
+        };
+
+        let clean = {
+            let check = checkbox("Clean graph", self.clean).on_toggle(ModelMessage::Clean);
+
+            let tip = tooltip("Only points on the axes have their outline drawn");
+
+            row!(check, tip).spacing(10.0)
+        };
+
+        let kind = {
+            let icons = Font::with_name("line-type-icons");
+
+            let menu = ToolbarMenu::new(
+                GraphType::ALL,
+                self.graph_type,
+                ModelMessage::GraphType,
+                icons,
+            )
+            .orientation(ToolBarOrientation::Both)
+            .padding([4, 4])
+            .menu_padding([4, 10, 4, 8])
+            .spacing(5.0);
+
+            let tooltip = container(text("The type of line graph").size(12.0))
+                .max_width(200.0)
+                .padding([6, 8])
+                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
+                .height(Length::Shrink);
+
+            let menu = Tooltip::new(menu, tooltip, iced::widget::tooltip::Position::Bottom)
+                .gap(2.0)
+                .snap_within_viewport(true);
+
+            let text = text("Graph Type");
+
+            row!(menu, text)
+                .spacing(10.0)
+                .align_items(Alignment::Center)
+        };
+
+        let clean_kind = row!(clean, horizontal_space(), kind).align_items(Alignment::Center);
+
+        let legend = {
+            let icons = Font::with_name("legend-icons");
+
+            let menu = ToolbarMenu::new(
+                LegendPosition::ALL,
+                self.legend,
+                ModelMessage::Legend,
+                icons,
+            )
+            .orientation(ToolBarOrientation::Both)
+            .padding([4, 4])
+            .menu_padding([4, 10, 4, 8])
+            .spacing(5.0);
+
+            let tooltip = container(text("Legend Position").size(12.0))
+                .max_width(200.0)
+                .padding([6, 8])
+                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
+                .height(Length::Shrink);
+
+            let menu = Tooltip::new(menu, tooltip, iced::widget::tooltip::Position::Bottom)
+                .gap(2.0)
+                .snap_within_viewport(true);
+
+            let text = text("Legend Position");
+
+            row!(menu, text)
+                .spacing(10.0)
+                .align_items(Alignment::Center)
+        };
+
+        let editor = {
+            let font = Font::with_name(icons::NAME);
+
+            let btn = button(
+                text(icons::EDITOR)
+                    .font(font)
+                    .width(16.0)
+                    .vertical_alignment(alignment::Vertical::Center)
+                    .horizontal_alignment(alignment::Horizontal::Center),
+            )
+            .on_press(ModelMessage::OpenEditor)
+            .style(theme::Button::Custom(Box::new(EditorButtonStyle)))
+            .padding([4, 4]);
+
+            let tooltip = container(text("Open in Editor").size(12.0))
+                .max_width(200.0)
+                .padding([6, 8])
+                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
+                .height(Length::Shrink);
+
+            let menu = Tooltip::new(btn, tooltip, iced::widget::tooltip::Position::Bottom)
+                .gap(2.0)
+                .snap_within_viewport(true);
+
+            let text = text("Open in Editor");
+
+            row!(menu, text)
+                .spacing(10.0)
+                .align_items(Alignment::Center)
+        };
+
+        let legend_editor = row!(legend, horizontal_space(), editor).align_items(Alignment::Center);
+
+        let content = column!(
+            header,
+            title,
+            x_label,
+            y_label,
+            caption,
+            sequential,
+            clean_kind,
+            legend_editor
+        )
+        .spacing(30.0);
+
+        dialog_container(content)
+            .width(450.0)
+            .height(Length::Shrink)
+            .into()
+    }
+
+    fn content(&self) -> Element<'_, ModelMessage> {
+        let graph = self.graph();
+
+        let toolbar = tools_button().on_press(ModelMessage::ToggleConfig);
+
+        row!(
+            graph,
+            column!(vertical_space(), toolbar, vertical_space())
+                .padding([0, 5, 0, 0])
+                .align_items(Alignment::Center)
+        )
+        .into()
     }
 }
 
@@ -548,6 +592,13 @@ impl Viewable for LineGraphTab {
             x_label: Some(x_label),
             y_label: Some(y_label),
             caption,
+            sequential_x: false,
+            sequential_y: false,
+            clean: false,
+            config_shown: false,
+            cache: canvas::Cache::default(),
+            legend: LegendPosition::default(),
+            graph_type: GraphType::default(),
         }
     }
 
@@ -629,6 +680,59 @@ impl Viewable for LineGraphTab {
     fn update(&mut self, message: Self::Event) -> Option<Message> {
         match message {
             ModelMessage::OpenEditor => Some(Message::OpenEditor(Some(self.file.clone()))),
+            ModelMessage::ToggleConfig => {
+                self.config_shown = !self.config_shown;
+                None
+            }
+            ModelMessage::Legend(legend) => {
+                self.legend = legend;
+                self.cache.clear();
+                None
+            }
+            ModelMessage::GraphType(kind) => {
+                self.graph_type = kind;
+                self.cache.clear();
+                None
+            }
+            ModelMessage::TitleChanged(title) => {
+                self.title = title;
+                self.cache.clear();
+                None
+            }
+            ModelMessage::Clean(clean) => {
+                self.clean = clean;
+                self.cache.clear();
+                None
+            }
+            ModelMessage::SequentialX(seq) => {
+                self.sequential_x = seq;
+                self.cache.clear();
+                None
+            }
+            ModelMessage::SequentialY(seq) => {
+                self.sequential_y = seq;
+                self.cache.clear();
+                None
+            }
+            ModelMessage::CaptionChange(caption) => {
+                self.caption = if caption.is_empty() {
+                    None
+                } else {
+                    Some(caption)
+                };
+                self.cache.clear();
+                None
+            }
+            ModelMessage::XLabelChanged(label) => {
+                self.x_label = if label.is_empty() { None } else { Some(label) };
+                self.cache.clear();
+                None
+            }
+            ModelMessage::YLabelChanged(label) => {
+                self.y_label = if label.is_empty() { None } else { Some(label) };
+                self.cache.clear();
+                None
+            }
         }
     }
 
@@ -645,9 +749,8 @@ impl Viewable for LineGraphTab {
         }
         .height(Length::Shrink);
 
-        let content_area = container(self.graph())
+        let content_area = container(self.content())
             .max_width(1450)
-            // .padding([5, 10])
             .width(Length::Fill)
             .height(Length::Fill)
             .style(theme::Container::Custom(Box::new(ContentAreaContainer)));
@@ -657,6 +760,14 @@ impl Viewable for LineGraphTab {
             .spacing(20)
             .height(Length::Fill)
             .width(Length::Fill);
+
+        let content: Element<Self::Event, Theme, Renderer> = if self.config_shown {
+            Modal::new(content, self.tools())
+                .on_blur(ModelMessage::ToggleConfig)
+                .into()
+        } else {
+            content.into()
+        };
 
         let content: Element<Self::Event, Theme, Renderer> = container(content)
             .padding([10, 30, 30, 15])

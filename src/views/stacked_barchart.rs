@@ -1,4 +1,4 @@
-use std::{fmt::Debug, path::PathBuf};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf};
 
 use iced::{
     alignment, theme,
@@ -11,8 +11,8 @@ use iced::{
 
 use modav_core::{
     models::{
-        bar::{Bar, BarChart},
-        Point as GraphPoint, Scale,
+        stacked_bar::{StackedBar, StackedBarChart},
+        Scale,
     },
     repr::sheet::{builders::SheetBuilder, utils::Data},
 };
@@ -24,7 +24,7 @@ use crate::{
         modal::Modal,
         style::dialog_container,
         toolbar::{ToolBarOrientation, ToolbarMenu},
-        wizard::BarChartConfigState,
+        wizard::StackedBarChartConfigState,
     },
     Message, ToolTipContainerStyle,
 };
@@ -39,44 +39,35 @@ use super::{
 };
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct GraphBar {
-    point: GraphPoint,
-    label: Option<String>,
-    color: Color,
+struct GraphBar {
+    id: usize,
+    bar: StackedBar,
+    colors: HashMap<String, Color>,
 }
 
 impl GraphBar {
-    fn new(point: GraphPoint<Data, Data>, label: Option<String>, color: Color) -> Self {
-        Self {
-            point,
-            label,
-            color,
-        }
+    fn new(id: usize, bar: StackedBar, colors: HashMap<String, Color>) -> Self {
+        Self { id, bar, colors }
     }
 
-    fn color(mut self, color: Color) -> Self {
-        self.color = color;
-        self
+    fn x(&self) -> &Data {
+        &self.bar.point.x
     }
-}
 
-impl From<Bar> for GraphBar {
-    fn from(value: Bar) -> Self {
-        let Bar { point, label } = value;
-
-        Self::new(point, label, Color::BLACK)
+    fn y(&self) -> &Data {
+        &self.bar.point.y
     }
 }
 
 impl Graphable for GraphBar {
-    type Data = bool;
+    type Data = (usize, bool);
 
     fn label(&self) -> Option<&String> {
-        self.label.as_ref()
+        None
     }
 
-    fn draw_legend_filter(&self, _data: &Self::Data) -> bool {
-        self.label.is_some()
+    fn draw_legend_filter(&self, data: &Self::Data) -> bool {
+        data.0 == self.id
     }
 
     fn draw_legend(
@@ -84,36 +75,48 @@ impl Graphable for GraphBar {
         frame: &mut canvas::Frame,
         bounds: iced::Rectangle,
         color: Color,
-        idx: usize,
-        _data: &Self::Data,
+        _idx: usize,
+        data: &Self::Data,
     ) {
-        if idx > 4 {
+        if self.id != data.0 {
             return;
         }
 
-        let y_padding = bounds.height / (5.0);
+        if self.colors.len() == 0 {
+            return;
+        }
+
+        let y_padding = bounds.height / (self.colors.len() as f32);
         let spacing = 5.0;
         let text_size = 12.0;
         let color_size = Size::new(12.0, 12.0);
 
-        let x = bounds.x;
-        let y = bounds.position().y + (idx as f32 * y_padding);
-        let position = Point::new(x, y);
+        let mut count = 0.0;
 
-        frame.fill_rectangle(position, color_size, self.color);
+        for (label, label_color) in self.colors.iter() {
+            let y = bounds.position().y + (count * y_padding);
+            let position = Point::new(bounds.x, y);
 
-        let position = Point::new(x + spacing + color_size.width, y + 0.5 * color_size.height);
+            frame.fill_rectangle(position, color_size, *label_color);
 
-        let label = canvas::Text {
-            content: self.label.clone().unwrap_or_default(),
-            position,
-            color,
-            size: text_size.into(),
-            vertical_alignment: alignment::Vertical::Center,
-            ..Default::default()
-        };
+            let position = Point::new(
+                position.x + spacing + color_size.width,
+                position.y + 0.5 * color_size.height,
+            );
 
-        frame.fill_text(label);
+            let label = canvas::Text {
+                content: label.clone(),
+                position,
+                color,
+                size: text_size.into(),
+                vertical_alignment: alignment::Vertical::Center,
+                ..Default::default()
+            };
+
+            frame.fill_text(label);
+
+            count += 1.0;
+        }
     }
 
     fn draw(
@@ -123,7 +126,7 @@ impl Graphable for GraphBar {
         y_output: &DrawnOutput,
         data: &Self::Data,
     ) {
-        let is_horizontal = *data;
+        let is_horizontal = data.1;
 
         let mut x_output = x_output;
         let mut y_output = y_output;
@@ -134,18 +137,18 @@ impl Graphable for GraphBar {
             y_output = temp;
         }
 
-        let x = match x_output.get_closest(&self.point.x, true) {
+        let x = match x_output.get_closest(self.x(), true) {
             Some(x) => x,
             None => {
-                warn!("BartChart x point, {} not found", &self.point.x);
+                warn!("Stacked BartChart x point, {} not found", self.x());
                 return;
             }
         };
 
-        let y = match y_output.get_closest(&self.point.y, false) {
+        let y = match y_output.get_closest(self.y(), false) {
             Some(y) => y,
             None => {
-                warn!("BarChart y point, {} not found", &self.point.y);
+                warn!("Stacked BarChart y point, {} not found", self.y());
                 return;
             }
         };
@@ -156,54 +159,91 @@ impl Graphable for GraphBar {
             ..
         } = x_output;
 
+        let mut fractions = self.bar.fractions.iter().collect::<Vec<(&String, &f64)>>();
+        fractions.sort_by(|x, y| {
+            let x = *x.1;
+            let y = y.1;
+
+            x.total_cmp(y)
+        });
+
         if is_horizontal {
             let height = x_spacing / 2.0;
 
-            let base = *x_axis;
+            let mut base = *x_axis;
+            let y = y - x_axis;
 
-            let top_left = Point::new(f32::min(base, y), x - (height / 2.0));
-            let size = Size::new(f32::abs(base - y), height);
+            for (label, fraction) in fractions.iter().rev() {
+                let width = (*fraction * y as f64) as f32;
 
-            frame.fill_rectangle(top_left, size, self.color)
+                let size = Size::new(width, height);
+                let top_left = Point::new(base, x - (0.5 * height));
+                let color = self.colors.get(*label).copied().unwrap_or(Color::BLACK);
+                base += width;
+
+                frame.fill_rectangle(top_left, size, color);
+            }
         } else {
             let width = x_spacing / 2.0;
-            let base = *x_axis;
+            let mut base = *x_axis;
+            let y = x_axis - y;
 
-            let top_left = Point::new(x - (width / 2.0), f32::min(y, base));
-            let size = Size::new(width, f32::abs(base - y));
+            for (label, fraction) in fractions.iter().rev() {
+                let height = (*fraction * y as f64) as f32;
+                base -= height;
 
-            frame.fill_rectangle(top_left, size, self.color);
+                let size = Size::new(width, height);
+                let top_left = Point::new(x - (width * 0.5), base);
+                let color = self.colors.get(*label).copied().unwrap_or(Color::BLACK);
+
+                frame.fill_rectangle(top_left, size, color);
+            }
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct BarChartTabData {
-    file: PathBuf,
-    title: String,
-    barchart: BarChart,
-    theme: Theme,
-    order: bool,
-    is_horizontal: bool,
-    caption: Option<String>,
+pub enum StackedBarChartMessage {
+    ToggleConfig,
+    OpenEditor,
+    SequentialX(bool),
+    SequentialY(bool),
+    Clean(bool),
+    Horizontal(bool),
+    CaptionChange(String),
+    XLabelChanged(String),
+    YLabelChanged(String),
+    TitleChanged(String),
+    Legend(LegendPosition),
+    Debug,
+    None,
 }
 
-impl BarChartTabData {
-    pub fn new(file: PathBuf, config: BarChartConfigState) -> Result<Self, AppError> {
-        let BarChartConfigState {
+#[derive(Debug, Clone, PartialEq)]
+pub struct StackedBarChartTabData {
+    title: String,
+    file: PathBuf,
+    order: bool,
+    caption: Option<String>,
+    is_horizontal: bool,
+    theme: Theme,
+    chart: StackedBarChart,
+}
+
+impl StackedBarChartTabData {
+    pub fn new(file: PathBuf, config: StackedBarChartConfigState) -> Result<Self, AppError> {
+        let StackedBarChartConfigState {
             title,
-            trim,
-            flexible,
+            x_col,
+            acc_cols,
+            is_horizontal,
+            order,
+            axis_label,
             header_types,
             header_labels,
-            row_exclude,
-            bar_label,
-            axis_label,
-            x_col,
-            y_col,
-            order,
+            flexible,
+            trim,
             caption,
-            is_horizontal,
             ..
         } = config;
 
@@ -215,17 +255,17 @@ impl BarChartTabData {
             .build()
             .map_err(AppError::CSVError)?;
 
-        let barchart = sht
-            .create_bar_chart(x_col, y_col, bar_label, axis_label, row_exclude)
+        let stacked = sht
+            .create_stacked_bar_chart(x_col, acc_cols, axis_label)
             .map_err(AppError::CSVError)?;
 
         Ok(Self {
             file,
             title,
-            barchart,
+            chart: stacked,
             order,
-            caption,
             is_horizontal,
+            caption,
             theme: Theme::default(),
         })
     }
@@ -236,42 +276,70 @@ impl BarChartTabData {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum BarChartMessage {
-    OpenEditor,
-    ToggleConfig,
-    TitleChanged(String),
-    SequentialX(bool),
-    SequentialY(bool),
-    Clean(bool),
-    Horizontal(bool),
-    CaptionChange(String),
-    XLabelChanged(String),
-    YLabelChanged(String),
-    Legend(LegendPosition),
-}
-
+#[allow(dead_code)]
 #[derive(Debug)]
-pub struct BarChartTab {
-    file: PathBuf,
+pub struct StackedBarChartTab {
     title: String,
+    file: PathBuf,
     x_axis: Scale,
-    y_axis: Scale,
     x_label: Option<String>,
+    y_axis: Scale,
     y_label: Option<String>,
-    bars: Vec<GraphBar>,
-    caption: Option<String>,
     is_horizontal: bool,
     config_shown: bool,
+    order: bool,
     sequential_x: bool,
     sequential_y: bool,
+    bars: Vec<GraphBar>,
     clean: bool,
     cache: canvas::Cache,
+    labels_len: usize,
+    caption: Option<String>,
     legend: LegendPosition,
 }
 
-impl BarChartTab {
-    fn tools(&self) -> Element<'_, BarChartMessage> {
+impl StackedBarChartTab {
+    fn create_axis(&self) -> (Axis, Axis) {
+        let (x_scale, y_scale) = if self.is_horizontal {
+            (&self.y_axis, &self.x_axis)
+        } else {
+            (&self.x_axis, &self.y_axis)
+        };
+
+        let (x_axis, y_axis) = create_axis(
+            x_scale,
+            y_scale,
+            self.sequential_x,
+            self.sequential_y,
+            self.clean,
+        );
+
+        let (x_label, y_label) = if self.is_horizontal {
+            (self.y_label.clone(), self.x_label.clone())
+        } else {
+            (self.x_label.clone(), self.y_label.clone())
+        };
+
+        return (x_axis.label(x_label), y_axis.label(y_label));
+    }
+
+    fn graph(&self) -> Element<'_, StackedBarChartMessage> {
+        let (x_axis, y_axis) = self.create_axis();
+
+        let content = Canvas::new(
+            Graph::new(x_axis, y_axis, &self.bars, &self.cache)
+                .caption(self.caption.as_ref())
+                .labels_len(self.labels_len)
+                .legend(self.legend)
+                .data((0, self.is_horizontal)),
+        )
+        .width(Length::FillPortion(24))
+        .height(Length::Fill);
+
+        content.into()
+    }
+
+    fn tools(&self) -> Element<'_, StackedBarChartMessage> {
         let header = {
             let header = text("Model Config").size(17.0);
 
@@ -280,8 +348,8 @@ impl BarChartTab {
                 .align_items(Alignment::Center)
         };
 
-        let title =
-            text_input("Graph Title", self.title.as_str()).on_input(BarChartMessage::TitleChanged);
+        let title = text_input("Graph Title", self.title.as_str())
+            .on_input(StackedBarChartMessage::TitleChanged);
 
         let x_label = text_input(
             "X axis label",
@@ -290,7 +358,7 @@ impl BarChartTab {
                 .map(|s| s.as_str())
                 .unwrap_or_default(),
         )
-        .on_input(BarChartMessage::XLabelChanged);
+        .on_input(StackedBarChartMessage::XLabelChanged);
 
         let y_label = text_input(
             "Y axis label",
@@ -299,7 +367,7 @@ impl BarChartTab {
                 .map(|s| s.as_str())
                 .unwrap_or_default(),
         )
-        .on_input(BarChartMessage::YLabelChanged);
+        .on_input(StackedBarChartMessage::YLabelChanged);
 
         let caption = text_input(
             "Graph Caption",
@@ -308,12 +376,12 @@ impl BarChartTab {
                 .map(|s| s.as_str())
                 .unwrap_or_default(),
         )
-        .on_input(BarChartMessage::CaptionChange);
+        .on_input(StackedBarChartMessage::CaptionChange);
 
         let sequential = {
             let x = {
                 let check = checkbox("Ranged X axis", self.sequential_x)
-                    .on_toggle(BarChartMessage::SequentialX);
+                    .on_toggle(StackedBarChartMessage::SequentialX);
 
                 let tip = tooltip("Each point on the axis is produced consecutively");
 
@@ -322,7 +390,7 @@ impl BarChartTab {
 
             let y = {
                 let check = checkbox("Ranged Y axis", self.sequential_y)
-                    .on_toggle(BarChartMessage::SequentialY);
+                    .on_toggle(StackedBarChartMessage::SequentialY);
 
                 let tip = tooltip("Each point on the axis is produced consecutively");
 
@@ -333,7 +401,8 @@ impl BarChartTab {
         };
 
         let clean = {
-            let check = checkbox("Clean graph", self.clean).on_toggle(BarChartMessage::Clean);
+            let check =
+                checkbox("Clean graph", self.clean).on_toggle(StackedBarChartMessage::Clean);
 
             let tip = tooltip("Only points on the axes have their outline drawn");
 
@@ -342,7 +411,7 @@ impl BarChartTab {
 
         let horizontal = {
             let check = checkbox("Horizontal bars", self.is_horizontal)
-                .on_toggle(BarChartMessage::Horizontal);
+                .on_toggle(StackedBarChartMessage::Horizontal);
 
             let tip = tooltip("The bars are drawn horizontally");
 
@@ -358,7 +427,7 @@ impl BarChartTab {
             let menu = ToolbarMenu::new(
                 LegendPosition::ALL,
                 self.legend,
-                BarChartMessage::Legend,
+                StackedBarChartMessage::Legend,
                 icons,
             )
             .orientation(ToolBarOrientation::Both)
@@ -393,7 +462,7 @@ impl BarChartTab {
                     .vertical_alignment(alignment::Vertical::Center)
                     .horizontal_alignment(alignment::Horizontal::Center),
             )
-            .on_press(BarChartMessage::OpenEditor)
+            .on_press(StackedBarChartMessage::OpenEditor)
             .style(theme::Button::Custom(Box::new(EditorButtonStyle)))
             .padding([4, 4]);
 
@@ -434,50 +503,10 @@ impl BarChartTab {
             .into()
     }
 
-    fn create_axis(&self) -> (Axis, Axis) {
-        let (x_scale, y_scale) = if self.is_horizontal {
-            (&self.y_axis, &self.x_axis)
-        } else {
-            (&self.x_axis, &self.y_axis)
-        };
-
-        let (x_axis, y_axis) = create_axis(
-            x_scale,
-            y_scale,
-            self.sequential_x,
-            self.sequential_y,
-            self.clean,
-        );
-
-        let (x_label, y_label) = if self.is_horizontal {
-            (self.y_label.clone(), self.x_label.clone())
-        } else {
-            (self.x_label.clone(), self.y_label.clone())
-        };
-
-        return (x_axis.label(x_label), y_axis.label(y_label));
-    }
-
-    fn graph(&self) -> Element<'_, BarChartMessage> {
-        let (x_axis, y_axis) = self.create_axis();
-
-        let content = Canvas::new(
-            Graph::new(x_axis, y_axis, &self.bars, &self.cache)
-                .caption(self.caption.as_ref())
-                .labels_len(self.bars.iter().filter(|bar| bar.label.is_some()).count())
-                .legend(self.legend)
-                .data(self.is_horizontal),
-        )
-        .width(Length::FillPortion(24))
-        .height(Length::Fill);
-
-        content.into()
-    }
-
-    fn content(&self) -> Element<'_, BarChartMessage> {
+    fn content(&self) -> Element<'_, StackedBarChartMessage> {
         let graph = self.graph();
 
-        let toolbar = tools_button().on_press(BarChartMessage::ToggleConfig);
+        let toolbar = tools_button().on_press(StackedBarChartMessage::ToggleConfig);
 
         row!(
             graph,
@@ -489,57 +518,68 @@ impl BarChartTab {
     }
 }
 
-impl Viewable for BarChartTab {
-    type Event = BarChartMessage;
-    type Data = BarChartTabData;
+impl Viewable for StackedBarChartTab {
+    type Event = StackedBarChartMessage;
+    type Data = StackedBarChartTabData;
 
     fn new(data: Self::Data) -> Self {
-        let BarChartTabData {
+        let StackedBarChartTabData {
             file,
             title,
-            barchart,
             theme,
+            chart,
             order,
             caption,
             is_horizontal,
         } = data;
 
-        let BarChart {
-            x_label,
+        let StackedBarChart {
+            x_axis,
             x_scale,
-            y_label,
+            y_axis,
             y_scale,
+            labels,
             mut bars,
-        } = barchart;
+            ..
+        } = chart;
+
+        let labels_len = labels.len();
 
         if order {
-            bars.sort_by(|one, two| one.point.x.cmp(&two.point.x))
-        };
+            bars.sort_by(|one, two| one.point.y.cmp(&two.point.y));
+        }
 
-        let colors = ColorEngine::new(&theme).gradual(order);
+        let engine = ColorEngine::new(&theme).gradual(order);
+
+        let colors = labels
+            .into_iter()
+            .zip(engine)
+            .collect::<HashMap<String, Color>>();
 
         let bars = bars
             .into_iter()
-            .zip(colors)
-            .map(|(bar, color)| Into::<GraphBar>::into(bar).color(color))
-            .collect();
+            .enumerate()
+            .map(|(id, bar)| GraphBar::new(id, bar, colors.clone()))
+            .collect::<Vec<GraphBar>>();
 
         Self {
-            file,
             title,
+            file,
+            labels_len,
             x_axis: x_scale,
-            x_label,
+            x_label: x_axis,
             y_axis: y_scale,
-            y_label,
-            caption,
-            bars,
+            y_label: y_axis,
             is_horizontal,
             config_shown: false,
+            bars,
+            order,
             sequential_x: false,
             sequential_y: false,
+            caption,
             clean: false,
-            legend: LegendPosition::default(),
             cache: canvas::Cache::default(),
+            legend: LegendPosition::default(),
         }
     }
 
@@ -587,36 +627,40 @@ impl Viewable for BarChartTab {
 
     fn update(&mut self, message: Self::Event) -> Option<Message> {
         match message {
-            BarChartMessage::OpenEditor => Some(Message::OpenEditor(Some(self.file.clone()))),
-            BarChartMessage::ToggleConfig => {
+            StackedBarChartMessage::None => None,
+            StackedBarChartMessage::Debug => {
+                dbg!("Debugging!");
+                None
+            }
+            StackedBarChartMessage::ToggleConfig => {
                 self.config_shown = !self.config_shown;
                 None
             }
-            BarChartMessage::TitleChanged(title) => {
-                self.title = title;
-                None
+            StackedBarChartMessage::OpenEditor => {
+                self.config_shown = false;
+                Some(Message::OpenEditor(Some(self.file.clone())))
             }
-            BarChartMessage::SequentialX(seq) => {
+            StackedBarChartMessage::SequentialX(seq) => {
                 self.sequential_x = seq;
                 self.cache.clear();
                 None
             }
-            BarChartMessage::SequentialY(seq) => {
+            StackedBarChartMessage::SequentialY(seq) => {
                 self.sequential_y = seq;
                 self.cache.clear();
                 None
             }
-            BarChartMessage::Clean(clean) => {
+            StackedBarChartMessage::Clean(clean) => {
                 self.clean = clean;
                 self.cache.clear();
                 None
             }
-            BarChartMessage::Horizontal(is_horizontal) => {
+            StackedBarChartMessage::Horizontal(is_horizontal) => {
                 self.is_horizontal = is_horizontal;
                 self.cache.clear();
                 None
             }
-            BarChartMessage::CaptionChange(caption) => {
+            StackedBarChartMessage::CaptionChange(caption) => {
                 self.caption = if caption.is_empty() {
                     None
                 } else {
@@ -625,17 +669,21 @@ impl Viewable for BarChartTab {
                 self.cache.clear();
                 None
             }
-            BarChartMessage::XLabelChanged(label) => {
+            StackedBarChartMessage::XLabelChanged(label) => {
                 self.x_label = if label.is_empty() { None } else { Some(label) };
                 self.cache.clear();
                 None
             }
-            BarChartMessage::YLabelChanged(label) => {
+            StackedBarChartMessage::YLabelChanged(label) => {
                 self.y_label = if label.is_empty() { None } else { Some(label) };
                 self.cache.clear();
                 None
             }
-            BarChartMessage::Legend(legend) => {
+            StackedBarChartMessage::TitleChanged(title) => {
+                self.title = title;
+                None
+            }
+            StackedBarChartMessage::Legend(legend) => {
                 self.legend = legend;
                 None
             }
@@ -648,7 +696,7 @@ impl Viewable for BarChartTab {
         Message: 'a + Clone + Debug,
     {
         let title = {
-            let text = text(format!("{} - Bar Chart", self.title));
+            let text = text(format!("{} - Stacked Bar Chart", self.title));
             row!(horizontal_space(), text, horizontal_space())
                 .width(Length::Fill)
                 .align_items(Alignment::Center)
@@ -657,7 +705,6 @@ impl Viewable for BarChartTab {
 
         let content_area = container(self.content())
             .max_width(1450)
-            // .padding([5, 10])
             .width(Length::Fill)
             .height(Length::Fill)
             .style(theme::Container::Custom(Box::new(ContentAreaContainer)));
@@ -670,7 +717,7 @@ impl Viewable for BarChartTab {
 
         let content: Element<Self::Event, Theme, Renderer> = if self.config_shown {
             Modal::new(content, self.tools())
-                .on_blur(BarChartMessage::ToggleConfig)
+                .on_blur(StackedBarChartMessage::ToggleConfig)
                 .into()
         } else {
             content.into()

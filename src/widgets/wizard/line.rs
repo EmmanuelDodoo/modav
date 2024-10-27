@@ -11,11 +11,11 @@ use iced::{
 use modav_core::repr::sheet::utils::{HeaderLabelStrategy, HeaderTypesStrategy, LineLabelStrategy};
 
 use crate::{
-    utils::AppError,
+    utils::{tooltip, AppError},
     views::{LineTabData, View},
 };
 
-use super::{shared::tooltip, sheet::SheetConfigState};
+use super::sheet::SheetConfigState;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 
@@ -331,7 +331,7 @@ where
                 };
 
                 state.diff(self.sheet_config.clone());
-                let data = LineTabData::new(self.file.clone(), state.clone());
+                let data = LineTabData::new(self.file.clone(), state.submit());
                 match data {
                     Err(err) => Some((self.on_error)(err)),
                     Ok(data) => {
