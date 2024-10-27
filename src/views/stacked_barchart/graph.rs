@@ -1191,8 +1191,8 @@ impl Axis {
         }
     }
 
-    pub fn label(mut self, label: impl Into<String>) -> Self {
-        self.label = Some(label.into());
+    pub fn label(mut self, label: Option<impl Into<String>>) -> Self {
+        self.label = label.map(Into::into);
         self
     }
 
@@ -1210,8 +1210,8 @@ pub struct Graph<'a, G>
 where
     G: Graphable,
 {
-    x_axis: &'a Axis,
-    y_axis: &'a Axis,
+    x_axis: Axis,
+    y_axis: Axis,
     cache: &'a canvas::Cache,
     graphables: &'a [G],
     data: <G as Graphable>::Data,
@@ -1224,12 +1224,7 @@ impl<'a, G> Graph<'a, G>
 where
     G: Graphable,
 {
-    pub fn new(
-        x_axis: &'a Axis,
-        y_axis: &'a Axis,
-        graphables: &'a [G],
-        cache: &'a canvas::Cache,
-    ) -> Self {
+    pub fn new(x_axis: Axis, y_axis: Axis, graphables: &'a [G], cache: &'a canvas::Cache) -> Self {
         Self {
             x_axis,
             y_axis,
@@ -1242,8 +1237,8 @@ where
         }
     }
 
-    pub fn data(mut self, data: <G as Graphable>::Data) -> Self {
-        self.data = data;
+    pub fn data(mut self, data: impl Into<<G as Graphable>::Data>) -> Self {
+        self.data = data.into();
         self
     }
 

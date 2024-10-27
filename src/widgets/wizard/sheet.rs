@@ -10,7 +10,7 @@ use iced::{
 
 use modav_core::repr::sheet::utils::{HeaderLabelStrategy, HeaderTypesStrategy};
 
-use super::shared::tooltip;
+use crate::utils::tooltip;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SheetConfigState {

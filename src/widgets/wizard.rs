@@ -34,8 +34,6 @@ mod stacked_barchart;
 use stacked_barchart::StackedBarChartConfig;
 pub use stacked_barchart::StackedBarChartConfigState;
 
-pub mod shared;
-
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum Portal {
     #[default]

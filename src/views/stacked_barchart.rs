@@ -1,11 +1,14 @@
 #![allow(unused_imports, dead_code)]
-use core::panic;
-use std::{collections::HashMap, fmt::Debug, path::PathBuf};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf, rc::Rc};
 
 use iced::{
-    alignment, theme,
-    widget::{canvas, column, container, horizontal_space, row, text, Canvas},
-    Alignment, Color, Element, Font, Length, Point, Renderer, Size, Theme,
+    alignment, color, theme,
+    widget::{
+        self, button, canvas, checkbox, column, container, horizontal_space, row, text, text_input,
+        vertical_space, Canvas, Tooltip,
+    },
+    Alignment, Background, Border, Color, Element, Font, Length, Point, Renderer, Shadow, Size,
+    Theme, Vector,
 };
 
 use modav_core::{
@@ -18,16 +21,25 @@ use modav_core::{
 use tracing::warn;
 
 use crate::{
-    utils::{coloring::ColorEngine, icons, AppError},
-    widgets::{toolbar::ToolbarMenu, wizard::StackedBarChartConfigState},
+    utils::{coloring::ColorEngine, icons, tooltip, AppError},
+    widgets::{
+        modal::Modal,
+        style::dialog_container,
+        toolbar::{ToolBarOrientation, ToolbarMenu},
+        tools::Tools,
+        wizard::StackedBarChartConfigState,
+    },
     Message, ToolTipContainerStyle,
 };
 
 mod graph;
-use graph::{Axis, AxisKind, DrawnOutput, Graph, Graphable};
+use graph::{Axis, AxisKind, DrawnOutput, Graph, Graphable, LegendPosition};
 
 use super::{
-    shared::{ContentAreaContainer, ToolbarContainerStyle, ToolbarMenuStyle, ToolbarStyle},
+    shared::{
+        ContentAreaContainer, EditorButtonStyle, ToolbarContainerStyle, ToolbarMenuStyle,
+        ToolbarStyle,
+    },
     tabs::TabLabel,
     Viewable,
 };
@@ -282,6 +294,19 @@ impl Graphable for GraphBar {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StackedBarChartMessage {
+    ToggleConfig,
+    OpenEditor,
+    SequentialX(bool),
+    SequentialY(bool),
+    Clean(bool),
+    Horizontal(bool),
+    CaptionChange(String),
+    XLabelChanged(String),
+    YLabelChanged(String),
+    TitleChanged(String),
+    Legend(LegendPosition),
+    Alt,
+    Debug,
     None,
 }
 
@@ -346,22 +371,32 @@ impl StackedBarChartTabData {
 pub struct StackedBarChartTab {
     title: String,
     file: PathBuf,
-    x_axis: Axis,
-    y_axis: Axis,
+    x_axis: Scale,
+    x_label: Option<String>,
+    y_axis: Scale,
+    y_label: Option<String>,
     is_horizontal: bool,
+    config_shown: bool,
     order: bool,
+    sequential_x: bool,
+    sequential_y: bool,
     bars: Vec<GraphBar>,
+    clean: bool,
     cache: canvas::Cache,
     labels_len: usize,
     caption: Option<String>,
+    legend: LegendPosition,
 }
 
 impl StackedBarChartTab {
-    fn create_axis(x_scale: Scale, y_scale: Scale, _order: bool) -> (Axis, Axis) {
-        let sequential_x = false;
-        let sequential_y = false;
+    fn create_axis(&self, x_scale: &Scale, y_scale: &Scale, _order: bool) -> (Axis, Axis) {
+        let (x_scale, y_scale) = if self.is_horizontal {
+            (y_scale, x_scale)
+        } else {
+            (x_scale, y_scale)
+        };
 
-        let (x_kind, y_fraction) = match x_scale.axis_points(sequential_x) {
+        let (x_kind, y_fraction) = match x_scale.axis_points(self.sequential_x) {
             AxisPoints::Categorical(points) => {
                 let kind = AxisKind::BaseHorizontal(points);
                 (kind, 1.0)
@@ -388,7 +423,7 @@ impl StackedBarChartTab {
             }
         };
 
-        let y_points = y_scale.axis_points(sequential_y);
+        let y_points = y_scale.axis_points(self.sequential_y);
 
         let (y_kind, x_fraction) = match y_points {
             AxisPoints::Categorical(points) => {
@@ -419,29 +454,223 @@ impl StackedBarChartTab {
             }
         };
 
-        let x_axis = Axis::new(x_kind, x_fraction, y_fraction);
-        let y_axis = Axis::new(y_kind, y_fraction, x_fraction);
+        let (x_label, y_label) = if self.is_horizontal {
+            (self.y_label.clone(), self.x_label.clone())
+        } else {
+            (self.x_label.clone(), self.y_label.clone())
+        };
+
+        let x_axis = Axis::new(x_kind, x_fraction, y_fraction)
+            .clean(self.clean)
+            .label(x_label);
+        let y_axis = Axis::new(y_kind, y_fraction, x_fraction)
+            .clean(self.clean)
+            .label(y_label);
 
         return (x_axis, y_axis);
     }
 
     fn graph(&self) -> Element<'_, StackedBarChartMessage> {
-        let (x_axis, y_axis) = if self.is_horizontal {
-            (&self.y_axis, &self.x_axis)
-        } else {
-            (&self.x_axis, &self.y_axis)
-        };
+        let (x_axis, y_axis) = self.create_axis(&self.x_axis, &self.y_axis, self.order);
 
         let content = Canvas::new(
             Graph::new(x_axis, y_axis, &self.bars, &self.cache)
                 .caption(self.caption.as_ref())
                 .labels_len(self.labels_len)
+                .legend(self.legend)
                 .data((0, self.is_horizontal)),
         )
         .width(Length::FillPortion(24))
         .height(Length::Fill);
 
         content.into()
+    }
+
+    fn tools(&self) -> Element<'_, StackedBarChartMessage> {
+        let header = {
+            let header = text("Model Config").size(17.0);
+
+            row!(horizontal_space(), header, horizontal_space())
+                .padding([2, 0])
+                .align_items(Alignment::Center)
+        };
+
+        let title = text_input("Graph Title", self.title.as_str())
+            .on_input(StackedBarChartMessage::TitleChanged);
+
+        let x_label = text_input(
+            "X axis label",
+            self.x_label
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_default(),
+        )
+        .on_input(StackedBarChartMessage::XLabelChanged);
+
+        let y_label = text_input(
+            "Y axis label",
+            self.y_label
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_default(),
+        )
+        .on_input(StackedBarChartMessage::YLabelChanged);
+
+        let caption = text_input(
+            "Graph Caption",
+            self.caption
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_default(),
+        )
+        .on_input(StackedBarChartMessage::CaptionChange);
+
+        let sequential = {
+            let x = {
+                let check = checkbox("Ranged X axis", self.sequential_x)
+                    .on_toggle(StackedBarChartMessage::SequentialX);
+
+                let tip = tooltip("Each point on the axis is produced consecutively");
+
+                row!(check, tip).spacing(10.0)
+            };
+
+            let y = {
+                let check = checkbox("Ranged Y axis", self.sequential_y)
+                    .on_toggle(StackedBarChartMessage::SequentialY);
+
+                let tip = tooltip("Each point on the axis is produced consecutively");
+
+                row!(check, tip).spacing(10.0)
+            };
+
+            row!(x, horizontal_space(), y).align_items(Alignment::Center)
+        };
+
+        let clean = {
+            let check =
+                checkbox("Clean graph", self.clean).on_toggle(StackedBarChartMessage::Clean);
+
+            let tip = tooltip("Only points on the axes have their outline drawn");
+
+            row!(check, tip).spacing(10.0)
+        };
+
+        let horizontal = {
+            let check = checkbox("Horizontal bars", self.is_horizontal)
+                .on_toggle(StackedBarChartMessage::Horizontal);
+
+            let tip = tooltip("The bars are drawn horizontally");
+
+            row!(check, tip).spacing(10.0)
+        };
+
+        let clean_horizontal =
+            row!(clean, horizontal_space(), horizontal).align_items(Alignment::Center);
+
+        let legend = {
+            let icons = Font::with_name("legend-icons");
+
+            let menu = ToolbarMenu::new(
+                LegendPosition::ALL,
+                self.legend,
+                StackedBarChartMessage::Legend,
+                icons,
+            )
+            .orientation(ToolBarOrientation::Both)
+            .padding([4, 4])
+            .menu_padding([4, 10, 4, 8])
+            .spacing(5.0);
+
+            let tooltip = container(text("Legend Position").size(12.0))
+                .max_width(200.0)
+                .padding([6, 8])
+                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
+                .height(Length::Shrink);
+
+            let menu = Tooltip::new(menu, tooltip, iced::widget::tooltip::Position::Bottom)
+                .gap(2.0)
+                .snap_within_viewport(true);
+
+            let text = text("Legend Position");
+
+            row!(menu, text)
+                .spacing(10.0)
+                .align_items(Alignment::Center)
+        };
+
+        let editor = {
+            let font = Font::with_name(icons::NAME);
+
+            let btn = button(
+                text(icons::EDITOR)
+                    .font(font)
+                    .width(16.0)
+                    .vertical_alignment(alignment::Vertical::Center)
+                    .horizontal_alignment(alignment::Horizontal::Center),
+            )
+            .on_press(StackedBarChartMessage::OpenEditor)
+            .style(theme::Button::Custom(Box::new(EditorButtonStyle)))
+            .padding([4, 4]);
+
+            let tooltip = container(text("Open in Editor").size(12.0))
+                .max_width(200.0)
+                .padding([6, 8])
+                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
+                .height(Length::Shrink);
+
+            let menu = Tooltip::new(btn, tooltip, iced::widget::tooltip::Position::Bottom)
+                .gap(2.0)
+                .snap_within_viewport(true);
+
+            let text = text("Open in Editor");
+
+            row!(menu, text)
+                .spacing(10.0)
+                .align_items(Alignment::Center)
+        };
+
+        let legend_editor = row!(legend, horizontal_space(), editor).align_items(Alignment::Center);
+
+        let content = column!(
+            header,
+            title,
+            x_label,
+            y_label,
+            caption,
+            sequential,
+            clean_horizontal,
+            legend_editor,
+        )
+        .spacing(30.0);
+
+        dialog_container(content)
+            .width(450.0)
+            .height(Length::Shrink)
+            .into()
+    }
+
+    fn content(&self) -> Element<'_, StackedBarChartMessage> {
+        let graph = self.graph();
+
+        let toolbar = button(
+            text(icons::TOOLS)
+                .font(Font::with_name(icons::NAME))
+                .width(18.0)
+                .vertical_alignment(alignment::Vertical::Center)
+                .horizontal_alignment(alignment::Horizontal::Center),
+        )
+        .padding([4, 8])
+        .style(theme::Button::Custom(Box::new(ToolsButton)))
+        .on_press(StackedBarChartMessage::ToggleConfig);
+
+        row!(
+            graph,
+            column!(vertical_space(), toolbar, vertical_space())
+                .padding([0, 5, 0, 0])
+                .align_items(Alignment::Center)
+        )
+        .into()
     }
 }
 
@@ -462,9 +691,9 @@ impl Viewable for StackedBarChartTab {
 
         let StackedBarChart {
             x_axis,
-            mut x_scale,
+            x_scale,
             y_axis,
-            mut y_scale,
+            y_scale,
             labels,
             mut bars,
             ..
@@ -489,38 +718,24 @@ impl Viewable for StackedBarChartTab {
             .map(|(id, bar)| GraphBar::new(id, bar, colors.clone()))
             .collect::<Vec<GraphBar>>();
 
-        if is_horizontal {
-            let temp = x_scale;
-            x_scale = y_scale;
-            y_scale = temp;
-        }
-
-        let (mut x, mut y) = Self::create_axis(x_scale, y_scale, order);
-
-        if is_horizontal {
-            let temp = x;
-            x = y;
-            y = temp;
-        }
-
-        if let Some(label) = x_axis {
-            x = x.label(label);
-        }
-        if let Some(label) = y_axis {
-            y = y.label(label);
-        }
-
         Self {
             title,
             file,
             labels_len,
-            x_axis: x,
-            y_axis: y,
+            x_axis: x_scale,
+            x_label: x_axis,
+            y_axis: y_scale,
+            y_label: y_axis,
             is_horizontal,
+            config_shown: false,
             bars,
             order,
+            sequential_x: false,
+            sequential_y: false,
             caption,
+            clean: false,
             cache: canvas::Cache::default(),
+            legend: LegendPosition::default(),
         }
     }
 
@@ -569,6 +784,69 @@ impl Viewable for StackedBarChartTab {
     fn update(&mut self, message: Self::Event) -> Option<Message> {
         match message {
             StackedBarChartMessage::None => None,
+            StackedBarChartMessage::Debug => {
+                dbg!("Debugging!");
+                None
+            }
+            StackedBarChartMessage::ToggleConfig => {
+                self.config_shown = !self.config_shown;
+                None
+            }
+            StackedBarChartMessage::OpenEditor => {
+                self.config_shown = false;
+                Some(Message::OpenEditor(Some(self.file.clone())))
+            }
+            StackedBarChartMessage::SequentialX(seq) => {
+                self.sequential_x = seq;
+                self.cache.clear();
+                None
+            }
+            StackedBarChartMessage::SequentialY(seq) => {
+                self.sequential_y = seq;
+                self.cache.clear();
+                None
+            }
+            StackedBarChartMessage::Clean(clean) => {
+                self.clean = clean;
+                self.cache.clear();
+                None
+            }
+            StackedBarChartMessage::Horizontal(is_horizontal) => {
+                self.is_horizontal = is_horizontal;
+                self.cache.clear();
+                None
+            }
+            StackedBarChartMessage::CaptionChange(caption) => {
+                self.caption = if caption.is_empty() {
+                    None
+                } else {
+                    Some(caption)
+                };
+                self.cache.clear();
+                None
+            }
+            StackedBarChartMessage::XLabelChanged(label) => {
+                self.x_label = if label.is_empty() { None } else { Some(label) };
+                self.cache.clear();
+                None
+            }
+            StackedBarChartMessage::YLabelChanged(label) => {
+                self.y_label = if label.is_empty() { None } else { Some(label) };
+                self.cache.clear();
+                None
+            }
+            StackedBarChartMessage::TitleChanged(title) => {
+                self.title = title;
+                None
+            }
+            StackedBarChartMessage::Legend(legend) => {
+                self.legend = legend;
+                None
+            }
+            StackedBarChartMessage::Alt => {
+                self.legend = LegendPosition::default();
+                None
+            }
         }
     }
 
@@ -585,9 +863,8 @@ impl Viewable for StackedBarChartTab {
         }
         .height(Length::Shrink);
 
-        let content_area = container(self.graph())
+        let content_area = container(self.content())
             .max_width(1450)
-            // .padding([5, 10])
             .width(Length::Fill)
             .height(Length::Fill)
             .style(theme::Container::Custom(Box::new(ContentAreaContainer)));
@@ -598,6 +875,14 @@ impl Viewable for StackedBarChartTab {
             .height(Length::Fill)
             .width(Length::Fill);
 
+        let content: Element<Self::Event, Theme, Renderer> = if self.config_shown {
+            Modal::new(content, self.tools())
+                .on_blur(StackedBarChartMessage::ToggleConfig)
+                .into()
+        } else {
+            content.into()
+        };
+
         let content: Element<Self::Event, Theme, Renderer> = container(content)
             .padding([10, 30, 30, 15])
             .width(Length::Fill)
@@ -605,5 +890,54 @@ impl Viewable for StackedBarChartTab {
             .into();
 
         content.map(map)
+    }
+}
+
+struct ToolsButton;
+
+impl widget::button::StyleSheet for ToolsButton {
+    type Style = Theme;
+
+    fn active(&self, style: &Self::Style) -> button::Appearance {
+        let default = <Theme as widget::button::StyleSheet>::active(style, &theme::Button::Primary);
+        let border = Border {
+            radius: 5.0.into(),
+            width: default.border.width * 0.5,
+            ..default.border
+        };
+
+        let shadow = Shadow {
+            color: color!(0, 0, 0, 0.5),
+            offset: Vector::new(2.0, 2.0),
+            blur_radius: 4.0,
+        };
+
+        button::Appearance {
+            border,
+            shadow,
+            ..default
+        }
+    }
+
+    fn hovered(&self, style: &Self::Style) -> button::Appearance {
+        let default =
+            <Theme as widget::button::StyleSheet>::hovered(style, &theme::Button::Primary);
+        let border = Border {
+            radius: 5.0.into(),
+            width: default.border.width,
+            ..default.border
+        };
+
+        let shadow = Shadow {
+            color: color!(0, 0, 0, 0.5),
+            offset: Vector::new(1.0, 1.0),
+            blur_radius: 10.0,
+        };
+
+        button::Appearance {
+            border,
+            shadow,
+            ..default
+        }
     }
 }

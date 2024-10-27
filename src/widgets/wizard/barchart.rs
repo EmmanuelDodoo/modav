@@ -16,11 +16,11 @@ use modav_core::repr::sheet::utils::{
 };
 
 use crate::{
-    utils::AppError,
+    utils::{tooltip, AppError},
     views::{BarChartTabData, View},
 };
 
-use super::{shared::tooltip, sheet::SheetConfigState};
+use super::sheet::SheetConfigState;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum AxisStrategy {

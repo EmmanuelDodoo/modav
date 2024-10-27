@@ -5,10 +5,10 @@ use std::{
     path::PathBuf,
 };
 
-use super::{shared::tooltip, sheet::SheetConfigState};
+use super::sheet::SheetConfigState;
 
 use crate::{
-    utils::AppError,
+    utils::{tooltip, AppError},
     views::{StackedBarChartTabData, View},
 };
 use iced::{

@@ -289,7 +289,7 @@ impl Flags {
                         x_col: 0,
                         acc_cols: vec![1, 2, 3, 4],
                         axis_label: StackedBarChartAxisLabelStrategy::Header("Total Cost".into()),
-                        is_horizontal: true,
+                        is_horizontal: false,
                         caption: Some("Caption where?".into()),
                         title: "Stacked Bar Chart".into(),
                         ..Default::default()
