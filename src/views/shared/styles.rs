@@ -1,6 +1,7 @@
 use iced::{
+    color, theme,
     widget::{button, container, overlay, pick_list},
-    Background, Border, Theme,
+    Background, Border, Shadow, Theme, Vector,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -154,6 +155,54 @@ impl container::StyleSheet for ContentAreaContainer {
             border,
             background: Some(background),
             ..Default::default()
+        }
+    }
+}
+
+pub struct ToolsButton;
+
+impl button::StyleSheet for ToolsButton {
+    type Style = Theme;
+
+    fn active(&self, style: &Self::Style) -> button::Appearance {
+        let default = <Theme as button::StyleSheet>::active(style, &theme::Button::Primary);
+        let border = Border {
+            radius: 5.0.into(),
+            width: default.border.width * 0.5,
+            ..default.border
+        };
+
+        let shadow = Shadow {
+            color: color!(0, 0, 0, 0.5),
+            offset: Vector::new(2.0, 2.0),
+            blur_radius: 4.0,
+        };
+
+        button::Appearance {
+            border,
+            shadow,
+            ..default
+        }
+    }
+
+    fn hovered(&self, style: &Self::Style) -> button::Appearance {
+        let default = <Theme as button::StyleSheet>::hovered(style, &theme::Button::Primary);
+        let border = Border {
+            radius: 5.0.into(),
+            width: default.border.width,
+            ..default.border
+        };
+
+        let shadow = Shadow {
+            color: color!(0, 0, 0, 0.5),
+            offset: Vector::new(1.0, 1.0),
+            blur_radius: 10.0,
+        };
+
+        button::Appearance {
+            border,
+            shadow,
+            ..default
         }
     }
 }

@@ -67,6 +67,7 @@ pub struct Axis {
     caption: Option<String>,
 }
 
+#[allow(dead_code)]
 impl Axis {
     const AXIS_THICKNESS: f32 = 2.0;
     const OUTLINES_THICKNESS: f32 = 0.5;

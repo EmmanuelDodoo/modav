@@ -1,18 +1,18 @@
-#![allow(dead_code, unused_variables, unused_imports)]
 use core::f32;
 use modav_core::repr::Data;
 use std::{
     collections::HashMap,
-    fmt::{self, Debug, Display},
-    hash::Hash,
+    fmt::{self, Debug},
 };
 
 use iced::{
-    alignment::{self, Horizontal, Vertical},
-    color, font, mouse,
+    alignment::{Horizontal, Vertical},
+    font,
     widget::canvas::{self, Frame, Geometry, Path, Stroke, Text},
     Color, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
+
+use modav_core::models::{AxisPoints, Scale};
 
 use crate::widgets::toolbar::ToolbarOption;
 
@@ -190,9 +190,19 @@ pub trait Graphable {
 
     fn label(&self) -> Option<&String>;
 
-    fn draw_legend(&self, frame: &mut Frame, bounds: Rectangle, color: Color, data: &Self::Data);
+    fn draw_legend(
+        &self,
+        frame: &mut Frame,
+        bounds: Rectangle,
+        color: Color,
+        idx: usize,
+        data: &Self::Data,
+    );
 
-    //fn color(&self) -> &Color;
+    /// Returns true if `Self` should not be skipped when drawing legend
+    fn draw_legend_filter(&self, _data: &Self::Data) -> bool {
+        true
+    }
 
     fn draw(
         &self,
@@ -203,6 +213,7 @@ pub trait Graphable {
     );
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 struct AxisData {
     axis_color: Color,
@@ -311,12 +322,85 @@ impl AxisData {
     }
 }
 
+/// Information about an Axis
 #[derive(Debug, Clone, PartialEq)]
 pub struct DrawnOutput {
+    /// Mapping of where a given [`Data`] point is located on this Axis
     pub record: HashMap<Data, f32>,
+    /// The location of the axis. For the X axis, this is how far down it is.
+    /// For the Y axis, this is how far left it is
     pub axis_pos: f32,
+    /// Spacing of points on the axis
     pub spacing: f32,
+    /// The smallest difference between any two numeric points
     pub step: f32,
+}
+
+impl DrawnOutput {
+    /// Returns the position of data if present, else the closest approximate point
+    /// of where data would be
+    pub fn get_closest(&self, data: &Data, is_x: bool) -> Option<f32> {
+        let data = match self.record.get(data) {
+            Some(point) => *point,
+            None => {
+                let closest = self
+                    .record
+                    .keys()
+                    .into_iter()
+                    .fold(None, |acc, curr| match acc {
+                        Some(prev) => {
+                            if curr < data && curr > prev {
+                                Some(curr)
+                            } else if curr < data && prev > data {
+                                Some(curr)
+                            } else {
+                                Some(prev)
+                            }
+                        }
+                        None => Some(curr),
+                    });
+
+                let closest = closest?;
+
+                let point = self.record.get(closest).unwrap();
+
+                match (data, closest) {
+                    (Data::Integer(a), Data::Integer(b)) => {
+                        let diff = a - b;
+                        let ratio = diff as f32 / self.step;
+                        if is_x {
+                            point + (ratio * self.spacing)
+                        } else {
+                            point - (ratio * self.spacing)
+                        }
+                    }
+                    (Data::Number(a), Data::Number(b)) => {
+                        let diff = a - b;
+                        let ratio = diff as f32 / self.step;
+                        if is_x {
+                            point + (ratio * self.spacing)
+                        } else {
+                            point - (ratio * self.spacing)
+                        }
+                    }
+                    (Data::Float(a), Data::Float(b)) => {
+                        let diff = a - b;
+                        let ratio = diff / self.step;
+                        if is_x {
+                            point + (ratio * self.spacing)
+                        } else {
+                            point - (ratio * self.spacing)
+                        }
+                    }
+                    _ => {
+                        return None;
+                    }
+                }
+            }
+        };
+
+        Some(data)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -327,6 +411,7 @@ pub enum AxisKind {
     SplitVertical(Vec<Data>, Vec<Data>),
 }
 
+#[allow(dead_code)]
 impl AxisKind {
     const AXIS_THICKNESS: f32 = 2.0;
     const OUTLINES_THICKNESS: f32 = 0.5;
@@ -385,7 +470,6 @@ impl AxisKind {
         let points_len = points.len();
 
         let axis_color = axis_data.axis_color;
-        let label_color = axis_data.label_color;
         let text_color = axis_data.text_color;
         let outlines_color = axis_data.outlines_color;
 
@@ -393,20 +477,13 @@ impl AxisKind {
         let x_point_padding = axis_data.x_point_padding;
 
         let x_padding_left = axis_data.x_padding_left;
-        let x_padding_right = axis_data.x_padding_right;
         let true_x_length = axis_data.true_x_length;
-        let x_offset_right = axis_data.x_offset_right;
         let x_offset_left = axis_data.x_offset_left;
         let x_offset_length = axis_data.x_offset_length;
 
         let y_padding_top = axis_data.y_padding_top;
-        let y_padding_bottom = axis_data.y_padding_bottom;
-        let true_y_length = axis_data.true_y_length;
 
         let y_offset_top = axis_data.y_offset_top;
-        let y_offset_bottom = axis_data.y_offset_bottom;
-        let y_offset_length = axis_data.y_offset_length;
-        let bottom_text_y = axis_data.bottom_text_y;
 
         let y_top = axis_data.y_top;
         let y_bottom = axis_data.y_bottom;
@@ -533,30 +610,24 @@ impl AxisKind {
         let points_len = points.len();
 
         let axis_color = axis_data.axis_color;
-        let label_color = axis_data.label_color;
         let text_color = axis_data.text_color;
         let outlines_color = axis_data.outlines_color;
 
         let point_size = axis_data.point_size;
 
         let x_padding_left = axis_data.x_padding_left;
-        let x_padding_right = axis_data.x_padding_right;
-        let true_x_length = axis_data.true_x_length;
         let x_offset_right = axis_data.x_offset_right;
         let x_offset_left = axis_data.x_offset_left;
         let x_offset_length = axis_data.x_offset_length;
 
         let y_padding_top = axis_data.y_padding_top;
-        let y_padding_bottom = axis_data.y_padding_bottom;
         let true_y_length = axis_data.true_y_length;
 
         let y_offset_top = axis_data.y_offset_top;
         let y_offset_bottom = axis_data.y_offset_bottom;
         let y_offset_length = axis_data.y_offset_length;
-        let bottom_text_y = axis_data.bottom_text_y;
 
         let x_left = axis_data.x_left;
-        let x_right = axis_data.x_right;
 
         let x = x_padding_left + x_offset_left + x_left;
         let y = y_padding_top;
@@ -690,27 +761,21 @@ impl AxisKind {
         let neg_points_len = neg_points.len();
 
         let axis_color = axis_data.axis_color;
-        let label_color = axis_data.label_color;
         let text_color = axis_data.text_color;
         let outlines_color = axis_data.outlines_color;
 
         let point_size = axis_data.point_size;
 
         let x_padding_left = axis_data.x_padding_left;
-        let x_padding_right = axis_data.x_padding_right;
-        let true_x_length = axis_data.true_x_length;
         let x_offset_right = axis_data.x_offset_right;
         let x_offset_left = axis_data.x_offset_left;
         let x_offset_length = axis_data.x_offset_length;
 
         let y_padding_top = axis_data.y_padding_top;
-        let y_padding_bottom = axis_data.y_padding_bottom;
         let true_y_length = axis_data.true_y_length;
 
         let y_offset_top = axis_data.y_offset_top;
-        let y_offset_bottom = axis_data.y_offset_bottom;
         let y_offset_length = axis_data.y_offset_length;
-        let bottom_text_y = axis_data.bottom_text_y;
 
         let x_left = axis_data.x_left;
 
@@ -936,7 +1001,6 @@ impl AxisKind {
         let neg_points_len = neg_points.len();
 
         let axis_color = axis_data.axis_color;
-        let label_color = axis_data.label_color;
         let text_color = axis_data.text_color;
         let outlines_color = axis_data.outlines_color;
 
@@ -944,20 +1008,13 @@ impl AxisKind {
         let x_point_padding = axis_data.x_point_padding;
 
         let x_padding_left = axis_data.x_padding_left;
-        let x_padding_right = axis_data.x_padding_right;
         let true_x_length = axis_data.true_x_length;
-        let x_offset_right = axis_data.x_offset_right;
         let x_offset_left = axis_data.x_offset_left;
         let x_offset_length = axis_data.x_offset_length;
 
         let y_padding_top = axis_data.y_padding_top;
-        let y_padding_bottom = axis_data.y_padding_bottom;
-        let true_y_length = axis_data.true_y_length;
 
         let y_offset_top = axis_data.y_offset_top;
-        let y_offset_bottom = axis_data.y_offset_bottom;
-        let y_offset_length = axis_data.y_offset_length;
-        let bottom_text_y = axis_data.bottom_text_y;
 
         let y_top = axis_data.y_top;
         let y_bottom = axis_data.y_bottom;
@@ -1314,8 +1371,13 @@ where
 
         let bounds = Rectangle::new(position, Size::new(width, height));
 
-        for graphable in self.graphables.iter() {
-            graphable.draw_legend(&mut frame, bounds, text_color, &self.data);
+        for (i, graphable) in self
+            .graphables
+            .iter()
+            .filter(|graphable| graphable.draw_legend_filter(&self.data))
+            .enumerate()
+        {
+            graphable.draw_legend(&mut frame, bounds, text_color, i, &self.data);
         }
 
         frame.into_geometry()
@@ -1411,4 +1473,73 @@ where
 
         vec![content, self.draw_legend(renderer, bounds, theme)]
     }
+}
+
+pub fn create_axis(
+    x_scale: &Scale,
+    y_scale: &Scale,
+    sequential_x: bool,
+    sequential_y: bool,
+    clean: bool,
+) -> (Axis, Axis) {
+    let (x_kind, y_fraction) = match x_scale.axis_points(sequential_x) {
+        AxisPoints::Categorical(points) => {
+            let kind = AxisKind::BaseHorizontal(points);
+            (kind, 1.0)
+        }
+        AxisPoints::Numeric {
+            positives,
+            negatives,
+        } => {
+            if positives.is_empty() {
+                let kind = AxisKind::BaseHorizontal(negatives);
+                (kind, 0.0)
+            } else if negatives.is_empty() {
+                let kind = AxisKind::BaseHorizontal(positives);
+                (kind, 1.0)
+            } else if positives.is_empty() && negatives.is_empty() {
+                // Scale is never empty.
+                panic!("StackedBarChart: Empty Scale")
+            } else {
+                let fraction = positives.len() as f32 / (positives.len() + negatives.len()) as f32;
+                let kind = AxisKind::SplitHorizontal(positives, negatives);
+                (kind, fraction)
+            }
+        }
+    };
+
+    let y_points = y_scale.axis_points(sequential_y);
+
+    let (y_kind, x_fraction) = match y_points {
+        AxisPoints::Categorical(points) => {
+            let kind = AxisKind::BaseVertical(points);
+            (kind, 1.0)
+        }
+        AxisPoints::Numeric {
+            positives,
+            negatives,
+        } => {
+            if positives.is_empty() {
+                let kind = AxisKind::BaseVertical(negatives);
+                (kind, 0.0)
+            } else if negatives.is_empty() {
+                let kind = AxisKind::BaseVertical(positives);
+                (kind, 1.0)
+            } else if positives.is_empty() && negatives.is_empty() {
+                // Scale is never empty.
+                panic!("StackedBarChart: Empty Scale")
+            } else {
+                let fraction = positives.len() as f32 / (positives.len() + negatives.len()) as f32;
+
+                let kind = AxisKind::SplitVertical(positives, negatives);
+
+                (kind, fraction)
+            }
+        }
+    };
+
+    let x_axis = Axis::new(x_kind, x_fraction, y_fraction).clean(clean);
+    let y_axis = Axis::new(y_kind, y_fraction, x_fraction).clean(clean);
+
+    return (x_axis, y_axis);
 }

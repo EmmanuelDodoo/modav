@@ -1,20 +1,18 @@
-#![allow(unused_imports, dead_code)]
-use std::{collections::HashMap, fmt::Debug, path::PathBuf, rc::Rc};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf};
 
 use iced::{
-    alignment, color, theme,
+    alignment, theme,
     widget::{
-        self, button, canvas, checkbox, column, container, horizontal_space, row, text, text_input,
+        button, canvas, checkbox, column, container, horizontal_space, row, text, text_input,
         vertical_space, Canvas, Tooltip,
     },
-    Alignment, Background, Border, Color, Element, Font, Length, Point, Renderer, Shadow, Size,
-    Theme, Vector,
+    Alignment, Color, Element, Font, Length, Point, Renderer, Size, Theme,
 };
 
 use modav_core::{
     models::{
         stacked_bar::{StackedBar, StackedBarChart},
-        AxisPoints, Scale,
+        Scale,
     },
     repr::sheet::{builders::SheetBuilder, utils::Data},
 };
@@ -26,25 +24,19 @@ use crate::{
         modal::Modal,
         style::dialog_container,
         toolbar::{ToolBarOrientation, ToolbarMenu},
-        tools::Tools,
         wizard::StackedBarChartConfigState,
     },
     Message, ToolTipContainerStyle,
 };
 
-mod graph;
-use graph::{Axis, AxisKind, DrawnOutput, Graph, Graphable, LegendPosition};
+pub mod graph;
+use graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition};
 
 use super::{
-    shared::{
-        ContentAreaContainer, EditorButtonStyle, ToolbarContainerStyle, ToolbarMenuStyle,
-        ToolbarStyle,
-    },
+    shared::{tools_button, ContentAreaContainer, EditorButtonStyle},
     tabs::TabLabel,
     Viewable,
 };
-
-const DEFAULT_WIDTH: f32 = 50.0;
 
 #[derive(Debug, Clone, PartialEq)]
 struct GraphBar {
@@ -74,11 +66,16 @@ impl Graphable for GraphBar {
         None
     }
 
+    fn draw_legend_filter(&self, data: &Self::Data) -> bool {
+        data.0 == self.id
+    }
+
     fn draw_legend(
         &self,
         frame: &mut canvas::Frame,
         bounds: iced::Rectangle,
         color: Color,
+        _idx: usize,
         data: &Self::Data,
     ) {
         if self.id != data.0 {
@@ -140,114 +137,27 @@ impl Graphable for GraphBar {
             y_output = temp;
         }
 
+        let x = match x_output.get_closest(self.x(), true) {
+            Some(x) => x,
+            None => {
+                warn!("Stacked BartChart x point, {} not found", self.x());
+                return;
+            }
+        };
+
+        let y = match y_output.get_closest(self.y(), false) {
+            Some(y) => y,
+            None => {
+                warn!("Stacked BarChart y point, {} not found", self.y());
+                return;
+            }
+        };
+
         let DrawnOutput {
-            record: x_points,
             axis_pos: x_axis,
             spacing: x_spacing,
-            step: x_step,
             ..
         } = x_output;
-
-        let DrawnOutput {
-            record: y_points,
-            spacing: y_spacing,
-            step: y_step,
-            ..
-        } = y_output;
-
-        let x = match x_points.get(self.x()) {
-            Some(x) => *x,
-            None => {
-                let closest = x_points
-                    .keys()
-                    .into_iter()
-                    .fold(None, |acc, curr| match acc {
-                        Some(prev) => {
-                            if curr < self.x() && curr > prev {
-                                Some(curr)
-                            } else if curr < self.x() && prev > self.x() {
-                                Some(curr)
-                            } else {
-                                Some(prev)
-                            }
-                        }
-                        None => Some(curr),
-                    });
-
-                let closest = closest.expect("Stacked BarChart: Empty graph not possible");
-
-                let x = x_points.get(closest).unwrap();
-
-                match (self.x(), closest) {
-                    (Data::Integer(a), Data::Integer(b)) => {
-                        let diff = a - b;
-                        let ratio = diff as f32 / x_step;
-                        x + (ratio * x_spacing)
-                    }
-                    (Data::Number(a), Data::Number(b)) => {
-                        let diff = a - b;
-                        let ratio = diff as f32 / x_step;
-                        x + (ratio * x_spacing)
-                    }
-                    (Data::Float(a), Data::Float(b)) => {
-                        let diff = a - b;
-                        let ratio = diff / x_step;
-                        x + (ratio * x_spacing)
-                    }
-                    _ => {
-                        warn!("Stacked BartChart x point, {} not found", self.x());
-                        return;
-                    }
-                }
-            }
-        };
-
-        let y = match y_points.get(self.y()) {
-            Some(y) => *y,
-            None => {
-                let closest = y_points
-                    .keys()
-                    .into_iter()
-                    .fold(None, |acc, curr| match acc {
-                        Some(prev) => {
-                            if curr < self.y() && curr > prev {
-                                Some(curr)
-                            } else if curr < self.y() && prev > self.y() {
-                                Some(curr)
-                            } else {
-                                Some(prev)
-                            }
-                        }
-                        None => Some(curr),
-                    });
-
-                let closest = closest.expect("Stacked BarChart: Empty graph not possible");
-                let y = y_points.get(closest).unwrap();
-
-                match (self.y(), closest) {
-                    (Data::Integer(a), Data::Integer(b)) => {
-                        let diff = a - b;
-                        let ratio = diff as f32 / y_step;
-                        y - (ratio * y_spacing)
-                    }
-                    (Data::Number(a), Data::Number(b)) => {
-                        let diff = a - b;
-                        let ratio = diff as f32 / y_step;
-                        y - (ratio * y_spacing)
-                    }
-                    (Data::Float(a), Data::Float(b)) => {
-                        let diff = a - b;
-                        let ratio = diff / y_step;
-                        y - (ratio * y_spacing)
-                    }
-
-                    _ => {
-                        warn!("Stacked BarChart y point, {} not found", self.y());
-                        return;
-                    }
-                }
-            }
-        };
 
         let mut fractions = self.bar.fractions.iter().collect::<Vec<(&String, &f64)>>();
         fractions.sort_by(|x, y| {
@@ -305,7 +215,6 @@ pub enum StackedBarChartMessage {
     YLabelChanged(String),
     TitleChanged(String),
     Legend(LegendPosition),
-    Alt,
     Debug,
     None,
 }
@@ -367,6 +276,7 @@ impl StackedBarChartTabData {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct StackedBarChartTab {
     title: String,
@@ -389,70 +299,20 @@ pub struct StackedBarChartTab {
 }
 
 impl StackedBarChartTab {
-    fn create_axis(&self, x_scale: &Scale, y_scale: &Scale, _order: bool) -> (Axis, Axis) {
+    fn create_axis(&self) -> (Axis, Axis) {
         let (x_scale, y_scale) = if self.is_horizontal {
-            (y_scale, x_scale)
+            (&self.y_axis, &self.x_axis)
         } else {
-            (x_scale, y_scale)
+            (&self.x_axis, &self.y_axis)
         };
 
-        let (x_kind, y_fraction) = match x_scale.axis_points(self.sequential_x) {
-            AxisPoints::Categorical(points) => {
-                let kind = AxisKind::BaseHorizontal(points);
-                (kind, 1.0)
-            }
-            AxisPoints::Numeric {
-                positives,
-                negatives,
-            } => {
-                if positives.is_empty() {
-                    let kind = AxisKind::BaseHorizontal(negatives);
-                    (kind, 0.0)
-                } else if negatives.is_empty() {
-                    let kind = AxisKind::BaseHorizontal(positives);
-                    (kind, 1.0)
-                } else if positives.is_empty() && negatives.is_empty() {
-                    // Scale is never empty.
-                    panic!("StackedBarChart: Empty Scale")
-                } else {
-                    let fraction =
-                        positives.len() as f32 / (positives.len() + negatives.len()) as f32;
-                    let kind = AxisKind::SplitHorizontal(positives, negatives);
-                    (kind, fraction)
-                }
-            }
-        };
-
-        let y_points = y_scale.axis_points(self.sequential_y);
-
-        let (y_kind, x_fraction) = match y_points {
-            AxisPoints::Categorical(points) => {
-                let kind = AxisKind::BaseVertical(points);
-                (kind, 1.0)
-            }
-            AxisPoints::Numeric {
-                positives,
-                negatives,
-            } => {
-                if positives.is_empty() {
-                    let kind = AxisKind::BaseVertical(negatives);
-                    (kind, 0.0)
-                } else if negatives.is_empty() {
-                    let kind = AxisKind::BaseVertical(positives);
-                    (kind, 1.0)
-                } else if positives.is_empty() && negatives.is_empty() {
-                    // Scale is never empty.
-                    panic!("StackedBarChart: Empty Scale")
-                } else {
-                    let fraction =
-                        positives.len() as f32 / (positives.len() + negatives.len()) as f32;
-
-                    let kind = AxisKind::SplitVertical(positives, negatives);
-
-                    (kind, fraction)
-                }
-            }
-        };
+        let (x_axis, y_axis) = create_axis(
+            x_scale,
+            y_scale,
+            self.sequential_x,
+            self.sequential_y,
+            self.clean,
+        );
 
         let (x_label, y_label) = if self.is_horizontal {
             (self.y_label.clone(), self.x_label.clone())
@@ -460,18 +320,11 @@ impl StackedBarChartTab {
             (self.x_label.clone(), self.y_label.clone())
         };
 
-        let x_axis = Axis::new(x_kind, x_fraction, y_fraction)
-            .clean(self.clean)
-            .label(x_label);
-        let y_axis = Axis::new(y_kind, y_fraction, x_fraction)
-            .clean(self.clean)
-            .label(y_label);
-
-        return (x_axis, y_axis);
+        return (x_axis.label(x_label), y_axis.label(y_label));
     }
 
     fn graph(&self) -> Element<'_, StackedBarChartMessage> {
-        let (x_axis, y_axis) = self.create_axis(&self.x_axis, &self.y_axis, self.order);
+        let (x_axis, y_axis) = self.create_axis();
 
         let content = Canvas::new(
             Graph::new(x_axis, y_axis, &self.bars, &self.cache)
@@ -653,16 +506,7 @@ impl StackedBarChartTab {
     fn content(&self) -> Element<'_, StackedBarChartMessage> {
         let graph = self.graph();
 
-        let toolbar = button(
-            text(icons::TOOLS)
-                .font(Font::with_name(icons::NAME))
-                .width(18.0)
-                .vertical_alignment(alignment::Vertical::Center)
-                .horizontal_alignment(alignment::Horizontal::Center),
-        )
-        .padding([4, 8])
-        .style(theme::Button::Custom(Box::new(ToolsButton)))
-        .on_press(StackedBarChartMessage::ToggleConfig);
+        let toolbar = tools_button().on_press(StackedBarChartMessage::ToggleConfig);
 
         row!(
             graph,
@@ -843,10 +687,6 @@ impl Viewable for StackedBarChartTab {
                 self.legend = legend;
                 None
             }
-            StackedBarChartMessage::Alt => {
-                self.legend = LegendPosition::default();
-                None
-            }
         }
     }
 
@@ -890,54 +730,5 @@ impl Viewable for StackedBarChartTab {
             .into();
 
         content.map(map)
-    }
-}
-
-struct ToolsButton;
-
-impl widget::button::StyleSheet for ToolsButton {
-    type Style = Theme;
-
-    fn active(&self, style: &Self::Style) -> button::Appearance {
-        let default = <Theme as widget::button::StyleSheet>::active(style, &theme::Button::Primary);
-        let border = Border {
-            radius: 5.0.into(),
-            width: default.border.width * 0.5,
-            ..default.border
-        };
-
-        let shadow = Shadow {
-            color: color!(0, 0, 0, 0.5),
-            offset: Vector::new(2.0, 2.0),
-            blur_radius: 4.0,
-        };
-
-        button::Appearance {
-            border,
-            shadow,
-            ..default
-        }
-    }
-
-    fn hovered(&self, style: &Self::Style) -> button::Appearance {
-        let default =
-            <Theme as widget::button::StyleSheet>::hovered(style, &theme::Button::Primary);
-        let border = Border {
-            radius: 5.0.into(),
-            width: default.border.width,
-            ..default.border
-        };
-
-        let shadow = Shadow {
-            color: color!(0, 0, 0, 0.5),
-            offset: Vector::new(1.0, 1.0),
-            blur_radius: 10.0,
-        };
-
-        button::Appearance {
-            border,
-            shadow,
-            ..default
-        }
     }
 }
