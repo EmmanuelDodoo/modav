@@ -269,6 +269,7 @@ pub mod coloring {
         pub fn new<'a>(seed: &'a Theme) -> Self {
             let rng: f32 = thread_rng().gen();
             let is_dark = seed.extended_palette().is_dark;
+            let seed = if is_dark { Theme::Dark } else { Theme::Light };
             let seed: HSV = seed.extended_palette().secondary.base.color.into();
 
             let stable_h = {

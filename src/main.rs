@@ -295,7 +295,8 @@ impl Flags {
                         ..Default::default()
                     };
                     let data = StackedBarChartTabData::new(file_path.clone(), config)
-                        .expect("Stacked Bar Chart dev flag panic");
+                        .expect("Stacked Bar Chart dev flag panic")
+                        .theme(theme.clone());
                     let view = View::StackedBarChart(data);
                     tabs.update(TabsMessage::AddTab(view));
                 }
