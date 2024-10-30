@@ -256,9 +256,8 @@ impl StackedBarChartTabData {
             .map_err(AppError::CSVError)?;
 
         let acc_cols = parse_ints(&acc_cols_str);
-        let acc_cols = Selection::to_vec(acc_cols, sht.width() - 1);
-        //dbg!(sht.width());
-        //dbg!(&acc_cols);
+        let end = if sht.width() == 0 { 0 } else { sht.width() - 1 };
+        let acc_cols = Selection::to_vec(acc_cols, end);
 
         let stacked = sht
             .create_stacked_bar_chart(x_col, acc_cols, axis_label)

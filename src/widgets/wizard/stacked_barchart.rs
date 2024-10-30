@@ -233,7 +233,7 @@ impl<'a, Message> StackedBarChartConfig<'a, Message> {
                     .width(100)
             };
 
-            let tip = tooltip("Columns to use for the stack, separated by `,`");
+            let tip = tooltip("Columns to use for the stack, separated by `,`. You can also use `:` to denote a range of columns");
 
             row!(label, input, tip)
                 .spacing(15)

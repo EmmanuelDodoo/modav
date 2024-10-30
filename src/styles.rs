@@ -95,9 +95,12 @@ impl container::StyleSheet for ToolTipContainerStyle {
     fn appearance(&self, style: &Self::Style) -> container::Appearance {
         let background = style.extended_palette().background.weak.color;
         let shadow = Shadow {
-            color: style.extended_palette().primary.strong.color,
-            offset: [0.0, 1.0].into(),
-            blur_radius: 1.0,
+            color: Color {
+                a: 0.25,
+                ..style.extended_palette().primary.strong.color
+            },
+            offset: [2.0, 3.0].into(),
+            blur_radius: 5.0,
         };
         let border = Border {
             width: 0.5,
