@@ -6,7 +6,7 @@ use std::{
 use super::sheet::SheetConfigState;
 
 use crate::{
-    utils::{parse_ints, tooltip, AppError},
+    utils::{tooltip, AppError},
     views::{StackedBarChartTabData, View},
 };
 use iced::{
@@ -72,7 +72,6 @@ pub(super) enum StackedBarChartConfigMessage {
 pub struct StackedBarChartConfigState {
     pub title: String,
     pub x_col: usize,
-    pub acc_cols: Vec<usize>,
     pub acc_cols_str: String,
     pub is_horizontal: bool,
     pub use_previous: bool,
@@ -104,10 +103,8 @@ impl StackedBarChartConfigState {
     }
 
     fn submit(&self) -> Self {
-        let input = parse_ints(&self.acc_cols_str);
         Self {
             use_previous: true,
-            acc_cols: input,
             ..self.clone()
         }
     }
@@ -118,7 +115,6 @@ impl Default for StackedBarChartConfigState {
         Self {
             title: "Untitled".into(),
             x_col: 0,
-            acc_cols: Vec::default(),
             acc_cols_str: String::default(),
             is_horizontal: false,
             use_previous: true,
@@ -232,20 +228,7 @@ impl<'a, Message> StackedBarChartConfig<'a, Message> {
             let label = text("Y columns: ");
 
             let input = {
-                //let value = state.acc_cols.iter().map(usize::to_string).fold(
-                //    String::new(),
-                //    |acc, curr| {
-                //        if acc.is_empty() {
-                //            curr
-                //        } else {
-                //            acc + "," + &curr
-                //        }
-                //    },
-                //);
-
-                let value = state.acc_cols_str.clone();
-
-                text_input("", &value)
+                text_input("", &state.acc_cols_str)
                     .on_input(StackedBarChartConfigMessage::YCol)
                     .width(100)
             };

@@ -287,7 +287,7 @@ impl Flags {
                 {
                     let config = StackedBarChartConfigState {
                         x_col: 0,
-                        acc_cols: vec![1, 2, 3, 4],
+                        acc_cols_str: "1:5".into(),
                         axis_label: StackedBarChartAxisLabelStrategy::Header("Total Cost".into()),
                         is_horizontal: false,
                         caption: Some("Caption where?".into()),

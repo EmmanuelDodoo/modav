@@ -565,39 +565,128 @@ pub async fn save_file(
     Ok((path, content))
 }
 
+/// Represents singular/multiple selection of Rows/Columns
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub enum Selection {
+    /// A single selection
+    Singular(usize),
+    /// A selection, `x:y`, from `x`, up to but not including `y`
+    Range { x: usize, y: usize },
+    ///  A selection, `:x`, from the start up to but not including x
+    FromStart(usize),
+    /// A selection, `x:` from x up to and including the end
+    ToEnd(usize),
+    /// A selection, `:` of everything
+    All,
+    /// A malformed selection
+    None,
+}
+
+#[allow(dead_code)]
+impl Selection {
+    /// The character which indicates a non [`Selection::Singular`] selection
+    const SPECIAL: &'static str = ":";
+
+    pub fn from_str(value: impl AsRef<str>) -> Self {
+        let value = value.as_ref();
+
+        if !value.contains(Self::SPECIAL) {
+            match value.parse::<usize>() {
+                Ok(value) => return Self::Singular(value),
+                Err(_) => return Self::None,
+            }
+        }
+
+        let split = value
+            .split(Self::SPECIAL)
+            .map(|n| n.trim())
+            .collect::<Vec<_>>();
+
+        if split.len() != 2 {
+            return Self::None;
+        }
+
+        let x = split[0];
+        let y = split[1];
+
+        if x.is_empty() && y.is_empty() {
+            return Self::All;
+        }
+
+        if x.is_empty() {
+            match y.parse::<usize>() {
+                Ok(value) => return Self::FromStart(value),
+                Err(_) => return Self::None,
+            }
+        }
+
+        if y.is_empty() {
+            match x.parse::<usize>() {
+                Ok(value) => return Self::ToEnd(value),
+                Err(_) => return Self::None,
+            }
+        }
+
+        match (x.parse::<usize>(), y.parse::<usize>()) {
+            (Ok(x), Ok(y)) => Self::Range { x, y },
+            _ => Self::None,
+        }
+    }
+
+    pub fn to_vec(values: impl IntoIterator<Item = Self>, inclusive_end: usize) -> Vec<usize> {
+        let mut output = Vec::new();
+
+        for value in values.into_iter() {
+            match value {
+                Self::Singular(n) => output.push(n),
+                Self::Range { x, y } => {
+                    for i in x..y {
+                        output.push(i);
+                    }
+                }
+                Self::FromStart(end) => {
+                    for i in 0..end {
+                        output.push(i);
+                    }
+                }
+                Self::ToEnd(start) => {
+                    for i in start..=inclusive_end {
+                        output.push(i);
+                    }
+                }
+                Self::All => {
+                    for i in 0..=inclusive_end {
+                        output.push(i);
+                    }
+                }
+                Self::None => {}
+            }
+        }
+
+        output
+    }
+}
+
+impl From<&str> for Selection {
+    fn from(value: &str) -> Self {
+        Self::from_str(value)
+    }
+}
+
+impl From<String> for Selection {
+    fn from(value: String) -> Self {
+        Self::from_str(&value)
+    }
+}
+
 /// Parses a string of ints.
 ///
 /// The range syntax `x:y` representing `x<= i < y` is supported
-pub fn parse_ints(input: &str) -> Vec<usize> {
-    let mut rng = Vec::new();
-    let mut output = Vec::new();
-
-    for num in input.trim().split(",").map(|num| num.trim()) {
-        if num.contains(":") {
-            rng.push(num);
-            continue;
-        }
-
-        if let Some(num) = num.parse::<usize>().ok() {
-            output.push(num);
-        }
-    }
-
-    for r in rng
-        .into_iter()
-        .map(|r| r.split(":").filter_map(|r| r.parse::<usize>().ok()))
-    {
-        let temp: Vec<usize> = r.collect();
-
-        if temp.len() != 2 {
-            continue;
-        }
-
-        let x = temp[0];
-        let y = temp[1];
-
-        (x..y).for_each(|i| output.push(i));
-    }
-
-    output
+pub fn parse_ints<'a>(input: &'a str) -> impl Iterator<Item = Selection> + 'a {
+    input
+        .trim()
+        .split(",")
+        .map(|value| value.trim())
+        .map(Selection::from_str)
 }
