@@ -26,6 +26,9 @@ pub use barchart::BarChartTabData;
 
 mod shared;
 
+mod stacked_barchart;
+pub use stacked_barchart::StackedBarChartTabData;
+
 use crate::utils::icons;
 
 #[derive(Debug, Clone, PartialEq, Default, Copy)]
@@ -61,6 +64,7 @@ pub enum View {
     Editor(EditorTabData),
     LineGraph(LineTabData),
     BarChart(BarChartTabData),
+    StackedBarChart(StackedBarChartTabData),
     #[default]
     None,
 }
@@ -72,6 +76,7 @@ impl View {
             Self::Editor(_) => true,
             Self::LineGraph(_) => false,
             Self::BarChart(_) => false,
+            Self::StackedBarChart(_) => false,
             Self::None => false,
         }
     }
@@ -123,6 +128,7 @@ pub enum ViewType {
     Editor,
     LineGraph,
     BarChart,
+    StackedBarChart,
     #[default]
     None,
 }
@@ -131,14 +137,20 @@ impl ViewType {
     pub const ALL: &'static [Self] = &[Self::Editor, Self::LineGraph, Self::BarChart, Self::None];
 
     /// Options for the setup wizard
-    pub const WIZARD: &'static [Self] = &[Self::Editor, Self::LineGraph, Self::BarChart];
+    pub const WIZARD: &'static [Self] = &[
+        Self::Editor,
+        Self::LineGraph,
+        Self::BarChart,
+        Self::StackedBarChart,
+    ];
 
     pub fn name(&self) -> String {
         match self {
-            Self::None => String::default(),
+            Self::None => "None".into(),
             Self::Editor => "Editor".into(),
             Self::LineGraph => "Line Graph".into(),
             Self::BarChart => "Bar Chart".into(),
+            Self::StackedBarChart => "Stacked Bar Chart".into(),
         }
     }
 
@@ -157,6 +169,10 @@ impl ViewType {
                 let icon = icons::icon(icons::BARCHART);
                 row!(icon, txt).spacing(5)
             }
+            Self::StackedBarChart => {
+                let icon = icons::icon(icons::BARCHART);
+                row!(icon, txt).spacing(5)
+            }
             Self::None => Row::new(),
         }
     }
@@ -167,6 +183,7 @@ impl ViewType {
             Self::Editor => false,
             Self::LineGraph => true,
             Self::BarChart => true,
+            Self::StackedBarChart => true,
             Self::None => false,
         }
     }
@@ -181,6 +198,10 @@ impl ViewType {
                 FileType::CSV => true,
                 _ => false,
             },
+            Self::StackedBarChart => match extn {
+                FileType::CSV => true,
+                _ => false,
+            },
             Self::Editor => true,
             Self::None => false,
         }
@@ -189,16 +210,7 @@ impl ViewType {
 
 impl fmt::Display for ViewType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ViewType::Editor => "Editor",
-                ViewType::None => "None",
-                ViewType::LineGraph => "Line Graph",
-                ViewType::BarChart => "Bar Chart",
-            }
-        )
+        write!(f, "{}", self.name())
     }
 }
 

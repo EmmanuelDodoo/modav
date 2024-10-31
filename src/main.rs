@@ -4,7 +4,7 @@ use iced::{
     keyboard::{self, key, Key},
     theme,
     widget::{self, column, container, horizontal_space, row, text, vertical_rule, Container, Row},
-    window, Alignment, Application, Command, Element, Font, Length, Renderer, Settings,
+    window, Alignment, Application, Command, Element, Font, Length, Pixels, Renderer, Settings,
     Subscription, Theme,
 };
 
@@ -21,8 +21,8 @@ use utils::{icons, load_file, menus, pick_file, save_file, AppError};
 
 mod views;
 use views::{
-    home_view, BarChartTabData, EditorTabData, LineTabData, Refresh, Tabs, TabsMessage, View,
-    ViewType,
+    home_view, BarChartTabData, EditorTabData, LineTabData, Refresh, StackedBarChartTabData, Tabs,
+    TabsMessage, View, ViewType,
 };
 
 pub mod widgets;
@@ -32,16 +32,51 @@ use widgets::{
     settings::SettingsDialog,
     style::dialog_container,
     toast::{self, Status, Toast},
-    wizard::{BarChartConfigState, LineConfigState, Wizard},
+    wizard::{BarChartConfigState, LineConfigState, StackedBarChartConfigState, Wizard},
 };
 
-pub const LOG_FILE: &'static str = "modav.log";
-
 fn main() -> Result<(), iced::Error> {
+    let fallback_log = "./modav.log";
+
+    let log = if cfg!(target_os = "windows") {
+        match directories::UserDirs::new() {
+            Some(usr) => usr
+                .home_dir()
+                .join("AppData")
+                .join("Local")
+                .join("modav.log"),
+            None => PathBuf::from(fallback_log),
+        }
+    } else if cfg!(target_os = "macos") {
+        match directories::UserDirs::new() {
+            Some(usr) => usr
+                .home_dir()
+                .join("Library")
+                .join("Logs")
+                .join("modav.log"),
+            None => PathBuf::from(fallback_log),
+        }
+    } else if cfg!(target_os = "linux") {
+        match directories::UserDirs::new() {
+            Some(usr) => usr
+                .home_dir()
+                .join(".local")
+                .join("share")
+                .join("modav.log"),
+            None => PathBuf::from(fallback_log),
+        }
+    } else {
+        PathBuf::from(fallback_log)
+    };
+
     let span = span!(Level::INFO, "Modav");
     let _guard = span.enter();
 
-    let log_file = File::create(LOG_FILE).unwrap();
+    let mut fallback_flag = false;
+    let log_file = File::create(log.clone()).unwrap_or_else(|_| {
+        fallback_flag = true;
+        File::create(fallback_log).unwrap()
+    });
 
     let (non_blocking, _log_writer) = tracing_appender::non_blocking(log_file);
 
@@ -66,11 +101,22 @@ fn main() -> Result<(), iced::Error> {
         ..Default::default()
     };
 
+    let _flags = Flags::Prod(if fallback_flag {
+        PathBuf::from(fallback_log)
+    } else {
+        log
+    });
+
+    let flags = Flags::Stacked;
+
     Modav::run(Settings {
         window,
         antialiasing: true,
-        flags: Flags::Prod,
-        ..Default::default()
+        flags,
+        id: None,
+        fonts: Vec::new(),
+        default_font: Font::default(),
+        default_text_size: Pixels(16.0),
     })
 }
 
@@ -121,18 +167,19 @@ pub struct Modav {
     toast_timeout: u64,
     dialog_view: DialogView,
     error: AppError,
+    log_file: PathBuf,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone)]
 pub enum Flags {
     Bar,
     Line,
-    #[default]
-    Prod,
+    Stacked,
+    Prod(PathBuf),
 }
 
 impl Flags {
-    fn create(&self) -> Modav {
+    fn create(self) -> Modav {
         let theme = Theme::TokyoNight;
         let toasts = Vec::default();
         let title = String::from("Modav");
@@ -151,8 +198,9 @@ impl Flags {
             .tab_padding([5, 7]);
         let toast_timeout = 2;
         let dialog_view = DialogView::default();
+        let default_log_file = PathBuf::from("~/.local/share/modav.log");
         match self {
-            Self::Prod => Modav {
+            Self::Prod(log_file) => Modav {
                 file_path: None,
                 current_view: ViewType::None,
                 theme_shadow: theme.clone(),
@@ -163,6 +211,7 @@ impl Flags {
                 error,
                 tabs,
                 dialog_view,
+                log_file,
             },
             Self::Line => {
                 let file_path = PathBuf::from("../../../alter.csv");
@@ -187,6 +236,7 @@ impl Flags {
                     error,
                     tabs,
                     dialog_view,
+                    log_file: default_log_file,
                 }
             }
             Self::Bar => {
@@ -203,7 +253,7 @@ impl Flags {
                         y_col: 2,
                         axis_label: BarChartAxisLabelStrategy::Headers,
                         bar_label: BarChartBarLabels::FromColumn(0),
-                        order: true,
+                        //order: true,
                         caption: Some("Caption: This".into()),
                         ..Default::default()
                     };
@@ -225,6 +275,44 @@ impl Flags {
                     error,
                     tabs,
                     dialog_view,
+                    log_file: default_log_file,
+                }
+            }
+            Self::Stacked => {
+                use modav_core::repr::sheet::utils::StackedBarChartAxisLabelStrategy;
+
+                let file_path = PathBuf::from("../../../stacked_neg.csv");
+                let current_view = ViewType::StackedBarChart;
+
+                {
+                    let config = StackedBarChartConfigState {
+                        x_col: 0,
+                        acc_cols_str: "1:5".into(),
+                        axis_label: StackedBarChartAxisLabelStrategy::Header("Total Cost".into()),
+                        is_horizontal: false,
+                        caption: Some("Caption where?".into()),
+                        title: "Stacked Bar Chart".into(),
+                        ..Default::default()
+                    };
+                    let data = StackedBarChartTabData::new(file_path.clone(), config)
+                        .expect("Stacked Bar Chart dev flag panic")
+                        .theme(theme.clone());
+                    let view = View::StackedBarChart(data);
+                    tabs.update(TabsMessage::AddTab(view));
+                }
+
+                Modav {
+                    file_path: Some(file_path),
+                    theme_shadow: theme.clone(),
+                    current_view,
+                    title,
+                    theme,
+                    toasts,
+                    toast_timeout,
+                    error,
+                    tabs,
+                    dialog_view,
+                    log_file: default_log_file,
                 }
             }
         }
@@ -262,7 +350,7 @@ pub enum Message {
     ChangeTheme(Theme),
     AddToast(Toast),
     CloseToast(usize),
-    Error(AppError),
+    Error(AppError, bool),
     /// Open the editor for the current model
     OpenEditor(Option<PathBuf>),
 }
@@ -441,7 +529,7 @@ impl Modav {
                 let data = LineTabData::new(path, LineConfigState::default());
                 match data {
                     Err(err) => {
-                        let msg = Message::Error(err);
+                        let msg = Message::Error(err, true);
                         Command::perform(async { msg }, |msg| msg)
                     }
 
@@ -456,13 +544,28 @@ impl Modav {
                 let data = BarChartTabData::new(path, BarChartConfigState::default());
                 match data {
                     Err(err) => {
-                        let msg = Message::Error(err);
+                        let msg = Message::Error(err, true);
                         Command::perform(async { msg }, |msg| msg)
                     }
 
                     Ok(data) => {
                         let data = data.theme(self.theme.clone());
                         let idr = View::BarChart(data);
+                        self.update_tabs(TabsMessage::AddTab(idr))
+                    }
+                }
+            }
+            FileIOAction::NewTab((View::StackedBarChart(_), path)) => {
+                let data = StackedBarChartTabData::new(path, StackedBarChartConfigState::default());
+                match data {
+                    Err(err) => {
+                        let msg = Message::Error(err, true);
+                        Command::perform(async { msg }, |msg| msg)
+                    }
+
+                    Ok(data) => {
+                        let data = data.theme(self.theme.clone());
+                        let idr = View::StackedBarChart(data);
                         self.update_tabs(TabsMessage::AddTab(idr))
                     }
                 }
@@ -477,7 +580,7 @@ impl Modav {
                 let data = LineTabData::new(path, LineConfigState::default());
                 match data {
                     Err(err) => {
-                        let msg = Message::Error(err);
+                        let msg = Message::Error(err, true);
                         Command::perform(async { msg }, |msg| msg)
                     }
                     Ok(data) => {
@@ -490,11 +593,24 @@ impl Modav {
                 let data = BarChartTabData::new(path, BarChartConfigState::default());
                 match data {
                     Err(err) => {
-                        let msg = Message::Error(err);
+                        let msg = Message::Error(err, true);
                         Command::perform(async { msg }, |msg| msg)
                     }
                     Ok(data) => {
                         let rsh = Refresh::BarChart(data);
+                        self.update_tabs(TabsMessage::RefreshTab(tidx, rsh))
+                    }
+                }
+            }
+            FileIOAction::RefreshTab((ViewType::StackedBarChart, tidx, path)) => {
+                let data = StackedBarChartTabData::new(path, StackedBarChartConfigState::default());
+                match data {
+                    Err(err) => {
+                        let msg = Message::Error(err, true);
+                        Command::perform(async { msg }, |msg| msg)
+                    }
+                    Ok(data) => {
+                        let rsh = Refresh::StackedBarChart(data);
                         self.update_tabs(TabsMessage::RefreshTab(tidx, rsh))
                     }
                 }
@@ -569,12 +685,16 @@ impl Application for Modav {
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
-            Message::Error(err) => {
-                let toast = Toast {
-                    status: Status::Error,
-                    body: err.message(),
-                };
-                self.push_toast(toast);
+            Message::Error(err, show_toast) => {
+                if show_toast {
+                    let toast = Toast {
+                        status: Status::Error,
+                        body: err.message(),
+                    };
+                    self.push_toast(toast);
+                } else {
+                    error!("{}", err.message());
+                }
                 Command::none()
             }
             Message::IconLoaded(Ok(_)) => {
@@ -583,7 +703,7 @@ impl Application for Modav {
             }
             Message::IconLoaded(Err(e)) => {
                 let error = AppError::FontLoading(e);
-                Command::perform(async { error }, Message::Error)
+                Command::perform(async { error }, |error| Message::Error(error, true))
             }
             Message::ToggleTheme => {
                 self.info_log("Theme toggled");
@@ -606,7 +726,9 @@ impl Application for Modav {
                 self.dialog_view = DialogView::Wizard;
                 Command::none()
             }
-            Message::FileSelected(Err(e)) => Command::perform(async { e }, Message::Error),
+            Message::FileSelected(Err(e)) => {
+                Command::perform(async { e }, |error| Message::Error(error, true))
+            }
             Message::LoadFile((path, action)) => {
                 self.error = AppError::None;
                 Command::perform(load_file(path), move |(res, _)| {
@@ -622,7 +744,7 @@ impl Application for Modav {
                 self.theme = self.theme_shadow.clone();
                 self.info_log("Opening Log file");
 
-                let path = PathBuf::from(LOG_FILE);
+                let path = self.log_file.clone();
                 let data =
                     EditorTabData::new(Some(path.clone()), String::default()).read_only(true);
                 let action = FileIOAction::NewTab((View::Editor(data), path.clone()));
@@ -632,7 +754,9 @@ impl Application for Modav {
                 })
             }
 
-            Message::FileLoaded((Err(err), _)) => Command::perform(async { err }, Message::Error),
+            Message::FileLoaded((Err(err), _)) => {
+                Command::perform(async { err }, |error| Message::Error(error, true))
+            }
             Message::OpenTab(path, tidr) => {
                 self.info_log("Tab opened");
                 let path = path.filter(|path| path.is_file());
@@ -654,6 +778,10 @@ impl Application for Modav {
                                 let data = data.theme(self.theme.clone());
                                 View::BarChart(data)
                             }
+                            View::StackedBarChart(data) => {
+                                let data = data.theme(self.theme.clone());
+                                View::StackedBarChart(data)
+                            }
                             View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
@@ -665,6 +793,7 @@ impl Application for Modav {
                             View::Editor(_) => View::None,
                             View::LineGraph(_) => View::None,
                             View::BarChart(_) => View::None,
+                            View::StackedBarChart(_) => View::None,
                             View::None => View::None,
                         };
                         self.update_tabs(TabsMessage::AddTab(idr))
@@ -705,7 +834,9 @@ impl Application for Modav {
                 self.push_toast(toast);
                 self.file_io_action_handler(action, content)
             }
-            Message::FileSaved((Err(e), _)) => Command::perform(async { e }, Message::Error),
+            Message::FileSaved((Err(e), _)) => {
+                Command::perform(async { e }, |error| Message::Error(error, true))
+            }
             Message::CheckExit => self.update_tabs(TabsMessage::Exit),
             Message::CanExit => {
                 self.info_log("Application closing");
@@ -838,9 +969,11 @@ impl Application for Modav {
                     .clone()
                     .expect("File path was empty for Wizard")
                     .clone();
-                let wizard = Wizard::new(file, Message::WizardSubmit, Message::Error)
-                    .on_reselect(Message::SelectFile)
-                    .on_cancel(Message::CloseWizard);
+                let wizard = Wizard::new(file, Message::WizardSubmit, |error| {
+                    Message::Error(error, false)
+                })
+                .on_reselect(Message::SelectFile)
+                .on_cancel(Message::CloseWizard);
                 Modal::new(main_axis, wizard)
                     .on_blur(Message::CloseWizard)
                     .into()

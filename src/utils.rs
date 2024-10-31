@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 use modav_core::repr::sheet::error::Error;
 
+pub use tooltip::tooltip;
+
 #[allow(dead_code)]
 pub mod coloring {
     use rand::{thread_rng, Rng};
@@ -70,6 +72,16 @@ pub mod coloring {
         }
     }
 
+    impl std::ops::Sub<F2> for f32 {
+        type Output = f32;
+
+        fn sub(self, rhs: F2) -> Self::Output {
+            let temp: f32 = rhs.into();
+
+            self - temp
+        }
+    }
+
     impl F2 {
         /// Hard clamps to 0.0 or 1.0 if [`value`] is below or above range.
         fn new(value: f32) -> Self {
@@ -80,6 +92,14 @@ pub mod coloring {
             } else {
                 Self(value)
             }
+        }
+
+        fn min(self, other: f32) -> Self {
+            f32::min(self.0, other).into()
+        }
+
+        fn max(self, other: f32) -> Self {
+            f32::max(self.0, other).into()
         }
     }
 
@@ -239,14 +259,17 @@ pub mod coloring {
         random: f32,
         mode: ColoringMode,
         stable_h: f32,
+        count: u32,
     }
 
     impl ColorEngine {
         const RATIO: f32 = 0.60;
+        const DEFAULT_COUNT: u32 = 5;
 
         pub fn new<'a>(seed: &'a Theme) -> Self {
             let rng: f32 = thread_rng().gen();
             let is_dark = seed.extended_palette().is_dark;
+            let seed = Theme::default();
             let seed: HSV = seed.extended_palette().secondary.base.color.into();
 
             let stable_h = {
@@ -258,13 +281,27 @@ pub mod coloring {
                 seed,
                 is_dark,
                 stable_h,
+                count: Self::DEFAULT_COUNT,
                 random: rng,
                 mode: ColoringMode::Normal,
             }
         }
 
+        pub fn count(mut self, count: u32) -> Self {
+            if count > 0 {
+                self.count = count;
+            }
+
+            self
+        }
+
         pub fn gradual(mut self, gradual: bool) -> Self {
             if gradual {
+                if self.is_dark {
+                    self.seed.v = (0.15).into()
+                } else {
+                    self.seed.v = (0.85).into()
+                }
                 self.mode = ColoringMode::Gradual;
             } else {
                 self.mode = ColoringMode::Normal;
@@ -291,14 +328,13 @@ pub mod coloring {
                     generated.into()
                 }
                 ColoringMode::Gradual => {
-                    let diff = 0.10;
-
+                    let diff = 0.85 / (self.count as f32);
                     let generated = if self.is_dark {
-                        let v = { self.seed.v - diff };
+                        let v = { self.seed.v + diff }.min(0.925);
                         HSV::new(self.stable_h, 0.8, v)
                     } else {
-                        let v = { self.seed.v + diff };
-                        HSV::new(self.stable_h, 0.69, v)
+                        let v = { self.seed.v - diff }.max(0.125);
+                        HSV::new(self.stable_h, 0.8, v)
                     };
 
                     self.seed = generated;
@@ -334,7 +370,7 @@ pub mod icons {
     pub const ANGLE_UP: char = '\u{F106}';
     pub const ANGLE_DOWN: char = '\u{F107}';
     pub const CHART: char = '\u{E802}';
-    pub const BARCHART: char = '\u{E80C}';
+    pub const BARCHART: char = '\u{E80E}';
     pub const SETTINGS: char = '\u{E800}';
     pub const INFO: char = '\u{E80A}';
     pub const HELP: char = '\u{E807}';
@@ -343,6 +379,7 @@ pub mod icons {
     pub const WARN: char = '\u{E808}';
     pub const ERROR: char = '\u{E809}';
     pub const CLOSE: char = '\u{E806}';
+    pub const TOOLS: char = '\u{E80D}';
 
     fn icon_maker(unicode: char, name: &'static str) -> Text<'static> {
         let fnt: Font = Font::with_name(name);
@@ -353,6 +390,38 @@ pub mod icons {
 
     pub fn icon(unicode: char) -> Text<'static> {
         icon_maker(unicode, NAME)
+    }
+}
+
+mod tooltip {
+    use crate::{utils::icons, ToolTipContainerStyle};
+
+    use iced::{
+        alignment, theme,
+        widget::{container, text, tooltip::Tooltip},
+        Length,
+    };
+
+    use iced::widget::tooltip as tt;
+
+    pub fn tooltip<'a, Message>(description: impl ToString) -> Tooltip<'a, Message>
+    where
+        Message: 'a,
+    {
+        let text = text(description).size(13.0);
+        let desc = container(text)
+            .max_width(200.0)
+            .padding([6.0, 8.0])
+            .height(Length::Shrink)
+            .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)));
+
+        let icon = icons::icon(icons::HELP)
+            .horizontal_alignment(alignment::Horizontal::Center)
+            .vertical_alignment(alignment::Vertical::Center);
+
+        Tooltip::new(icon, desc, tt::Position::Right)
+            .gap(10.0)
+            .snap_within_viewport(true)
     }
 }
 
@@ -494,4 +563,130 @@ pub async fn save_file(
         .map_err(|err| AppError::FileSaving(err.kind()))?;
 
     Ok((path, content))
+}
+
+/// Represents singular/multiple selection of Rows/Columns
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub enum Selection {
+    /// A single selection
+    Singular(usize),
+    /// A selection, `x:y`, from `x`, up to but not including `y`
+    Range { x: usize, y: usize },
+    ///  A selection, `:x`, from the start up to but not including x
+    FromStart(usize),
+    /// A selection, `x:` from x up to and including the end
+    ToEnd(usize),
+    /// A selection, `:` of everything
+    All,
+    /// A malformed selection
+    None,
+}
+
+#[allow(dead_code)]
+impl Selection {
+    /// The character which indicates a non [`Selection::Singular`] selection
+    const SPECIAL: &'static str = ":";
+
+    pub fn from_str(value: impl AsRef<str>) -> Self {
+        let value = value.as_ref();
+
+        if !value.contains(Self::SPECIAL) {
+            match value.parse::<usize>() {
+                Ok(value) => return Self::Singular(value),
+                Err(_) => return Self::None,
+            }
+        }
+
+        let split = value
+            .split(Self::SPECIAL)
+            .map(|n| n.trim())
+            .collect::<Vec<_>>();
+
+        if split.len() != 2 {
+            return Self::None;
+        }
+
+        let x = split[0];
+        let y = split[1];
+
+        if x.is_empty() && y.is_empty() {
+            return Self::All;
+        }
+
+        if x.is_empty() {
+            match y.parse::<usize>() {
+                Ok(value) => return Self::FromStart(value),
+                Err(_) => return Self::None,
+            }
+        }
+
+        if y.is_empty() {
+            match x.parse::<usize>() {
+                Ok(value) => return Self::ToEnd(value),
+                Err(_) => return Self::None,
+            }
+        }
+
+        match (x.parse::<usize>(), y.parse::<usize>()) {
+            (Ok(x), Ok(y)) => Self::Range { x, y },
+            _ => Self::None,
+        }
+    }
+
+    pub fn to_vec(values: impl IntoIterator<Item = Self>, inclusive_end: usize) -> Vec<usize> {
+        let mut output = Vec::new();
+
+        for value in values.into_iter() {
+            match value {
+                Self::Singular(n) => output.push(n),
+                Self::Range { x, y } => {
+                    for i in x..y {
+                        output.push(i);
+                    }
+                }
+                Self::FromStart(end) => {
+                    for i in 0..end {
+                        output.push(i);
+                    }
+                }
+                Self::ToEnd(start) => {
+                    for i in start..=inclusive_end {
+                        output.push(i);
+                    }
+                }
+                Self::All => {
+                    for i in 0..=inclusive_end {
+                        output.push(i);
+                    }
+                }
+                Self::None => {}
+            }
+        }
+
+        output
+    }
+}
+
+impl From<&str> for Selection {
+    fn from(value: &str) -> Self {
+        Self::from_str(value)
+    }
+}
+
+impl From<String> for Selection {
+    fn from(value: String) -> Self {
+        Self::from_str(&value)
+    }
+}
+
+/// Parses a string of ints.
+///
+/// The range syntax `x:y` representing `x<= i < y` is supported
+pub fn parse_ints<'a>(input: &'a str) -> impl Iterator<Item = Selection> + 'a {
+    input
+        .trim()
+        .split(",")
+        .map(|value| value.trim())
+        .map(Selection::from_str)
 }

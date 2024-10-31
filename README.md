@@ -1,5 +1,3 @@
-# Core
-
 # Modern Data Visualisation Tool (Modav)
 
 ## Description
@@ -30,6 +28,10 @@ I plan to support the most common dataset operations, models and data formats. I
 
 ![Bar chart](images/bar.png)
 
+- Stacked Bar Graphs
+
+![Stacked Bar graph](images/stacked.png)
+
 See the [images](images/) folder for more examples.
 
 ## Install from Package
@@ -46,6 +48,7 @@ To build,
 
 ```
 $ git clone https://github.com/EmmanuelDodoo/modav
+$ git checkout release-v0.1.0
 $ cd modav
 $ cargo build --release
 $ ./target/release/modav
