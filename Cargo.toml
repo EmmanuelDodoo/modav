@@ -1,6 +1,6 @@
 [package]
 name = "modav"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 description = "This is a personal learning project aimed at creating a simple, intuitive, and modern data visualization tool using Rust."
