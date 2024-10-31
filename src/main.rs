@@ -101,13 +101,13 @@ fn main() -> Result<(), iced::Error> {
         ..Default::default()
     };
 
-    let _flags = Flags::Prod(if fallback_flag {
+    let flags = Flags::Prod(if fallback_flag {
         PathBuf::from(fallback_log)
     } else {
         log
     });
 
-    let flags = Flags::Stacked;
+    //let flags = Flags::Stacked;
 
     Modav::run(Settings {
         window,
