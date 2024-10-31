@@ -28,6 +28,10 @@ I plan to support the most common dataset operations, models and data formats. I
 
 ![Bar chart](images/bar.png)
 
+- Stacked Bar Graphs
+
+![Stacked Bar graph](images/stacked.png)
+
 See the [images](images/) folder for more examples.
 
 ## Install from Package
