@@ -362,15 +362,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-<<<<<<< HEAD
-version = "1.1.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57b6a275aa2903740dc87da01c62040406b8812552e97129a63ea8850a17c6e6"
-=======
 version = "1.1.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2e7962b54006dcfcc61cb72735f4d89bb97061dd6a7ed882ec6b8ee53714c6f"
->>>>>>> main
 dependencies = [
  "jobserver",
  "libc",
@@ -1836,13 +1830,9 @@ dependencies = [
 
 [[package]]
 name = "modav_core"
-version = "0.1.1"
-<<<<<<< HEAD
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "127e403d9cb0a15d03543adcbe32843e5e697cbbb2b07576a1d91f8419f4594e"
-=======
-source = "git+ssh://github.com/EmmanuelDodoo/modav_core.git#4171bf1d84f9127bb0d7f2367284de8ab3b9c1ad"
->>>>>>> main
+checksum = "e8920d239dd2bdc9c2b070fa3f0fd956128d482dd8f08183dd776de5a6d07cc2"
 dependencies = [
  "csv",
 ]
