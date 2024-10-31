@@ -19,7 +19,7 @@ use modav_core::{
 use tracing::warn;
 
 use crate::{
-    utils::{coloring::ColorEngine, icons, tooltip, AppError},
+    utils::{coloring::ColorEngine, icons, parse_ints, tooltip, AppError, Selection},
     widgets::{
         modal::Modal,
         style::dialog_container,
@@ -234,8 +234,8 @@ impl StackedBarChartTabData {
     pub fn new(file: PathBuf, config: StackedBarChartConfigState) -> Result<Self, AppError> {
         let StackedBarChartConfigState {
             title,
+            acc_cols_str,
             x_col,
-            acc_cols,
             is_horizontal,
             order,
             axis_label,
@@ -254,6 +254,10 @@ impl StackedBarChartTabData {
             .types(header_types)
             .build()
             .map_err(AppError::CSVError)?;
+
+        let acc_cols = parse_ints(&acc_cols_str);
+        let end = if sht.width() == 0 { 0 } else { sht.width() - 1 };
+        let acc_cols = Selection::to_vec(acc_cols, end);
 
         let stacked = sht
             .create_stacked_bar_chart(x_col, acc_cols, axis_label)
