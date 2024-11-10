@@ -48,7 +48,7 @@ To build,
 
 ```
 $ git clone https://github.com/EmmanuelDodoo/modav
-$ git checkout release-v0.1.0
+$ git checkout v0.2.0
 $ cd modav
 $ cargo build --release
 $ ./target/release/modav
