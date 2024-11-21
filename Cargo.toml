@@ -10,7 +10,7 @@ repository = "https://github.com/EmmanuelDodoo/modav"
 
 [dependencies]
 modav_core = { git = "ssh://github.com/EmmanuelDodoo/modav_core.git" }
-iced = { version = "0.12.1", features = [
+iced = { version = "0.13.1", features = [
     "default",
     "advanced",
     "lazy",

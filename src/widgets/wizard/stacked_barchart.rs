@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use std::{
     fmt::{self, Debug},
     path::PathBuf,
@@ -221,7 +222,7 @@ impl<'a, Message> StackedBarChartConfig<'a, Message> {
 
             row!(label, input, tip)
                 .spacing(15)
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
         };
 
         let y_col = {
@@ -237,7 +238,7 @@ impl<'a, Message> StackedBarChartConfig<'a, Message> {
 
             row!(label, input, tip)
                 .spacing(15)
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
         };
 
         let axis_label = {
@@ -260,9 +261,7 @@ impl<'a, Message> StackedBarChartConfig<'a, Message> {
 
             let tip = tooltip("How labels for the axis are determined");
 
-            let content = row!(label, list, tip)
-                .spacing(8)
-                .align_items(Alignment::Center);
+            let content = row!(label, list, tip).spacing(8).align_y(Alignment::Center);
 
             let extra: Element<'_, StackedBarChartConfigMessage> = match &state.axis_label {
                 StackedBarChartAxisLabelStrategy::Provided { x, y } => {

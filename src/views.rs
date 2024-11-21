@@ -4,9 +4,8 @@ use std::{
 };
 
 use iced::{
-    theme::{self, Theme},
     widget::{button, column, container, horizontal_space, row, text, Button, Container, Row},
-    Element, Length, Renderer,
+    Element, Length, Renderer, Theme,
 };
 
 use crate::Message;
@@ -220,13 +219,13 @@ pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
             None,
             View::Editor(EditorTabData::default()),
         ))
-        .style(theme::Button::Text);
+        .style(button::text);
     let open_btn: Button<'_, Message, Theme, Renderer> = button("Open File")
         .on_press(Message::SelectFile)
-        .style(theme::Button::Text);
+        .style(button::text);
     let recents_btn: Button<'_, Message, Theme, Renderer> = button("Recent Files")
         .on_press(Message::None)
-        .style(theme::Button::Text);
+        .style(button::text);
     let options: Row<'_, Message, Theme, Renderer> = row!(
         horizontal_space(),
         column!(new_btn, open_btn, recents_btn).spacing(8),
@@ -245,8 +244,7 @@ pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
 
     container(content)
         .width(Length::FillPortion(5))
-        .height(Length::Fill)
-        .center_y()
+        .center_y(Length::Fill)
 }
 
 pub type Tabs<Theme> = TabsState<Theme>;

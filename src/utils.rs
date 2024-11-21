@@ -381,14 +381,14 @@ pub mod icons {
     pub const CLOSE: char = '\u{E806}';
     pub const TOOLS: char = '\u{E80D}';
 
-    fn icon_maker(unicode: char, name: &'static str) -> Text<'static> {
+    fn icon_maker<'a>(unicode: char, name: &'static str) -> Text<'a> {
         let fnt: Font = Font::with_name(name);
         text(unicode.to_string())
             .font(fnt)
-            .horizontal_alignment(alignment::Horizontal::Center)
+            .align_x(alignment::Horizontal::Center)
     }
 
-    pub fn icon(unicode: char) -> Text<'static> {
+    pub fn icon<'a>(unicode: char) -> Text<'a> {
         icon_maker(unicode, NAME)
     }
 }
@@ -397,7 +397,7 @@ mod tooltip {
     use crate::{utils::icons, ToolTipContainerStyle};
 
     use iced::{
-        alignment, theme,
+        alignment,
         widget::{container, text, tooltip::Tooltip},
         Length,
     };
@@ -408,16 +408,18 @@ mod tooltip {
     where
         Message: 'a,
     {
-        let text = text(description).size(13.0);
+        let text = text(description.to_string()).size(13.0);
         let desc = container(text)
             .max_width(200.0)
             .padding([6.0, 8.0])
             .height(Length::Shrink)
-            .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)));
+            .style(|theme| {
+                <ToolTipContainerStyle as container::Catalog>::style(&ToolTipContainerStyle, theme)
+            });
 
         let icon = icons::icon(icons::HELP)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center);
+            .align_x(alignment::Horizontal::Center)
+            .align_y(alignment::Vertical::Center);
 
         Tooltip::new(icon, desc, tt::Position::Right)
             .gap(10.0)
@@ -494,9 +496,9 @@ pub mod menus {
 
     use super::{icons, Message};
 
-    use iced::{Font, Length, Renderer};
+    use iced::{Font, Length};
 
-    pub fn menu_styler(menu: DashMenu<Message, Renderer>) -> DashMenu<Message, Renderer> {
+    pub fn menu_styler(menu: DashMenu<Message>) -> DashMenu<Message> {
         menu.spacing(10.0)
             .width(Length::Fixed(150.0))
             .padding([2.0, 8.0])
@@ -504,7 +506,7 @@ pub mod menus {
             .icon_font(Font::with_name(icons::NAME))
     }
 
-    pub fn models_menu<'a>() -> DashMenu<Message, Renderer> {
+    pub fn models_menu<'a>() -> DashMenu<Message> {
         let options = vec![DashMenuOption::new("Line Graph", Some(Message::Convert))];
 
         let menu = DashMenu::new(icons::CHART, "Models").submenus(options);
@@ -512,13 +514,13 @@ pub mod menus {
         menu_styler(menu)
     }
 
-    pub fn about_menu<'a>() -> DashMenu<Message, Renderer> {
+    pub fn about_menu<'a>() -> DashMenu<Message> {
         let menu = DashMenu::new(icons::INFO, "About").on_select(Message::OpenAboutDialog);
 
         menu_styler(menu)
     }
 
-    pub fn settings_menu<'a>() -> DashMenu<Message, Renderer> {
+    pub fn settings_menu<'a>() -> DashMenu<Message> {
         let menu =
             DashMenu::new(icons::SETTINGS, "Settings").on_select(Message::OpenSettingsDialog);
 

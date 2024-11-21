@@ -158,24 +158,26 @@ impl LegendPosition {
     }
 }
 
+impl AsRef<str> for LegendPosition {
+    fn as_ref(&self) -> &str {
+        match self {
+            LegendPosition::TopLeft => "Top Left",
+            LegendPosition::TopCenter => "Top Center",
+            LegendPosition::TopRight => "Top Right",
+            LegendPosition::CenterLeft => "Center Left",
+            LegendPosition::Center => "Center",
+            LegendPosition::CenterRight => "Center Right",
+            LegendPosition::BottomLeft => "Bottom Left",
+            LegendPosition::BottomCenter => "Bottom Center",
+            LegendPosition::BottomRight => "Bottom Right",
+            LegendPosition::None => "No Legend",
+        }
+    }
+}
+
 impl fmt::Display for LegendPosition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                LegendPosition::TopLeft => "Top Left",
-                LegendPosition::TopCenter => "Top Center",
-                LegendPosition::TopRight => "Top Right",
-                LegendPosition::CenterLeft => "Center Left",
-                LegendPosition::Center => "Center",
-                LegendPosition::CenterRight => "Center Right",
-                LegendPosition::BottomLeft => "Bottom Left",
-                LegendPosition::BottomCenter => "Bottom Center",
-                LegendPosition::BottomRight => "Bottom Right",
-                LegendPosition::None => "No Legend",
-            }
-        )
+        write!(f, "{}", self.as_ref())
     }
 }
 

@@ -1,12 +1,12 @@
 use std::{fmt::Debug, path::PathBuf};
 
 use iced::{
-    alignment, theme,
+    alignment,
     widget::{
         button, canvas, checkbox, column, container, horizontal_space, row, text, text_input,
         vertical_space, Canvas, Tooltip,
     },
-    Alignment, Color, Element, Font, Length, Point, Renderer, Size, Theme,
+    Alignment, Color, Element, Font, Length, Padding, Point, Renderer, Size, Theme,
 };
 
 use modav_core::{
@@ -277,7 +277,7 @@ impl BarChartTab {
 
             row!(horizontal_space(), header, horizontal_space())
                 .padding([2, 0])
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
         };
 
         let title =
@@ -329,7 +329,7 @@ impl BarChartTab {
                 row!(check, tip).spacing(10.0)
             };
 
-            row!(x, horizontal_space(), y).align_items(Alignment::Center)
+            row!(x, horizontal_space(), y).align_y(Alignment::Center)
         };
 
         let clean = {
@@ -350,7 +350,7 @@ impl BarChartTab {
         };
 
         let clean_horizontal =
-            row!(clean, horizontal_space(), horizontal).align_items(Alignment::Center);
+            row!(clean, horizontal_space(), horizontal).align_y(Alignment::Center);
 
         let legend = {
             let icons = Font::with_name("legend-icons");
@@ -363,13 +363,23 @@ impl BarChartTab {
             )
             .orientation(ToolBarOrientation::Both)
             .padding([4, 4])
-            .menu_padding([4, 10, 4, 8])
+            .menu_padding(Padding {
+                top: 4.,
+                right: 10.,
+                bottom: 4.,
+                left: 8.,
+            })
             .spacing(5.0);
 
             let tooltip = container(text("Legend Position").size(12.0))
                 .max_width(200.0)
                 .padding([6, 8])
-                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
+                .style(|theme| {
+                    <ToolTipContainerStyle as container::Catalog>::style(
+                        &ToolTipContainerStyle,
+                        theme,
+                    )
+                })
                 .height(Length::Shrink);
 
             let menu = Tooltip::new(menu, tooltip, iced::widget::tooltip::Position::Bottom)
@@ -378,9 +388,7 @@ impl BarChartTab {
 
             let text = text("Legend Position");
 
-            row!(menu, text)
-                .spacing(10.0)
-                .align_items(Alignment::Center)
+            row!(menu, text).spacing(10.0).align_y(Alignment::Center)
         };
 
         let editor = {
@@ -390,17 +398,24 @@ impl BarChartTab {
                 text(icons::EDITOR)
                     .font(font)
                     .width(16.0)
-                    .vertical_alignment(alignment::Vertical::Center)
-                    .horizontal_alignment(alignment::Horizontal::Center),
+                    .align_y(alignment::Vertical::Center)
+                    .align_x(alignment::Horizontal::Center),
             )
             .on_press(BarChartMessage::OpenEditor)
-            .style(theme::Button::Custom(Box::new(EditorButtonStyle)))
+            .style(|theme, status| {
+                <EditorButtonStyle as button::Catalog>::style(&EditorButtonStyle, theme, status)
+            })
             .padding([4, 4]);
 
             let tooltip = container(text("Open in Editor").size(12.0))
                 .max_width(200.0)
                 .padding([6, 8])
-                .style(theme::Container::Custom(Box::new(ToolTipContainerStyle)))
+                .style(|theme| {
+                    <ToolTipContainerStyle as container::Catalog>::style(
+                        &ToolTipContainerStyle,
+                        theme,
+                    )
+                })
                 .height(Length::Shrink);
 
             let menu = Tooltip::new(btn, tooltip, iced::widget::tooltip::Position::Bottom)
@@ -409,12 +424,10 @@ impl BarChartTab {
 
             let text = text("Open in Editor");
 
-            row!(menu, text)
-                .spacing(10.0)
-                .align_items(Alignment::Center)
+            row!(menu, text).spacing(10.0).align_y(Alignment::Center)
         };
 
-        let legend_editor = row!(legend, horizontal_space(), editor).align_items(Alignment::Center);
+        let legend_editor = row!(legend, horizontal_space(), editor).align_y(Alignment::Center);
 
         let content = column!(
             header,
@@ -482,8 +495,8 @@ impl BarChartTab {
         row!(
             graph,
             column!(vertical_space(), toolbar, vertical_space())
-                .padding([0, 5, 0, 0])
-                .align_items(Alignment::Center)
+                .padding(Padding::ZERO.right(5.))
+                .align_x(Alignment::Center)
         )
         .into()
     }
@@ -651,7 +664,7 @@ impl Viewable for BarChartTab {
             let text = text(format!("{} - Bar Chart", self.title));
             row!(horizontal_space(), text, horizontal_space())
                 .width(Length::Fill)
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
         }
         .height(Length::Shrink);
 
@@ -660,10 +673,12 @@ impl Viewable for BarChartTab {
             // .padding([5, 10])
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(theme::Container::Custom(Box::new(ContentAreaContainer)));
+            .style(|theme| {
+                <ContentAreaContainer as container::Catalog>::style(&ContentAreaContainer, theme)
+            });
 
         let content = column!(title, content_area)
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .spacing(20)
             .height(Length::Fill)
             .width(Length::Fill);
@@ -677,7 +692,12 @@ impl Viewable for BarChartTab {
         };
 
         let content: Element<Self::Event, Theme, Renderer> = container(content)
-            .padding([10, 30, 30, 15])
+            .padding(Padding {
+                top: 10.,
+                right: 30.,
+                bottom: 30.,
+                left: 15.,
+            })
             .width(Length::Fill)
             .height(Length::Fill)
             .into();

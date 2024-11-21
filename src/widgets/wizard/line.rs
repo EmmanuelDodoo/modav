@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use std::{collections::HashSet, fmt::Debug, path::PathBuf};
 
 use iced::{
@@ -240,7 +241,7 @@ where
 
             row!(label, list, input, tip)
                 .spacing(8)
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
         };
 
         column!(title, x_label, y_label, line_labels)

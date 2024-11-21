@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use std::fmt::Debug;
 
 use iced::{
@@ -159,9 +160,7 @@ impl<'a, Message> SheetConfig<'a, Message> {
 
             let tip = tooltip("How the types for each column are handled");
 
-            row!(label, list, tip)
-                .spacing(8)
-                .align_items(Alignment::Center)
+            row!(label, list, tip).spacing(8).align_y(Alignment::Center)
         };
 
         let header_labels = {
@@ -181,9 +180,7 @@ impl<'a, Message> SheetConfig<'a, Message> {
 
             let tip = tooltip("How the header labels are handled");
 
-            row!(label, list, tip)
-                .spacing(8)
-                .align_items(Alignment::Center)
+            row!(label, list, tip).spacing(8).align_y(Alignment::Center)
         };
 
         let caption = text_input(
@@ -197,7 +194,7 @@ impl<'a, Message> SheetConfig<'a, Message> {
         .on_input(SheetConfigMessage::CaptionChange);
 
         column!(trim, flexible, header_labels, header_types, caption)
-            .align_items(Alignment::Start)
+            .align_x(Alignment::Start)
             .spacing(30.0)
             .into()
     }

@@ -5,7 +5,11 @@ use iced::{
         Widget,
     },
     alignment, color, event, mouse, overlay, touch,
-    widget::{self, text::LineHeight, Scrollable},
+    widget::{
+        self,
+        text::{LineHeight, Wrapping},
+        Scrollable,
+    },
     Background, Element, Event, Font, Length, Padding, Point, Rectangle, Renderer, Size, Theme,
     Vector,
 };
@@ -16,7 +20,7 @@ use crate::utils::icons;
 pub struct Tools<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer>
 where
     Renderer: advanced::Renderer + advanced::text::Renderer,
-    Theme: overlay::menu::StyleSheet + widget::button::StyleSheet,
+    Theme: overlay::menu::Catalog + widget::button::Catalog,
 {
     on_open: Option<Message>,
     on_close: Option<Message>,
@@ -29,8 +33,8 @@ where
     icon_font: Renderer::Font,
     padding: Padding,
     menu_padding: Padding,
-    style: <Theme as widget::button::StyleSheet>::Style,
-    menu_style: <Theme as overlay::menu::StyleSheet>::Style,
+    style: <Theme as widget::button::Catalog>::Class<'a>,
+    menu_style: <Theme as overlay::menu::Catalog>::Class<'a>,
 }
 
 impl<'a, Message> Tools<'a, Message> {
@@ -55,8 +59,8 @@ impl<'a, Message> Tools<'a, Message> {
             icon_size: 18.0,
             icon_font: Font::with_name(icons::NAME),
             menu_padding: Padding::ZERO,
-            style: <Theme as widget::button::StyleSheet>::Style::default(),
-            menu_style: <Theme as overlay::menu::StyleSheet>::Style::default(),
+            style: <Theme as widget::button::Catalog>::default(),
+            menu_style: <Theme as overlay::menu::Catalog>::default(),
         }
     }
 
@@ -107,7 +111,7 @@ impl<'a, Message> Tools<'a, Message> {
         self
     }
 
-    pub fn menu_style(mut self, style: <Theme as overlay::menu::StyleSheet>::Style) -> Self {
+    pub fn menu_style(mut self, style: <Theme as overlay::menu::Catalog>::Class<'a>) -> Self {
         self.menu_style = style;
         self
     }
@@ -184,9 +188,9 @@ where
         let is_mouse_over = cursor.is_over(bounds);
 
         let style = if is_mouse_over {
-            widget::button::StyleSheet::hovered(theme, &self.style)
+            widget::button::Catalog::style(theme, &self.style, widget::button::Status::Hovered)
         } else {
-            widget::button::StyleSheet::active(theme, &self.style)
+            widget::button::Catalog::style(theme, &self.style, widget::button::Status::Active)
         };
 
         <Renderer as advanced::Renderer>::fill_quad(
@@ -202,7 +206,7 @@ where
         );
 
         let icon = advanced::text::Text {
-            content: &self.icon.to_string(),
+            content: self.icon.to_string(),
             size: self.icon_size.into(),
             line_height: LineHeight::default(),
             bounds: Size::new(
@@ -213,6 +217,7 @@ where
             horizontal_alignment: alignment::Horizontal::Center,
             vertical_alignment: alignment::Vertical::Center,
             shaping: advanced::text::Shaping::default(),
+            wrapping: Wrapping::Word,
         };
 
         <Renderer as advanced::text::Renderer>::fill_text(
@@ -356,7 +361,7 @@ struct Overlay<'a, Message> {
     position: Point,
     state: &'a mut MenuState,
     list: Scrollable<'a, Message, iced::Theme, iced::Renderer>,
-    style: &'a <Theme as overlay::menu::StyleSheet>::Style,
+    style: &'a <Theme as overlay::menu::Catalog>::Class<'a>,
 }
 
 #[allow(dead_code)]
@@ -367,7 +372,7 @@ impl<'a, Message> Overlay<'a, Message> {
         spacing: f32,
         padding: Padding,
         position: Point,
-        style: &'a <Theme as overlay::menu::StyleSheet>::Style,
+        style: &'a <Theme as overlay::menu::Catalog>::Class<'a>,
     ) -> Self {
         let list = List {
             elements,
@@ -387,7 +392,7 @@ impl<'a, Message> Overlay<'a, Message> {
         }
     }
 
-    fn style(mut self, style: &'a <Theme as overlay::menu::StyleSheet>::Style) -> Self {
+    fn style(mut self, style: &'a <Theme as overlay::menu::Catalog>::Class<'a>) -> Self {
         self.style = style;
         self
     }
@@ -421,7 +426,7 @@ impl<'a, Message> advanced::overlay::Overlay<Message, Theme, Renderer> for Overl
         cursor: advanced::mouse::Cursor,
     ) {
         let bounds = layout.bounds();
-        let own_style = <Theme as overlay::menu::StyleSheet>::appearance(theme, &self.style);
+        let own_style = <Theme as overlay::menu::Catalog>::style(theme, &self.style);
 
         <Renderer as advanced::Renderer>::fill_quad(
             renderer,
@@ -482,7 +487,7 @@ impl<'a, Message> advanced::overlay::Overlay<Message, Theme, Renderer> for Overl
 /// Because normal wdigets can't hold &\[Element\]
 struct List<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer>
 where
-    Theme: overlay::menu::StyleSheet,
+    Theme: overlay::menu::Catalog,
     Renderer: advanced::Renderer,
 {
     elements: &'a mut [Element<'a, Message, Theme, Renderer>],
@@ -493,7 +498,7 @@ where
 impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for List<'a, Message, Theme, Renderer>
 where
-    Theme: overlay::menu::StyleSheet,
+    Theme: overlay::menu::Catalog,
     Renderer: advanced::Renderer,
 {
     fn size(&self) -> Size<Length> {
@@ -617,7 +622,7 @@ where
         tree: &mut tree::Tree,
         layout: layout::Layout<'_>,
         renderer: &Renderer,
-        operation: &mut dyn Operation<Message>,
+        operation: &mut dyn Operation,
     ) {
         operation.container(None, layout.bounds(), &mut |operation| {
             self.elements
@@ -646,7 +651,7 @@ where
 impl<'a, Message, Theme, Renderer> From<List<'a, Message, Theme, Renderer>>
     for Element<'a, Message, Theme, Renderer>
 where
-    Theme: overlay::menu::StyleSheet + 'a,
+    Theme: overlay::menu::Catalog + 'a,
     Renderer: advanced::Renderer + 'a,
     Message: 'a,
 {

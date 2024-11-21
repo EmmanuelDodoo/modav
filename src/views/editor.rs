@@ -160,7 +160,7 @@ impl Viewable for EditorTab {
             .unwrap_or("txt")
             .to_string();
         let highlighter_settings = highlighter::Settings {
-            extension,
+            token: extension,
             theme: highlighter::Theme::SolarizedDark,
         };
 
@@ -168,7 +168,7 @@ impl Viewable for EditorTab {
             .on_action(EditorMessage::Action)
             .height(Length::Fill)
             .padding([4, 8])
-            .highlight::<Highlighter>(highlighter_settings, |hl, _theme| hl.to_format())
+            .highlight_with::<Highlighter>(highlighter_settings, |hl, _theme| hl.to_format())
             .into();
 
         content.map(map)

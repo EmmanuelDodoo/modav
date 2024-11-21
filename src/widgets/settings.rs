@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use std::fmt::Debug;
 
 use iced::{
@@ -90,7 +91,7 @@ where
 
         row!(label, pick_list)
             .spacing(10)
-            .align_items(Alignment::Center)
+            .align_y(Alignment::Center)
             .into()
     }
 
@@ -172,7 +173,7 @@ where
     fn view(&self, state: &Self::State) -> Element<'_, Self::Event, Theme, Renderer> {
         let header = text("Settings Menu")
             .width(Length::Fill)
-            .horizontal_alignment(Horizontal::Center)
+            .align_x(Horizontal::Center)
             .size(18.0);
 
         let theme = self.theme();
@@ -193,7 +194,7 @@ where
             row!(
                 label,
                 row!(input, text("seconds"))
-                    .align_items(Alignment::Center)
+                    .align_y(Alignment::Center)
                     .spacing(5)
             )
             .spacing(20.0)
