@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use std::{
     collections::HashSet,
     fmt::{self, Debug},
@@ -264,7 +265,7 @@ impl<'a, Message> BarChartConfig<'a, Message> {
 
             row!(label, input, tip)
                 .spacing(15)
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
         };
 
         let y_col = {
@@ -282,7 +283,7 @@ impl<'a, Message> BarChartConfig<'a, Message> {
 
             row!(label, input, tip)
                 .spacing(15)
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
         };
 
         let axis_label = {
@@ -301,9 +302,7 @@ impl<'a, Message> BarChartConfig<'a, Message> {
 
             let tip = tooltip("How labels for the axis are determined");
 
-            let content = row!(label, list, tip)
-                .spacing(8)
-                .align_items(Alignment::Center);
+            let content = row!(label, list, tip).spacing(8).align_y(Alignment::Center);
 
             let extra: Element<'_, BarChartConfigMessage> = match &state.axis_label {
                 BarChartAxisLabelStrategy::Provided { x, y } => {
@@ -350,7 +349,7 @@ impl<'a, Message> BarChartConfig<'a, Message> {
 
             row!(label, list, input, tip)
                 .spacing(15)
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
         };
 
         let order = {

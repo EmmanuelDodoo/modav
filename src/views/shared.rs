@@ -1,5 +1,5 @@
 use iced::{
-    alignment, theme,
+    alignment,
     widget::{button, text, Button},
     Font,
 };
@@ -16,9 +16,9 @@ pub fn tools_button<'a, Message>() -> Button<'a, Message> {
         text(icons::TOOLS)
             .font(Font::with_name(icons::NAME))
             .width(18.0)
-            .vertical_alignment(alignment::Vertical::Center)
-            .horizontal_alignment(alignment::Horizontal::Center),
+            .align_y(alignment::Vertical::Center)
+            .align_x(alignment::Horizontal::Center),
     )
     .padding([4, 8])
-    .style(theme::Button::Custom(Box::new(ToolsButton)))
+    .style(|theme, status| <ToolsButton as button::Catalog>::style(&ToolsButton, theme, status))
 }

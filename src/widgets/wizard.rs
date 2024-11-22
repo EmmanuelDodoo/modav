@@ -1,8 +1,9 @@
+#![allow(deprecated)]
 use std::{fmt::Debug, path::PathBuf};
 
 use iced::{
     alignment::{Alignment, Horizontal, Vertical},
-    color, theme,
+    color,
     widget::{
         self, button, column, component, container, horizontal_space, pick_list, row, text,
         vertical_space, Component, Space,
@@ -199,7 +200,7 @@ where
 
     fn default_view(&self, state: &Hex) -> Element<'_, Charm> {
         let file = {
-            let label = text("File:").width(Length::FillPortion(1));
+            let label = text("File:");
 
             let file_name = self
                 .file
@@ -215,27 +216,26 @@ where
 
             let file = container(text(file_name))
                 .padding([5, 8])
-                .center_y()
+                .center_y(Length::Shrink)
                 .width(Length::FillPortion(12))
-                .style(theme::Container::Custom(Box::new(FileBorderContainer)));
+                .style(|theme| {
+                    <FileBorderContainer as container::Catalog>::style(&FileBorderContainer, theme)
+                });
 
             let btn = button(
                 icons::icon(icons::REDO)
-                    .vertical_alignment(Vertical::Center)
+                    .align_y(Vertical::Center)
                     .size(15.0),
             )
             .height(30.0)
             .width(Length::FillPortion(1))
             .on_press(Charm::ReselectFile);
 
-            let temp = row!(label, file)
-                .align_items(Alignment::Center)
-                .spacing(46)
-                .width(Length::FillPortion(10));
+            let temp = row!(label, file).align_y(Alignment::Center).spacing(27);
 
             row!(temp, horizontal_space(), btn)
                 .width(Length::Fill)
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
         };
 
         let options = {
@@ -251,7 +251,7 @@ where
 
             let list = pick_list(options, Some(state.model), Charm::ModelSelected);
 
-            row!(label, list).spacing(8).align_items(Alignment::Center)
+            row!(label, list).spacing(8).align_y(Alignment::Center)
         };
 
         let top = column!(file, options).spacing(30);
@@ -363,21 +363,25 @@ where
         let header = text("File Wizard")
             .size(18.0)
             .width(Length::Fill)
-            .horizontal_alignment(Horizontal::Center);
+            .align_x(Horizontal::Center);
 
         let error_section: Element<'_, Self::Event> = match state.error.clone() {
             Some(msg) => {
                 struct Background;
 
-                impl widget::container::StyleSheet for Background {
-                    type Style = Theme;
+                impl widget::container::Catalog for Background {
+                    type Class<'a> = Theme;
 
-                    fn appearance(&self, style: &Self::Style) -> container::Appearance {
-                        if style.extended_palette().is_dark {
+                    fn default<'a>() -> Self::Class<'a> {
+                        <Theme as std::default::Default>::default()
+                    }
+
+                    fn style(&self, class: &Self::Class<'_>) -> container::Style {
+                        if class.extended_palette().is_dark {
                             let text_color = color!(248, 133, 133);
                             let background = color!(153, 27, 27);
 
-                            container::Appearance {
+                            container::Style {
                                 text_color: Some(text_color),
                                 background: Some(iced::Background::Color(background)),
                                 ..Default::default()
@@ -386,7 +390,7 @@ where
                             let text_color = color!(75, 20, 20);
                             let background = color!(248, 113, 113);
 
-                            container::Appearance {
+                            container::Style {
                                 text_color: Some(text_color),
                                 background: Some(iced::Background::Color(background)),
                                 ..Default::default()
@@ -398,7 +402,7 @@ where
                 container(text(msg).size(15.0))
                     .width(Length::Fill)
                     .padding([4, 6])
-                    .style(theme::Container::Custom(Box::new(Background)))
+                    .style(|theme| <Background as container::Catalog>::style(&Background, theme))
                     .into()
             }
             None => Space::new(0, 0).into(),
@@ -420,7 +424,7 @@ where
                 .spacing(0);
 
                 dialog_container(content)
-                    .width(420.0)
+                    .width(450.0)
                     .height(Length::Shrink)
                     .into()
             }
@@ -477,11 +481,15 @@ where
 
 pub struct FileBorderContainer;
 
-impl widget::container::StyleSheet for FileBorderContainer {
-    type Style = Theme;
+impl widget::container::Catalog for FileBorderContainer {
+    type Class<'a> = Theme;
 
-    fn appearance(&self, style: &Self::Style) -> container::Appearance {
-        let border_color = style.extended_palette().primary.weak.color;
+    fn default<'a>() -> Self::Class<'a> {
+        <Theme as std::default::Default>::default()
+    }
+
+    fn style(&self, class: &Self::Class<'_>) -> container::Style {
+        let border_color = class.extended_palette().primary.weak.color;
 
         let border = Border {
             color: border_color,
@@ -489,9 +497,9 @@ impl widget::container::StyleSheet for FileBorderContainer {
             ..Default::default()
         };
 
-        let background = style.extended_palette().background.weak.color;
+        let background = class.extended_palette().background.weak.color;
 
-        container::Appearance {
+        container::Style {
             background: Some(background.into()),
             border,
             ..Default::default()

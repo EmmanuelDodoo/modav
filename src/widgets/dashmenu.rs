@@ -1,77 +1,67 @@
+#![allow(deprecated)]
 use crate::utils::icons;
 
 use iced::{
-    advanced, alignment, theme,
+    alignment,
     widget::{
         self, button, column, component, horizontal_space, row, text, Column, Component, Space,
     },
-    Alignment, Background, Border, Element, Length, Padding, Pixels, Renderer, Shadow, Theme,
-    Vector,
+    Alignment, Background, Border, Element, Font, Length, Padding, Pixels, Renderer, Shadow, Theme,
 };
 
 #[derive(Clone, Copy, Debug)]
 struct DashMenuStyle {
     shadow: Shadow,
     border: Border,
-    shadow_offset: Vector,
 }
 
 impl DashMenuStyle {
     fn new() -> Self {
-        let shadow_offset = Vector::default();
-        let border = Border::with_radius(2.5);
+        let border = Border::default().rounded(2.5);
         let shadow = Shadow::default();
 
-        Self {
-            shadow,
-            border,
-            shadow_offset,
-        }
+        Self { shadow, border }
     }
 }
 
-impl widget::button::StyleSheet for DashMenuStyle {
-    type Style = Theme;
+impl button::Catalog for DashMenuStyle {
+    type Class<'a> = Theme;
 
-    fn active(&self, style: &Self::Style) -> widget::button::Appearance {
-        let pallete = style.extended_palette();
-
-        let text = pallete.primary.base.text;
-        let background = Background::Color(pallete.primary.weak.color);
-
-        let Self {
-            shadow,
-            border,
-            shadow_offset,
-        } = *self;
-
-        widget::button::Appearance {
-            shadow,
-            shadow_offset,
-            text_color: text,
-            background: Some(background),
-            border,
-        }
+    fn default<'a>() -> Self::Class<'a> {
+        <Theme as std::default::Default>::default()
     }
 
-    fn hovered(&self, style: &Self::Style) -> widget::button::Appearance {
-        let pallete = style.extended_palette();
+    fn style(&self, class: &Self::Class<'_>, status: button::Status) -> button::Style {
+        let pallete = class.extended_palette();
 
-        let text = pallete.primary.base.text;
-        let background = Background::Color(pallete.primary.base.color);
+        match status {
+            button::Status::Active => {
+                let text = pallete.primary.base.text;
+                let background = Background::Color(pallete.primary.weak.color);
 
-        let Self {
-            shadow,
-            border,
-            shadow_offset,
-        } = *self;
+                let Self { shadow, border, .. } = *self;
 
-        widget::button::Appearance {
-            shadow,
-            shadow_offset,
-            text_color: text,
-            background: Some(background),
-            border,
+                widget::button::Style {
+                    shadow,
+                    text_color: text,
+                    background: Some(background),
+                    border,
+                }
+            }
+            button::Status::Hovered => {
+                let text = pallete.primary.base.text;
+                let background = Background::Color(pallete.primary.base.color);
+
+                let Self { shadow, border, .. } = *self;
+
+                widget::button::Style {
+                    shadow,
+                    text_color: text,
+                    background: Some(background),
+                    border,
+                }
+            }
+            status => button::primary(class, status),
         }
     }
 }
@@ -80,65 +70,56 @@ impl widget::button::StyleSheet for DashMenuStyle {
 struct DashMenuOptionStyle {
     shadow: Shadow,
     border: Border,
-    shadow_offset: Vector,
 }
 
 impl DashMenuOptionStyle {
     fn new() -> Self {
-        let shadow_offset = Vector::default();
         let border = Border::default();
         let shadow = Shadow::default();
 
-        Self {
-            shadow,
-            shadow_offset,
-            border,
-        }
+        Self { shadow, border }
     }
 }
 
-impl widget::button::StyleSheet for DashMenuOptionStyle {
-    type Style = Theme;
+impl button::Catalog for DashMenuOptionStyle {
+    type Class<'a> = Theme;
 
-    fn active(&self, style: &Self::Style) -> widget::button::Appearance {
-        let pallete = style.extended_palette();
-
-        let text = pallete.primary.base.text;
-        let background = Background::Color(pallete.primary.weak.color);
-
-        let Self {
-            shadow,
-            border,
-            shadow_offset,
-        } = *self;
-
-        widget::button::Appearance {
-            background: Some(background),
-            text_color: text,
-            shadow,
-            shadow_offset,
-            border,
-        }
+    fn default<'a>() -> Self::Class<'a> {
+        <Theme as std::default::Default>::default()
     }
 
-    fn hovered(&self, style: &Self::Style) -> widget::button::Appearance {
-        let pallete = style.extended_palette();
+    fn style(&self, class: &Self::Class<'_>, status: button::Status) -> button::Style {
+        let pallete = class.extended_palette();
 
-        let text = pallete.primary.base.text;
-        let background = Background::Color(pallete.primary.base.color);
+        match status {
+            button::Status::Active => {
+                let text = pallete.primary.base.text;
+                let background = Background::Color(pallete.primary.weak.color);
 
-        let Self {
-            shadow,
-            border,
-            shadow_offset,
-        } = *self;
+                let Self { shadow, border, .. } = *self;
 
-        widget::button::Appearance {
-            background: Some(background),
-            text_color: text,
-            shadow,
-            shadow_offset,
-            border,
+                button::Style {
+                    background: Some(background),
+                    text_color: text,
+                    shadow,
+                    border,
+                }
+            }
+
+            button::Status::Hovered => {
+                let text = pallete.primary.base.text;
+                let background = Background::Color(pallete.primary.base.color);
+
+                let Self { shadow, border, .. } = *self;
+
+                button::Style {
+                    background: Some(background),
+                    text_color: text,
+                    shadow,
+                    border,
+                }
+            }
+            status => button::primary(class, status),
         }
     }
 }
@@ -175,19 +156,16 @@ pub struct DashMenuState {
     is_open: bool,
 }
 
-pub struct DashMenu<Message, Renderer>
+pub struct DashMenu<Message>
 where
     Message: Clone,
-    Renderer: advanced::text::Renderer,
 {
     icon: char,
     on_select: Option<Message>,
     label: String,
     options: Vec<DashMenuOption<Message>>,
-    icon_font: Option<Renderer::Font>,
+    icon_font: Option<Font>,
     icon_size: Option<Pixels>,
-    text_font: Option<Renderer::Font>,
-    submenu_text_font: Option<Renderer::Font>,
     text_size: Option<Pixels>,
     submenu_text_size: Option<Pixels>,
     padding: Padding,
@@ -197,10 +175,9 @@ where
     height: Length,
 }
 
-impl<Message, Renderer> DashMenu<Message, Renderer>
+impl<Message> DashMenu<Message>
 where
     Message: Clone,
-    Renderer: advanced::text::Renderer,
 {
     pub fn new(icon: char, label: impl Into<String>) -> Self {
         Self {
@@ -208,8 +185,6 @@ where
             icon_font: None,
             icon_size: None,
             text_size: None,
-            text_font: None,
-            submenu_text_font: None,
             submenu_text_size: None,
             label: label.into(),
             on_select: None,
@@ -227,23 +202,13 @@ where
         self
     }
 
-    pub fn icon_font(mut self, icon_font: Renderer::Font) -> Self {
+    pub fn icon_font(mut self, icon_font: Font) -> Self {
         self.icon_font = Some(icon_font);
         self
     }
 
     pub fn icon_size(mut self, icon_size: impl Into<Pixels>) -> Self {
         self.icon_size = Some(icon_size.into());
-        self
-    }
-
-    pub fn text_font(mut self, text_font: Renderer::Font) -> Self {
-        self.text_font = Some(text_font);
-        self
-    }
-
-    pub fn submenu_text_font(mut self, text_font: Renderer::Font) -> Self {
-        self.submenu_text_font = Some(text_font);
         self
     }
 
@@ -288,7 +253,7 @@ where
     }
 }
 
-impl<Message> Component<Message, Theme, Renderer> for DashMenu<Message, Renderer>
+impl<Message> Component<Message, Theme, Renderer> for DashMenu<Message>
 where
     Message: Clone,
 {
@@ -313,10 +278,6 @@ where
         let label = {
             let mut text = text(self.label.clone());
 
-            if let Some(font) = self.text_font {
-                text = text.font(font)
-            };
-
             if let Some(size) = self.text_size {
                 text = text.size(size)
             };
@@ -325,8 +286,7 @@ where
         };
 
         let icon = {
-            let mut icon =
-                text(self.icon.to_string()).horizontal_alignment(alignment::Horizontal::Center);
+            let mut icon = text(self.icon.to_string()).align_x(alignment::Horizontal::Center);
 
             if let Some(font) = self.icon_font {
                 icon = icon.font(font)
@@ -344,11 +304,11 @@ where
                 Space::new(0, 0).into()
             } else if state.is_open {
                 icons::icon(icons::ANGLE_UP)
-                    .horizontal_alignment(alignment::Horizontal::Center)
+                    .align_x(alignment::Horizontal::Center)
                     .into()
             } else {
                 icons::icon(icons::ANGLE_DOWN)
-                    .horizontal_alignment(alignment::Horizontal::Center)
+                    .align_x(alignment::Horizontal::Center)
                     .into()
             };
 
@@ -358,16 +318,18 @@ where
         let pair = row!(icon, label).spacing(self.spacing);
 
         let main = button(
-            column!(row!(pair, horizontal_space(), indicator).align_items(Alignment::Center))
+            column!(row!(pair, horizontal_space(), indicator).align_y(Alignment::Center))
                 .width(self.width)
                 .height(self.height)
-                .align_items(Alignment::Start)
+                .align_x(Alignment::Start)
                 .padding(self.padding),
         )
         .width(self.width)
         .height(self.height)
         .on_press(DashMenuMessage::Pressed)
-        .style(theme::Button::Custom(Box::new(DashMenuStyle::new())));
+        .style(|theme, status| {
+            <DashMenuStyle as button::Catalog>::style(&DashMenuStyle::new(), theme, status)
+        });
 
         if self.options.is_empty() || !state.is_open {
             return main.into();
@@ -375,9 +337,6 @@ where
 
         let options = self.options.iter().map(|option| {
             let mut text = text(option.label.clone());
-            if let Some(font) = self.submenu_text_font {
-                text = text.font(font)
-            };
             if let Some(size) = self.submenu_text_size {
                 text = text.size(size)
             };
@@ -385,7 +344,13 @@ where
             let btn = button(text)
                 .width(Length::Fill)
                 .padding(self.submenu_padding)
-                .style(theme::Button::Custom(Box::new(DashMenuOptionStyle::new())));
+                .style(|theme, status| {
+                    <DashMenuOptionStyle as button::Catalog>::style(
+                        &DashMenuOptionStyle::new(),
+                        theme,
+                        status,
+                    )
+                });
 
             if let Some(on_select) = &option.on_select {
                 btn.on_press(DashMenuMessage::OptionPressed(on_select.clone()))
@@ -395,17 +360,17 @@ where
             }
         });
 
-        let options = Column::with_children(options).align_items(Alignment::Start);
+        let options = Column::with_children(options).align_x(Alignment::Start);
 
         column!(main, options).width(self.width).into()
     }
 }
 
-impl<'a, Message> From<DashMenu<Message, Renderer>> for Element<'a, Message, Theme, Renderer>
+impl<'a, Message> From<DashMenu<Message>> for Element<'a, Message, Theme>
 where
     Message: Clone + 'a,
 {
-    fn from(value: DashMenu<Message, Renderer>) -> Self {
+    fn from(value: DashMenu<Message>) -> Self {
         component(value)
     }
 }

@@ -15,7 +15,7 @@ use iced::{
     },
     color,
     event::{self, Event},
-    mouse, theme,
+    mouse,
     widget::{button, column, container, horizontal_space, row, text, Text},
     window, Alignment, Color, Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
@@ -45,13 +45,20 @@ impl Status {
         }
     }
 
-    fn icon(&self, is_dark: bool) -> Text<'static> {
-        let style = theme::Text::Color(self.color(is_dark));
+    fn icon(&self, is_dark: bool) -> Text<'_> {
+        let color = self.color(is_dark);
         match self {
-            Self::Success => icons::icon(icons::SUCCESS).style(style),
-            Self::Info => icons::icon(icons::INFO).style(style),
-            Self::Warn => icons::icon(icons::WARN).style(style),
-            Self::Error => icons::icon(icons::ERROR).style(style),
+            Self::Success => icons::icon(icons::SUCCESS)
+                .style(move |_| widget::text::Style { color: Some(color) }),
+            Self::Info => {
+                icons::icon(icons::INFO).style(move |_| widget::text::Style { color: Some(color) })
+            }
+            Self::Warn => {
+                icons::icon(icons::WARN).style(move |_| widget::text::Style { color: Some(color) })
+            }
+            Self::Error => {
+                icons::icon(icons::ERROR).style(move |_| widget::text::Style { color: Some(color) })
+            }
         }
     }
 
@@ -87,7 +94,10 @@ pub struct Toast {
     pub status: Status,
 }
 
-pub struct Manager<'a, Message> {
+pub struct Manager<'a, Message>
+where
+    Message: 'a,
+{
     content: Element<'a, Message>,
     toasts: Vec<Element<'a, Message>>,
     timeout: u64,
@@ -102,7 +112,7 @@ where
         content: impl Into<Element<'a, Message>>,
         toasts: &'a [Toast],
         on_close: impl Fn(usize) -> Message + 'a,
-        theme: &Theme,
+        theme: &'a Theme,
     ) -> Self {
         let toasts = toasts
             .iter()
@@ -113,41 +123,48 @@ where
                 let status_icon = toast.status.icon(theme.extended_palette().is_dark).size(28);
 
                 let content = {
-                    let title = text(toast.status.to_string())
-                        .size(18)
-                        .style(theme::Text::Color(text_color));
-                    let body = text(toast.body.as_str())
-                        .size(15)
-                        .style(theme::Text::Color(text_color));
+                    let title = text(toast.status.to_string()).size(18).style(move |_| {
+                        widget::text::Style {
+                            color: Some(text_color),
+                        }
+                    });
+                    let body =
+                        text(toast.body.as_str())
+                            .size(15)
+                            .style(move |_| widget::text::Style {
+                                color: Some(text_color),
+                            });
 
                     column!(title, body).spacing(4).height(Length::Fill)
                 };
 
-                let close = button(
-                    icons::icon(icons::CLOSE)
-                        .size(24)
-                        .style(theme::Text::Color(text_color)),
-                )
+                let close = button(icons::icon(icons::CLOSE).size(24).style(move |_| {
+                    widget::text::Style {
+                        color: Some(text_color),
+                    }
+                }))
                 .on_press((on_close)(index))
-                .style(theme::Button::Text);
-
-                let background = ColoredContainer {
-                    color: toast
-                        .status
-                        .background_color(theme.extended_palette().is_dark),
-                    radius: 5.0,
-                };
+                .style(iced::widget::button::text);
 
                 container(
                     row!(status_icon, content, horizontal_space(), close)
-                        .align_items(Alignment::Center)
+                        .align_y(Alignment::Center)
                         .height(Length::Fill)
                         .spacing(16),
                 )
                 .max_width(350)
                 .height(65)
                 .padding([6.0, 8.0])
-                .style(theme::Container::Custom(Box::new(background)))
+                .style(|theme| {
+                    let background = ColoredContainer {
+                        color: toast
+                            .status
+                            .background_color(theme.extended_palette().is_dark),
+                        radius: 5.0,
+                    };
+
+                    <ColoredContainer as container::Catalog>::style(&background, theme)
+                })
                 .into()
             })
             .collect();
@@ -227,7 +244,7 @@ impl<'a, Message> Widget<Message, Theme, Renderer> for Manager<'a, Message> {
         state: &mut Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
-        operation: &mut dyn Operation<Message>,
+        operation: &mut dyn Operation,
     ) {
         operation.container(None, layout.bounds(), &mut |operation| {
             self.content
@@ -377,7 +394,7 @@ impl<'a, 'b, Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'a,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
     ) -> event::Status {
-        if let Event::Window(_, window::Event::RedrawRequested(now)) = &event {
+        if let Event::Window(window::Event::RedrawRequested(now)) = &event {
             let mut next_redraw: Option<window::RedrawRequest> = None;
 
             self.instants
@@ -465,7 +482,7 @@ impl<'a, 'b, Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'a,
         &mut self,
         layout: Layout<'_>,
         renderer: &Renderer,
-        operation: &mut dyn widget::Operation<Message>,
+        operation: &mut dyn widget::Operation,
     ) {
         operation.container(None, layout.bounds(), &mut |operation| {
             self.toasts

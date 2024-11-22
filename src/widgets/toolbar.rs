@@ -9,10 +9,8 @@ use iced::{
     },
     alignment, event, keyboard, touch,
     widget::{
-        overlay,
-        pick_list::StyleSheet,
-        scrollable,
-        text::{self, LineHeight},
+        overlay, pick_list, scrollable,
+        text::{self, LineHeight, Wrapping},
         Scrollable,
     },
     Element, Event, Length, Padding, Pixels, Point, Rectangle, Size, Vector,
@@ -24,10 +22,10 @@ pub trait ToolbarOption {
 
 pub struct ToolbarMenu<'a, T, L, V, Message, Theme, Renderer>
 where
-    T: ToString + PartialEq + Clone + ToolbarOption,
+    T: ToString + PartialEq + Clone + ToolbarOption + AsRef<str>,
     L: Borrow<[T]>,
     V: Borrow<T>,
-    Theme: StyleSheet + overlay::menu::StyleSheet,
+    Theme: pick_list::Catalog + overlay::menu::Catalog,
     Renderer: advanced::text::Renderer,
 {
     on_select: Box<dyn Fn(T) -> Message + 'a>,
@@ -46,16 +44,16 @@ where
     icon_size: Option<Pixels>,
     icon_font: Renderer::Font,
     spacing: f32,
-    style: <Theme as StyleSheet>::Style,
-    menu_style: <Theme as overlay::menu::StyleSheet>::Style,
+    style: <Theme as pick_list::Catalog>::Class<'a>,
+    menu_style: <Theme as overlay::menu::Catalog>::Class<'a>,
 }
 
 impl<'a, T, L, V, Message, Theme, Renderer> ToolbarMenu<'a, T, L, V, Message, Theme, Renderer>
 where
-    T: ToString + PartialEq + ToolbarOption + Clone,
+    T: ToString + PartialEq + ToolbarOption + Clone + AsRef<str>,
     L: Borrow<[T]>,
     V: Borrow<T>,
-    Theme: StyleSheet + overlay::menu::StyleSheet,
+    Theme: pick_list::Catalog + overlay::menu::Catalog,
     Renderer: advanced::text::Renderer,
 {
     pub fn new(
@@ -82,8 +80,8 @@ where
             icon_font,
             orientation: ToolBarOrientation::default(),
             spacing: 0.0,
-            style: <Theme as StyleSheet>::Style::default(),
-            menu_style: <Theme as overlay::menu::StyleSheet>::Style::default(),
+            style: <Theme as pick_list::Catalog>::default(),
+            menu_style: <Theme as overlay::menu::Catalog>::default(),
             options,
         }
     }
@@ -148,14 +146,14 @@ where
         self
     }
 
-    pub fn style(mut self, style: impl Into<<Theme as StyleSheet>::Style>) -> Self {
+    pub fn style(mut self, style: impl Into<<Theme as pick_list::Catalog>::Class<'a>>) -> Self {
         self.style = style.into();
         self
     }
 
     pub fn menu_style(
         mut self,
-        style: impl Into<<Theme as overlay::menu::StyleSheet>::Style>,
+        style: impl Into<<Theme as overlay::menu::Catalog>::Class<'a>>,
     ) -> Self {
         self.menu_style = style.into();
         self
@@ -165,10 +163,10 @@ where
 impl<'a, T, L, V, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for ToolbarMenu<'a, T, L, V, Message, Theme, Renderer>
 where
-    T: ToString + PartialEq + Clone + ToolbarOption + 'a,
+    T: ToString + PartialEq + Clone + ToolbarOption + AsRef<str> + 'a,
     L: Borrow<[T]> + 'a,
     V: Borrow<T> + 'a,
-    Theme: overlay::menu::StyleSheet + StyleSheet + scrollable::StyleSheet + 'a,
+    Theme: overlay::menu::Catalog + pick_list::Catalog + scrollable::Catalog + 'a,
     Renderer: iced::advanced::Renderer + advanced::text::Renderer + 'a,
     Message: Clone + 'a,
 {
@@ -205,42 +203,34 @@ where
             let line_height = LineHeight::default();
             let shaping = text::Shaping::default();
 
-            let options_text = Text {
-                content: "",
-                bounds: Size::new(f32::INFINITY, line_height.to_absolute(text_size).into()),
-                size: text_size,
-                line_height,
-                font: text_font,
-                horizontal_alignment: alignment::Horizontal::Left,
-                vertical_alignment: alignment::Vertical::Center,
-                shaping,
-            };
-
-            let options_icon = Text {
-                size: icon_size,
-                font: self.icon_font,
-                bounds: Size::new(f32::INFINITY, line_height.to_absolute(icon_size).into()),
-                ..options_text
-            };
-
             for option in options.iter() {
-                let mut text_par = <Renderer>::Paragraph::default();
-
                 let text = Text {
-                    content: &option.to_string(),
-                    ..options_text
+                    content: option.as_ref(),
+                    bounds: Size::new(f32::INFINITY, line_height.to_absolute(text_size).into()),
+                    size: text_size,
+                    line_height,
+                    font: text_font,
+                    horizontal_alignment: alignment::Horizontal::Left,
+                    vertical_alignment: alignment::Vertical::Center,
+                    wrapping: Wrapping::Word,
+                    shaping,
                 };
 
-                text_par.update(text);
+                let text_par = <Renderer>::Paragraph::with_text(text);
 
-                let mut icon_par = <Renderer>::Paragraph::default();
-
+                let icon = option.icon().to_string();
                 let icon = Text {
-                    content: &option.icon().to_string(),
-                    ..options_icon
+                    content: icon.as_ref(),
+                    font: self.icon_font,
+                    bounds: Size::new(f32::INFINITY, line_height.to_absolute(icon_size).into()),
+                    size: icon_size,
+                    line_height,
+                    horizontal_alignment: alignment::Horizontal::Left,
+                    vertical_alignment: alignment::Vertical::Center,
+                    wrapping: Wrapping::Word,
+                    shaping,
                 };
-
-                icon_par.update(icon);
+                let icon_par = <Renderer>::Paragraph::with_text(icon);
 
                 max_width = f32::max(
                     max_width,
@@ -401,9 +391,9 @@ where
         let is_mouse_over = cursor.is_over(bounds);
 
         let style = if !state.is_open && is_mouse_over {
-            StyleSheet::hovered(theme, &self.style)
+            <Theme as pick_list::Catalog>::style(theme, &self.style, pick_list::Status::Hovered)
         } else {
-            StyleSheet::active(theme, &self.style)
+            <Theme as pick_list::Catalog>::style(theme, &self.style, pick_list::Status::Active)
         };
 
         renderer.fill_quad(
@@ -416,7 +406,7 @@ where
         );
 
         let icon = Text {
-            content: &selected.borrow().icon().to_string(),
+            content: selected.borrow().icon().to_string(),
             size: icon_size * 1.05,
             line_height: LineHeight::default(),
             bounds: Size::new(
@@ -427,6 +417,7 @@ where
             horizontal_alignment: alignment::Horizontal::Center,
             vertical_alignment: alignment::Vertical::Center,
             shaping: text::Shaping::default(),
+            wrapping: Wrapping::Word,
         };
 
         renderer.fill_text(
@@ -441,50 +432,56 @@ where
         &'b mut self,
         state: &'b mut Tree,
         layout: Layout<'_>,
-        renderer: &Renderer,
+        _renderer: &Renderer,
         translation: Vector,
     ) -> Option<advanced::overlay::Element<'b, Message, Theme, Renderer>> {
         let state = state.state.downcast_mut::<MenuState>();
-        let text_font = self.text_font.unwrap_or(renderer.default_font());
 
         if state.is_open {
             let bounds = layout.bounds();
             let on_select = &self.on_select;
 
-            let mut menu = Menu::new(
-                &mut state.menu,
-                self.options.borrow(),
-                &mut state.hovered_option,
-                |option| {
+            let list = Scrollable::new(List {
+                options: self.options.borrow(),
+                hovered_option: &mut state.hovered_option,
+                on_option_hovered: None,
+                on_select: Box::new(|option| {
                     state.is_open = false;
                     (on_select)(option)
-                },
-                None,
-                self.icon_font,
-                &self.menu_style,
-            )
-            .width(self.menu_width.unwrap_or(state.width))
-            .height(bounds.height)
-            .padding(self.menu_padding)
-            .text_font(text_font)
-            .spacing(self.spacing);
+                }),
+                padding: self.menu_padding,
+                text_size: self.text_size,
+                text_font: self.text_font,
+                icon_size: self.icon_size,
+                icon_font: self.icon_font,
+                spacing: self.spacing,
+                style: &self.menu_style,
+            })
+            .direction(scrollable::Direction::default());
 
-            if let Some(text_size) = self.text_size {
-                menu = menu.text_size(text_size);
-            }
+            let orientation = match self.orientation {
+                ToolBarOrientation::Horizontal => Orientation::Horizontal(bounds.height),
+                ToolBarOrientation::Vertical => Orientation::Vertical(bounds.width),
+                ToolBarOrientation::Both => Orientation::Both(bounds.width, bounds.height),
+            };
 
-            if let Some(icon_size) = self.icon_size {
-                menu = menu.icon_size(icon_size);
-            }
+            let position = layout.position() + translation;
 
-            Some(menu.overlay(
-                layout.position() + translation,
-                match self.orientation {
-                    ToolBarOrientation::Horizontal => Orientation::Horizontal(bounds.height),
-                    ToolBarOrientation::Vertical => Orientation::Vertical(bounds.width),
-                    ToolBarOrientation::Both => Orientation::Both(bounds.width, bounds.height),
-                },
-            ))
+            state.menu.tree.diff(&list as &dyn Widget<_, _, _>);
+
+            let overlay = Overlay {
+                position,
+                state: &mut state.menu.tree,
+                list,
+                width: self.menu_width.unwrap_or(state.width),
+                height: bounds.height,
+                orientation,
+                style: &self.menu_style,
+            };
+
+            let overlay = advanced::overlay::Element::new(Box::new(overlay));
+
+            Some(overlay)
         } else {
             None
         }
@@ -494,10 +491,10 @@ where
 impl<'a, T, L, V, Message, Theme, Renderer> From<ToolbarMenu<'a, T, L, V, Message, Theme, Renderer>>
     for Element<'a, Message, Theme, Renderer>
 where
-    T: ToString + PartialEq + Clone + ToolbarOption + 'a,
+    T: ToString + PartialEq + Clone + ToolbarOption + AsRef<str> + 'a,
     L: Borrow<[T]> + 'a,
     V: Borrow<T> + 'a,
-    Theme: overlay::menu::StyleSheet + StyleSheet + scrollable::StyleSheet + 'a,
+    Theme: overlay::menu::Catalog + pick_list::Catalog + scrollable::Catalog + 'a,
     Renderer: iced::advanced::Renderer + advanced::text::Renderer + 'a,
     Message: Clone + 'a,
 {
@@ -545,116 +542,12 @@ impl Default for State {
     }
 }
 
-struct Menu<'a, T, Message, Theme, Renderer>
-where
-    T: ToString + PartialEq + Clone + ToolbarOption,
-    Renderer: advanced::text::Renderer + 'a,
-    Theme: overlay::menu::StyleSheet + scrollable::StyleSheet + 'a,
-{
-    options: &'a [T],
-    state: &'a mut State,
-    hovered_option: &'a mut Option<usize>,
-    on_select: Box<dyn FnMut(T) -> Message + 'a>,
-    on_option_hovered: Option<&'a dyn Fn(T) -> Message>,
-    width: f32,
-    height: f32,
-    padding: Padding,
-    text_size: Option<Pixels>,
-    text_font: Option<Renderer::Font>,
-    icon_size: Option<Pixels>,
-    icon_font: Renderer::Font,
-    spacing: f32,
-    style: &'a <Theme as overlay::menu::StyleSheet>::Style,
-}
-
 #[allow(dead_code)]
-impl<'a, T, Message, Theme, Renderer> Menu<'a, T, Message, Theme, Renderer>
-where
-    T: ToString + PartialEq + Clone + ToolbarOption,
-    Renderer: advanced::text::Renderer + 'a,
-    Theme: overlay::menu::StyleSheet + scrollable::StyleSheet + 'a,
-{
-    fn new(
-        state: &'a mut State,
-        options: &'a [T],
-        hovered_option: &'a mut Option<usize>,
-        on_select: impl FnMut(T) -> Message + 'a,
-        on_option_hovered: Option<&'a dyn Fn(T) -> Message>,
-        icon_font: Renderer::Font,
-        style: &'a <Theme as overlay::menu::StyleSheet>::Style,
-    ) -> Self {
-        Self {
-            state,
-            options,
-            hovered_option,
-            on_select: Box::new(on_select),
-            on_option_hovered,
-            text_font: None,
-            text_size: None,
-            icon_font,
-            icon_size: None,
-            width: 0.0,
-            height: 0.0,
-            padding: Padding::ZERO,
-            spacing: 0.0,
-            style,
-        }
-    }
-
-    fn width(mut self, width: f32) -> Self {
-        self.width = width;
-        self
-    }
-
-    fn height(mut self, height: f32) -> Self {
-        self.height = height;
-        self
-    }
-
-    fn text_font(mut self, font: Renderer::Font) -> Self {
-        self.text_font = Some(font);
-        self
-    }
-
-    fn text_size(mut self, text_size: impl Into<Pixels>) -> Self {
-        self.text_size = Some(text_size.into());
-        self
-    }
-
-    fn icon_font(mut self, font: Renderer::Font) -> Self {
-        self.icon_font = font;
-        self
-    }
-
-    fn icon_size(mut self, icon_size: impl Into<Pixels>) -> Self {
-        self.icon_size = Some(icon_size.into());
-        self
-    }
-
-    fn padding(mut self, padding: impl Into<Padding>) -> Self {
-        self.padding = padding.into();
-        self
-    }
-
-    fn spacing(mut self, spacing: f32) -> Self {
-        self.spacing = spacing;
-        self
-    }
-
-    fn overlay(
-        self,
-        position: Point,
-        orientation: Orientation,
-    ) -> advanced::overlay::Element<'a, Message, Theme, Renderer> {
-        advanced::overlay::Element::new(Box::new(Overlay::new(position, self, orientation)))
-    }
-}
-
-#[allow(dead_code)]
-struct Overlay<'a, Message, Theme, Renderer>
+struct Overlay<'a, 'b, Message, Theme, Renderer>
 where
     Renderer: advanced::text::Renderer,
-    Theme: overlay::menu::StyleSheet + scrollable::StyleSheet,
+    Theme: overlay::menu::Catalog + scrollable::Catalog,
+    'b: 'a,
 {
     position: Point,
     state: &'a mut Tree,
@@ -662,74 +555,15 @@ where
     width: f32,
     height: f32,
     orientation: Orientation,
-    style: &'a <Theme as overlay::menu::StyleSheet>::Style,
+    style: &'a <Theme as overlay::menu::Catalog>::Class<'b>,
 }
 
-impl<'a, Message, Theme, Renderer> Overlay<'a, Message, Theme, Renderer>
-where
-    Message: 'a,
-    Renderer: advanced::text::Renderer + 'a,
-    Theme: overlay::menu::StyleSheet + scrollable::StyleSheet + 'a,
-{
-    fn new<T>(
-        position: Point,
-        menu: Menu<'a, T, Message, Theme, Renderer>,
-        orientation: Orientation,
-    ) -> Self
-    where
-        T: ToString + Clone + PartialEq + ToolbarOption,
-    {
-        let Menu {
-            options,
-            state,
-            hovered_option,
-            on_select,
-            on_option_hovered,
-            width,
-            height,
-            padding,
-            text_size,
-            text_font,
-            icon_size,
-            icon_font,
-            spacing,
-            style,
-        } = menu;
-
-        let list = Scrollable::new(List {
-            options,
-            hovered_option,
-            on_option_hovered,
-            on_select,
-            padding,
-            text_size,
-            text_font,
-            icon_size,
-            icon_font,
-            spacing,
-            style,
-        })
-        .direction(scrollable::Direction::default());
-
-        state.tree.diff(&list as &dyn Widget<_, _, _>);
-
-        Self {
-            position,
-            state: &mut state.tree,
-            list,
-            width,
-            height,
-            orientation,
-            style,
-        }
-    }
-}
-
-impl<'a, Message, Theme, Renderer> advanced::overlay::Overlay<Message, Theme, Renderer>
-    for Overlay<'a, Message, Theme, Renderer>
+impl<'a, 'b, Message, Theme, Renderer> advanced::overlay::Overlay<Message, Theme, Renderer>
+    for Overlay<'a, 'b, Message, Theme, Renderer>
 where
     Renderer: advanced::text::Renderer,
-    Theme: overlay::menu::StyleSheet + scrollable::StyleSheet,
+    Theme: overlay::menu::Catalog + scrollable::Catalog,
+    'b: 'a,
 {
     fn layout(&mut self, renderer: &Renderer, bounds: Size) -> layout::Node {
         match self.orientation {
@@ -865,7 +699,7 @@ where
         cursor: mouse::Cursor,
     ) {
         let bounds = layout.bounds();
-        let inner_style = theme.appearance(&self.style);
+        let inner_style = <Theme as overlay::menu::Catalog>::style(theme, &self.style);
 
         renderer.fill_quad(
             renderer::Quad {
@@ -896,11 +730,12 @@ enum Orientation {
     Both(f32, f32),
 }
 
-struct List<'a, T, Message, Theme, Renderer>
+struct List<'a, 'b, T, Message, Theme, Renderer>
 where
     T: ToString + PartialEq + Clone + ToolbarOption,
     Renderer: advanced::text::Renderer,
-    Theme: overlay::menu::StyleSheet,
+    Theme: overlay::menu::Catalog,
+    'b: 'a,
 {
     options: &'a [T],
     hovered_option: &'a mut Option<usize>,
@@ -912,15 +747,16 @@ where
     icon_size: Option<Pixels>,
     icon_font: Renderer::Font,
     spacing: f32,
-    style: &'a <Theme as overlay::menu::StyleSheet>::Style,
+    style: &'a <Theme as overlay::menu::Catalog>::Class<'b>,
 }
 
-impl<'a, T, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
-    for List<'a, T, Message, Theme, Renderer>
+impl<'a, 'b, T, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for List<'a, 'b, T, Message, Theme, Renderer>
 where
     T: ToString + PartialEq + Clone + ToolbarOption,
     Renderer: advanced::text::Renderer,
-    Theme: overlay::menu::StyleSheet,
+    Theme: overlay::menu::Catalog,
+    'b: 'a,
 {
     fn size(&self) -> Size<Length> {
         Size {
@@ -965,7 +801,7 @@ where
     ) {
         use std::f32;
 
-        let style = theme.appearance(self.style);
+        let style = <Theme as overlay::menu::Catalog>::style(theme, self.style);
         let bounds = layout.bounds();
 
         let text_size = self.text_size.unwrap_or(renderer.default_size());
@@ -1009,7 +845,7 @@ where
             }
 
             let icon_text = Text {
-                content: &icon.to_string(),
+                content: icon.to_string(),
                 bounds: Size::new(bounds.width, bounds.height),
                 size: icon_size,
                 line_height: LineHeight::default(),
@@ -1017,6 +853,7 @@ where
                 horizontal_alignment: alignment::Horizontal::Left,
                 vertical_alignment: alignment::Vertical::Center,
                 shaping: text::Shaping::default(),
+                wrapping: Wrapping::Word,
             };
 
             renderer.fill_text(
@@ -1032,7 +869,7 @@ where
 
             renderer.fill_text(
                 Text {
-                    content: &option.to_string(),
+                    content: option.to_string(),
                     bounds: Size::new(bounds.width, bounds.height),
                     size: text_size,
                     line_height: LineHeight::default(),
@@ -1040,9 +877,10 @@ where
                     horizontal_alignment: alignment::Horizontal::Left,
                     vertical_alignment: alignment::Vertical::Center,
                     shaping: text::Shaping::default(),
+                    wrapping: Wrapping::Word,
                 },
                 Point::new(
-                    bounds.x + self.padding.left + icon_text.size.0 + self.spacing,
+                    bounds.x + self.padding.left + icon_size.0 + self.spacing,
                     bounds.center_y(),
                 ),
                 if is_selected {
@@ -1140,15 +978,16 @@ where
     }
 }
 
-impl<'a, T, Message, Theme, Renderer> From<List<'a, T, Message, Theme, Renderer>>
+impl<'a, 'b, T, Message, Theme, Renderer> From<List<'a, 'b, T, Message, Theme, Renderer>>
     for Element<'a, Message, Theme, Renderer>
 where
     T: ToString + PartialEq + Clone + ToolbarOption + 'a,
     Message: 'a,
     Renderer: 'a + advanced::text::Renderer,
-    Theme: 'a + overlay::menu::StyleSheet,
+    Theme: 'a + overlay::menu::Catalog,
+    'b: 'a,
 {
-    fn from(value: List<'a, T, Message, Theme, Renderer>) -> Self {
+    fn from(value: List<'a, 'b, T, Message, Theme, Renderer>) -> Self {
         Element::new(value)
     }
 }

@@ -13,17 +13,21 @@ impl Default for BorderedContainer {
     }
 }
 
-impl container::StyleSheet for BorderedContainer {
-    type Style = Theme;
+impl container::Catalog for BorderedContainer {
+    type Class<'a> = Theme;
 
-    fn appearance(&self, style: &Self::Style) -> container::Appearance {
-        let color = style.extended_palette().secondary.strong.color;
+    fn default<'a>() -> Self::Class<'a> {
+        <Theme as std::default::Default>::default()
+    }
+
+    fn style(&self, class: &Self::Class<'_>) -> container::Style {
+        let color = class.extended_palette().secondary.strong.color;
         let border = Border {
             color,
             width: self.width,
             ..Default::default()
         };
-        container::Appearance {
+        container::Style {
             border,
             ..Default::default()
         }
@@ -44,15 +48,19 @@ impl Default for ColoredContainer {
     }
 }
 
-impl container::StyleSheet for ColoredContainer {
-    type Style = Theme;
+impl container::Catalog for ColoredContainer {
+    type Class<'a> = Theme;
 
-    fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+    fn default<'a>() -> Self::Class<'a> {
+        <Theme as std::default::Default>::default()
+    }
+
+    fn style(&self, _class: &Self::Class<'_>) -> container::Style {
         let border = Border {
             radius: self.radius.into(),
             ..Default::default()
         };
-        container::Appearance {
+        container::Style {
             background: Some(self.color.into()),
             border,
             ..Default::default()
@@ -61,53 +69,62 @@ impl container::StyleSheet for ColoredContainer {
 }
 
 pub struct MenuButtonStyle;
-impl button::StyleSheet for MenuButtonStyle {
-    type Style = iced::Theme;
+impl button::Catalog for MenuButtonStyle {
+    type Class<'a> = Theme;
 
-    fn active(&self, _style: &Self::Style) -> button::Appearance {
-        let border = Border {
-            radius: [4.0; 4].into(),
-            ..Default::default()
-        };
-        button::Appearance {
-            border,
-            background: Some(Color::TRANSPARENT.into()),
-            ..Default::default()
-        }
+    fn default<'a>() -> Self::Class<'a> {
+        <Theme as std::default::Default>::default()
     }
 
-    fn hovered(&self, style: &Self::Style) -> button::Appearance {
-        let plt = style.extended_palette();
+    fn style(&self, class: &Self::Class<'_>, status: button::Status) -> button::Style {
+        let palette = class.extended_palette();
+        let border = Border {
+            radius: 4.0.into(),
+            ..Default::default()
+        };
 
-        button::Appearance {
-            background: Some(plt.primary.weak.color.into()),
-            text_color: plt.primary.weak.text,
-            ..self.active(style)
+        match status {
+            button::Status::Active => button::Style {
+                border,
+                background: Some(Color::TRANSPARENT.into()),
+                ..Default::default()
+            },
+            button::Status::Hovered => button::Style {
+                background: Some(palette.primary.weak.color.into()),
+                text_color: palette.primary.weak.text,
+                border,
+                ..Default::default()
+            },
+
+            status => button::primary(class, status),
         }
     }
 }
 
 pub struct ToolTipContainerStyle;
+impl container::Catalog for ToolTipContainerStyle {
+    type Class<'a> = Theme;
 
-impl container::StyleSheet for ToolTipContainerStyle {
-    type Style = Theme;
+    fn default<'a>() -> Self::Class<'a> {
+        <Theme as std::default::Default>::default()
+    }
 
-    fn appearance(&self, style: &Self::Style) -> container::Appearance {
-        let background = style.extended_palette().background.weak.color;
+    fn style(&self, class: &Self::Class<'_>) -> container::Style {
+        let background = class.extended_palette().background.weak.color;
         let shadow = Shadow {
             color: Color {
                 a: 0.25,
-                ..style.extended_palette().primary.strong.color
+                ..class.extended_palette().primary.strong.color
             },
             offset: [2.0, 3.0].into(),
             blur_radius: 5.0,
         };
         let border = Border {
             width: 0.5,
-            color: style.extended_palette().secondary.weak.color,
+            color: class.extended_palette().secondary.weak.color,
             radius: 5.0.into(),
         };
-        container::Appearance {
+        container::Style {
             background: Some(Background::Color(background)),
             border,
             shadow,

@@ -2,7 +2,7 @@
 // with similar name
 
 use iced::{
-    alignment, theme,
+    alignment::{self, Horizontal, Vertical},
     widget::{button, column, container, row, text},
     Element, Length, Padding, Renderer, Theme,
 };
@@ -568,7 +568,7 @@ where
 
         let header = text("Close Tab?")
             .width(Length::Fill)
-            .horizontal_alignment(alignment::Horizontal::Center);
+            .align_x(alignment::Horizontal::Center);
 
         let actions = {
             let btn1 =
@@ -578,20 +578,25 @@ where
             let btn3 = button("Cancel")
                 .on_press(TabBarMessage::DirtyTabModal(DirtyTabModalAction::Cancel));
 
-            row!(btn1, btn2, btn3).spacing(16).width(Length::Fill)
+            row!(btn1, btn2, btn3)
+                .align_y(Vertical::Center)
+                .spacing(16)
+                .width(Length::Fill)
         };
 
         let col = column!(header, msg, actions)
+            .align_x(Horizontal::Center)
+            .height(Length::Fill)
             .width(Length::Fill)
             .spacing(24);
 
         container(col)
-            .style(theme::Container::Custom(Box::new(
-                DialogContainer::default(),
-            )))
-            .height(175)
+            .style(|theme| {
+                <DialogContainer as container::Catalog>::style(&DialogContainer::default(), theme)
+            })
+            .center_y(175)
             .padding(16)
-            .width(300)
+            .width(325)
             .into()
     }
 
@@ -602,7 +607,7 @@ where
 
         let header = text("Open Tab?")
             .width(Length::Fill)
-            .horizontal_alignment(alignment::Horizontal::Center);
+            .align_x(alignment::Horizontal::Center);
 
         let actions = {
             let btn1 = button("Open File")
@@ -612,20 +617,25 @@ where
             let btn3 = button("Cancel")
                 .on_press(TabBarMessage::NewTabModalAction(NewTabModalAction::Cancel));
 
-            row!(btn1, btn2, btn3).spacing(16).width(Length::Fill)
+            row!(btn1, btn2, btn3)
+                .align_y(Vertical::Center)
+                .spacing(16)
+                .width(Length::Fill)
         };
 
         let col = column!(header, msg, actions)
+            .align_x(Horizontal::Center)
+            .height(Length::Fill)
             .width(Length::Fill)
             .spacing(24);
 
         container(col)
-            .style(theme::Container::Custom(Box::new(
-                DialogContainer::default(),
-            )))
+            .style(|theme| {
+                <DialogContainer as container::Catalog>::style(&DialogContainer::default(), theme)
+            })
             .height(175)
             .padding(16)
-            .width(300)
+            .width(325)
             .into()
     }
 
@@ -737,7 +747,7 @@ pub mod bar {
             self,
             layout::{Limits, Node},
             mouse, renderer,
-            text::{LineHeight, Shaping},
+            text::{LineHeight, Shaping, Wrapping},
             widget::{tree, Tree},
             Widget,
         },
@@ -848,18 +858,18 @@ pub mod bar {
                         add_button_background_hovered: Background::Color(
                             palette.primary.base.color,
                         ),
-                        add_button_border: Border::with_radius(5.0),
+                        add_button_border: Border::default().rounded(5.0),
                         add_button_text_color: Some(palette.primary.base.text),
 
                         tab_background_active: base_background,
                         tab_background_hovered: Background::Color(palette.primary.strong.color),
-                        tab_border: Border::with_radius(5.0),
+                        tab_border: Border::default().rounded(5.0),
                         tab_shadow: Shadow::default(),
                         tab_text_color: text_color,
                         tab_icon_color: Some(text_color),
 
                         close_background: Background::Color(palette.primary.base.color),
-                        close_border: Border::with_radius(5.0),
+                        close_border: Border::default().rounded(5.0),
                         close_text_color: Some(palette.primary.strong.text),
                     }
                 }
@@ -1049,7 +1059,7 @@ pub mod bar {
 
     impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer> for TabBar<'a, Message, Theme>
     where
-        Theme: text::StyleSheet + StyleSheet,
+        Theme: text::Catalog + StyleSheet,
         Renderer: renderer::Renderer + advanced::text::Renderer<Font = iced::Font>,
     {
         fn size(&self) -> Size<Length> {
@@ -1096,7 +1106,7 @@ pub mod bar {
 
                         Text::<Theme, Renderer>::new(label.text.clone())
                             .font(font)
-                            .horizontal_alignment(alignment::Horizontal::Center)
+                            .align_x(alignment::Horizontal::Center)
                             .width(Length::Shrink)
                     };
 
@@ -1105,8 +1115,8 @@ pub mod bar {
 
                         Text::<Theme, Renderer>::new(label.icon.to_string())
                             .font(font)
-                            .horizontal_alignment(alignment::Horizontal::Center)
-                            .vertical_alignment(alignment::Vertical::Center)
+                            .align_x(alignment::Horizontal::Center)
+                            .align_y(alignment::Vertical::Center)
                             .shaping(advanced::text::Shaping::Advanced)
                             .width(Length::Shrink)
                     };
@@ -1122,14 +1132,14 @@ pub mod bar {
                         .width(state.tab_width)
                         .height(self.tab_height)
                         .padding(self.tab_padding)
-                        .align_items(Alignment::Center);
+                        .align_y(Alignment::Center);
 
                     if self.on_close.is_some() {
                         label_row = label_row.push(horizontal_space()).push(
                             Row::new()
                                 .width(Length::Fixed(self.close_width))
                                 .height(Length::Fixed(self.close_height))
-                                .align_items(Alignment::Center),
+                                .align_y(Alignment::Center),
                         )
                     }
 
@@ -1137,7 +1147,7 @@ pub mod bar {
                 })
                 .spacing(state.tabs_spacing)
                 .padding(self.bar_padding)
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
                 .width(self.width)
                 .height(self.height);
 
@@ -1145,7 +1155,7 @@ pub mod bar {
                 let add_tabs = Row::new()
                     .width(state.add_tabs_width)
                     .height(32.0)
-                    .align_items(Alignment::Center);
+                    .align_y(Alignment::Center);
 
                 row = row.push(add_tabs);
             };
@@ -1240,7 +1250,7 @@ pub mod bar {
 
                 renderer.fill_text(
                     advanced::Text {
-                        content: &tab.icon.to_string(),
+                        content: tab.icon.to_string(),
                         bounds: Size::new(icon_bounds.width, icon_bounds.height),
                         size: Pixels(icon_data.1),
                         line_height: LineHeight::default(),
@@ -1248,6 +1258,7 @@ pub mod bar {
                         horizontal_alignment: alignment::Horizontal::Center,
                         vertical_alignment: alignment::Vertical::Center,
                         shaping: Shaping::Advanced,
+                        wrapping: Wrapping::None,
                     },
                     Point::new(icon_bounds.center_x(), icon_bounds.center_y()),
                     style.tab_icon_color.unwrap_or(style.tab_text_color),
@@ -1256,7 +1267,7 @@ pub mod bar {
 
                 renderer.fill_text(
                     advanced::Text {
-                        content: &tab.text.to_string(),
+                        content: tab.text.to_string(),
                         bounds: Size::new(text_bounds.width, text_bounds.height),
                         size: Pixels(text_data.1),
                         line_height: LineHeight::default(),
@@ -1264,6 +1275,7 @@ pub mod bar {
                         horizontal_alignment: alignment::Horizontal::Center,
                         vertical_alignment: alignment::Vertical::Center,
                         shaping: Shaping::Advanced,
+                        wrapping: Wrapping::None,
                     },
                     Point::new(text_bounds.center_x(), text_bounds.center_y()),
                     style.tab_text_color,
@@ -1280,7 +1292,7 @@ pub mod bar {
 
                         renderer.fill_text(
                             advanced::Text {
-                                content: &icons::CLOSE.to_string(),
+                                content: icons::CLOSE.to_string(),
                                 bounds: Size::new(close_bounds.width, close_bounds.height),
                                 size: Pixels(
                                     self.close_size * if is_mouse_over { 1.05 } else { 1.0 },
@@ -1290,6 +1302,7 @@ pub mod bar {
                                 horizontal_alignment: alignment::Horizontal::Center,
                                 vertical_alignment: alignment::Vertical::Center,
                                 shaping: Shaping::Advanced,
+                                wrapping: Wrapping::None,
                             },
                             Point::new(close_bounds.center_x(), close_bounds.center_y()),
                             style.close_text_color.unwrap_or(style.tab_text_color),
@@ -1343,7 +1356,7 @@ pub mod bar {
 
                     renderer.fill_text(
                         advanced::Text {
-                            content: "+",
+                            content: "+".into(),
                             bounds: Size::new(add_tabs_bounds.width, add_tabs_bounds.height),
                             size: Pixels(16.0 * if is_mouse_over_add_tabs { 1.05 } else { 1.0 }),
                             line_height: LineHeight::default(),
@@ -1351,6 +1364,7 @@ pub mod bar {
                             horizontal_alignment: alignment::Horizontal::Center,
                             vertical_alignment: alignment::Vertical::Center,
                             shaping: Shaping::Basic,
+                            wrapping: Wrapping::None,
                         },
                         Point::new(add_tabs_bounds.center_x(), add_tabs_bounds.center_y()),
                         style.add_button_text_color.unwrap_or(style.tab_text_color),
@@ -1445,7 +1459,7 @@ pub mod bar {
         for Element<'a, Message, Theme, Renderer>
     where
         Message: 'a,
-        Theme: text::StyleSheet + StyleSheet + 'a,
+        Theme: text::Catalog + StyleSheet + 'a,
         Renderer: renderer::Renderer + advanced::text::Renderer<Font = iced::Font>,
     {
         fn from(value: TabBar<'a, Message, Theme>) -> Self {

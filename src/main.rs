@@ -1,11 +1,8 @@
 use iced::{
-    event::{self, Event},
-    executor, font,
+    application, font,
     keyboard::{self, key, Key},
-    theme,
     widget::{self, column, container, horizontal_space, row, text, vertical_rule, Container, Row},
-    window, Alignment, Application, Command, Element, Font, Length, Pixels, Renderer, Settings,
-    Subscription, Theme,
+    window, Alignment, Element, Font, Length, Subscription, Task, Theme,
 };
 
 use tracing::{error, info, span, warn, Level};
@@ -96,11 +93,6 @@ fn main() -> Result<(), iced::Error> {
         .with_env_filter(filter)
         .init();
 
-    let window = window::settings::Settings {
-        exit_on_close_request: false,
-        ..Default::default()
-    };
-
     let _flags = Flags::Prod(if fallback_flag {
         PathBuf::from(fallback_log)
     } else {
@@ -109,15 +101,30 @@ fn main() -> Result<(), iced::Error> {
 
     let flags = Flags::Stacked;
 
-    Modav::run(Settings {
-        window,
-        antialiasing: true,
-        flags,
-        id: None,
-        fonts: Vec::new(),
-        default_font: Font::default(),
-        default_text_size: Pixels(16.0),
-    })
+    application(Modav::title, Modav::update, Modav::view)
+        .centered()
+        .antialiasing(true)
+        .subscription(Modav::subscription)
+        .exit_on_close_request(false)
+        .theme(Modav::theme)
+        .run_with(|| {
+            let app = Modav::new(flags);
+            let tasks = [
+                font::load(include_bytes!("../fonts/util-icons.ttf").as_slice())
+                    .map(Message::IconLoaded),
+                font::load(include_bytes!("../fonts/legend-icons.ttf").as_slice())
+                    .map(Message::IconLoaded),
+                font::load(include_bytes!("../fonts/line-type-icons.ttf").as_slice())
+                    .map(Message::IconLoaded),
+                window::get_oldest().and_then(|id| Task::done(Message::SetMainWindowID(id))),
+            ];
+
+            let batch = Task::batch(tasks);
+
+            let status = batch.chain(Task::done(Message::Ready));
+
+            (app, status)
+        })
 }
 
 /// What should be done after a file IO action
@@ -168,6 +175,8 @@ pub struct Modav {
     dialog_view: DialogView,
     error: AppError,
     log_file: PathBuf,
+    main_window_id: Option<window::Id>,
+    is_ready: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -184,6 +193,8 @@ impl Flags {
         let toasts = Vec::default();
         let title = String::from("Modav");
         let error = AppError::None;
+        let main_window_id = None;
+        let is_ready = false;
         let mut tabs = Tabs::new()
             .on_open(Message::SelectFile)
             .on_new_active_tab(Message::NewActiveTab)
@@ -203,10 +214,12 @@ impl Flags {
             Self::Prod(log_file) => Modav {
                 file_path: None,
                 current_view: ViewType::None,
+                is_ready,
                 theme_shadow: theme.clone(),
                 title,
                 theme,
                 toasts,
+                main_window_id,
                 toast_timeout,
                 error,
                 tabs,
@@ -228,9 +241,11 @@ impl Flags {
                 Modav {
                     file_path: Some(file_path),
                     theme_shadow: theme.clone(),
+                    is_ready,
                     current_view,
                     title,
                     theme,
+                    main_window_id,
                     toasts,
                     toast_timeout,
                     error,
@@ -267,9 +282,11 @@ impl Flags {
                 Modav {
                     file_path: Some(file_path),
                     theme_shadow: theme.clone(),
+                    is_ready,
                     current_view,
                     title,
                     theme,
+                    main_window_id,
                     toasts,
                     toast_timeout,
                     error,
@@ -304,11 +321,13 @@ impl Flags {
                 Modav {
                     file_path: Some(file_path),
                     theme_shadow: theme.clone(),
+                    is_ready,
                     current_view,
                     title,
                     theme,
                     toasts,
                     toast_timeout,
+                    main_window_id,
                     error,
                     tabs,
                     dialog_view,
@@ -324,6 +343,7 @@ pub enum Message {
     IconLoaded(Result<(), font::Error>),
     ToggleTheme,
     SelectFile,
+    Ready,
     FileSelected(Result<PathBuf, AppError>),
     LoadFile((PathBuf, FileIOAction)),
     FileLoaded((Result<String, AppError>, FileIOAction)),
@@ -332,7 +352,10 @@ pub enum Message {
     FileSaved((Result<(PathBuf, String), AppError>, FileIOAction)),
     Convert,
     None,
-    Event(Event),
+    WindowCloseRequested(window::Id),
+    SetMainWindowID(window::Id),
+    CloseWindow(window::Id),
+    KeyPressed(keyboard::Key, keyboard::Modifiers),
     CheckExit,
     CanExit,
     OpenTab(Option<PathBuf>, View),
@@ -364,7 +387,7 @@ impl Modav {
                         .and_then(|name| name.to_str())
                         .filter(|name| !name.is_empty())
                         .map(|file| {
-                            let text = text(file);
+                            let text = text(file.to_owned());
                             row!(text).spacing(5)
                         })
                 })
@@ -381,18 +404,16 @@ impl Modav {
                 (Some(p), m) => row!(m.display(), vertical_rule(10), p),
             }
         }
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .spacing(10);
 
         let row: Row<'_, Message> = row!(horizontal_space(), current)
             .height(Length::Fill)
-            .align_items(Alignment::Center);
+            .align_y(Alignment::Center);
 
-        let bstyle = BorderedContainer::default();
-
-        container(row)
-            .padding([0, 10])
-            .style(theme::Container::Custom(Box::new(bstyle)))
+        container(row).padding([0, 10]).style(|theme| {
+            <BorderedContainer as container::Catalog>::style(&BorderedContainer::default(), theme)
+        })
     }
 
     /// Creates a save message for the current tab. Assumes the path is valid
@@ -418,7 +439,7 @@ impl Modav {
         Message::SaveFile((save_path, content, action))
     }
 
-    fn file_menu(&self) -> DashMenu<Message, Renderer> {
+    fn file_menu(&self) -> DashMenu<Message> {
         let options = vec![
             DashMenuOption::new(
                 "New File",
@@ -459,13 +480,16 @@ impl Modav {
 
         let content = column!(logo, menus).spacing(80);
 
-        let bstyle = BorderedContainer::default();
         container(content)
-            .center_x()
+            .center_x(Length::FillPortion(1))
             .padding([15, 0])
-            .width(Length::FillPortion(1))
             .height(Length::Fill)
-            .style(theme::Container::Custom(Box::new(bstyle)))
+            .style(|theme| {
+                <BorderedContainer as container::Catalog>::style(
+                    &BorderedContainer::default(),
+                    theme,
+                )
+            })
     }
 
     fn toggle_theme(&mut self) {
@@ -506,19 +530,15 @@ impl Modav {
         }
     }
 
-    fn update_tabs(&mut self, tsg: TabsMessage) -> Command<Message> {
+    fn update_tabs(&mut self, tsg: TabsMessage) -> Task<Message> {
         if let Some(response) = self.tabs.update(tsg) {
-            Command::perform(async { response }, |response| response)
+            Task::perform(async { response }, |response| response)
         } else {
-            Command::none()
+            Task::none()
         }
     }
 
-    fn file_io_action_handler(
-        &mut self,
-        action: FileIOAction,
-        content: String,
-    ) -> Command<Message> {
+    fn file_io_action_handler(&mut self, action: FileIOAction, content: String) -> Task<Message> {
         match action {
             FileIOAction::NewTab((View::Editor(data), path)) => {
                 let data = data.path(path).data(content);
@@ -530,7 +550,7 @@ impl Modav {
                 match data {
                     Err(err) => {
                         let msg = Message::Error(err, true);
-                        Command::perform(async { msg }, |msg| msg)
+                        Task::perform(async { msg }, |msg| msg)
                     }
 
                     Ok(data) => {
@@ -545,7 +565,7 @@ impl Modav {
                 match data {
                     Err(err) => {
                         let msg = Message::Error(err, true);
-                        Command::perform(async { msg }, |msg| msg)
+                        Task::perform(async { msg }, |msg| msg)
                     }
 
                     Ok(data) => {
@@ -560,7 +580,7 @@ impl Modav {
                 match data {
                     Err(err) => {
                         let msg = Message::Error(err, true);
-                        Command::perform(async { msg }, |msg| msg)
+                        Task::perform(async { msg }, |msg| msg)
                     }
 
                     Ok(data) => {
@@ -581,7 +601,7 @@ impl Modav {
                 match data {
                     Err(err) => {
                         let msg = Message::Error(err, true);
-                        Command::perform(async { msg }, |msg| msg)
+                        Task::perform(async { msg }, |msg| msg)
                     }
                     Ok(data) => {
                         let rsh = Refresh::LineGraph(data);
@@ -594,7 +614,7 @@ impl Modav {
                 match data {
                     Err(err) => {
                         let msg = Message::Error(err, true);
-                        Command::perform(async { msg }, |msg| msg)
+                        Task::perform(async { msg }, |msg| msg)
                     }
                     Ok(data) => {
                         let rsh = Refresh::BarChart(data);
@@ -607,7 +627,7 @@ impl Modav {
                 match data {
                     Err(err) => {
                         let msg = Message::Error(err, true);
-                        Command::perform(async { msg }, |msg| msg)
+                        Task::perform(async { msg }, |msg| msg)
                     }
                     Ok(data) => {
                         let rsh = Refresh::StackedBarChart(data);
@@ -625,7 +645,7 @@ impl Modav {
                 let tsg = TabsMessage::Exit;
                 self.update_tabs(tsg)
             }
-            FileIOAction::None => Command::none(),
+            FileIOAction::None => Task::none(),
         }
     }
 
@@ -655,35 +675,20 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
 
         dialog_container(text).height(Length::Shrink).into()
     }
-}
-
-impl Application for Modav {
-    type Theme = Theme;
-    type Flags = Flags;
-    type Message = Message;
-    type Executor = executor::Default;
 
     fn title(&self) -> String {
         self.title.clone()
     }
 
-    fn theme(&self) -> Self::Theme {
+    fn theme(&self) -> Theme {
         self.theme.clone()
     }
 
-    fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
-        let commands = [
-            font::load(include_bytes!("../fonts/legend-icons.ttf").as_slice())
-                .map(Message::IconLoaded),
-            font::load(include_bytes!("../fonts/line-type-icons.ttf").as_slice())
-                .map(Message::IconLoaded),
-            font::load(include_bytes!("../fonts/util-icons.ttf").as_slice())
-                .map(Message::IconLoaded),
-        ];
-        (flags.create(), Command::batch(commands))
+    fn new(flags: Flags) -> Self {
+        flags.create()
     }
 
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+    fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Error(err, show_toast) => {
                 if show_toast {
@@ -695,24 +700,24 @@ impl Application for Modav {
                 } else {
                     error!("{}", err.message());
                 }
-                Command::none()
+                Task::none()
             }
             Message::IconLoaded(Ok(_)) => {
                 self.info_log("Icon Loaded Successfully");
-                Command::none()
+                Task::none()
             }
             Message::IconLoaded(Err(e)) => {
                 let error = AppError::FontLoading(e);
-                Command::perform(async { error }, |error| Message::Error(error, true))
+                Task::perform(async { error }, |error| Message::Error(error, true))
             }
             Message::ToggleTheme => {
                 self.info_log("Theme toggled");
                 self.toggle_theme();
-                Command::none()
+                Task::none()
             }
             Message::SelectFile => {
                 self.error = AppError::None;
-                Command::perform(pick_file(), Message::FileSelected)
+                Task::perform(pick_file(), Message::FileSelected)
             }
             Message::FileSelected(Ok(p)) => {
                 self.error = AppError::None;
@@ -724,16 +729,17 @@ impl Application for Modav {
                 ));
                 self.file_path = Some(p);
                 self.dialog_view = DialogView::Wizard;
-                Command::none()
+                Task::none()
             }
             Message::FileSelected(Err(e)) => {
-                Command::perform(async { e }, |error| Message::Error(error, true))
+                Task::perform(async { e }, |error| Message::Error(error, true))
             }
             Message::LoadFile((path, action)) => {
                 self.error = AppError::None;
-                Command::perform(load_file(path), move |(res, _)| {
-                    Message::FileLoaded((res, action))
-                })
+                Task::perform(
+                    async { (load_file(path).await, action) },
+                    |((res, _), action)| Message::FileLoaded((res, action)),
+                )
             }
             Message::FileLoaded((Ok(res), action)) => {
                 self.info_log("File loaded");
@@ -749,24 +755,26 @@ impl Application for Modav {
                     EditorTabData::new(Some(path.clone()), String::default()).read_only(true);
                 let action = FileIOAction::NewTab((View::Editor(data), path.clone()));
 
-                Command::perform(load_file(path), move |(res, _)| {
-                    Message::FileLoaded((res, action))
-                })
+                Task::perform(
+                    async { (load_file(path).await, action) },
+                    |((res, _), action)| Message::FileLoaded((res, action)),
+                )
             }
 
             Message::FileLoaded((Err(err), _)) => {
-                Command::perform(async { err }, |error| Message::Error(error, true))
+                Task::perform(async { err }, |error| Message::Error(error, true))
             }
             Message::OpenTab(path, tidr) => {
                 self.info_log("Tab opened");
                 let path = path.filter(|path| path.is_file());
 
                 match (path, tidr.should_load()) {
-                    (Some(path), true) => {
-                        Command::perform(load_file(path.clone()), |(res, path)| {
+                    (Some(path), true) => Task::perform(
+                        async move { (load_file(path.clone()).await, tidr) },
+                        |((res, path), tidr)| {
                             Message::FileLoaded((res, FileIOAction::NewTab((tidr, path))))
-                        })
-                    }
+                        },
+                    ),
                     (Some(_path), false) => {
                         let idr = match tidr {
                             View::Editor(_) => View::None,
@@ -802,29 +810,32 @@ impl Application for Modav {
             }
             Message::TabsMessage(tsg) => {
                 if let Some(response) = self.tabs.update(tsg) {
-                    Command::perform(async { response }, |response| response)
+                    Task::perform(async { response }, |response| response)
                 } else {
-                    Command::none()
+                    Task::none()
                 }
             }
             Message::SaveFile((path, content, action)) => {
                 self.error = AppError::None;
 
                 if self.tabs.active_tab_can_save() {
-                    Command::perform(save_file(path, content), |res| {
-                        let action = match &res {
-                            Err(_) => action,
-                            Ok((path, _)) => action.update_path(path.clone()),
-                        };
-                        Message::FileSaved((res, action))
-                    })
+                    Task::perform(
+                        async move { (save_file(path, content).await, action) },
+                        |(res, action)| {
+                            let action = match &res {
+                                Err(_) => action,
+                                Ok((path, _)) => action.update_path(path.clone()),
+                            };
+                            Message::FileSaved((res, action))
+                        },
+                    )
                 } else {
-                    Command::none()
+                    Task::none()
                 }
             }
             Message::SaveKeyPressed => {
                 let save_message = self.save_helper(self.tabs.active_path());
-                Command::perform(async { save_message }, |msg| msg)
+                Task::perform(async { save_message }, |msg| msg)
             }
             Message::FileSaved((Ok((_path, content)), action)) => {
                 let toast = Toast {
@@ -835,49 +846,56 @@ impl Application for Modav {
                 self.file_io_action_handler(action, content)
             }
             Message::FileSaved((Err(e), _)) => {
-                Command::perform(async { e }, |error| Message::Error(error, true))
+                Task::perform(async { e }, |error| Message::Error(error, true))
             }
             Message::CheckExit => self.update_tabs(TabsMessage::Exit),
+            Message::SetMainWindowID(id) => {
+                self.main_window_id = Some(id);
+                Task::none()
+            }
             Message::CanExit => {
                 self.info_log("Application closing");
-                window::close(window::Id::MAIN)
+                match self.main_window_id {
+                    Some(id) => window::close(id),
+                    None => Task::none(),
+                }
             }
             Message::NewActiveTab => {
                 self.info_log("New active tab");
                 self.current_view = self.tabs.active_tab_type().unwrap_or(ViewType::None);
                 self.file_path = self.tabs.active_path();
-                Command::none()
+                Task::none()
             }
-            Message::Convert => Command::none(),
-            Message::None => Command::none(),
+            Message::Convert => Task::none(),
+            Message::None => Task::none(),
             Message::Debugging => {
                 dbg!("Debugging Message sent!");
-                Command::none()
+                Task::none()
             }
             Message::CloseWizard => {
                 self.dialog_view = DialogView::None;
-                Command::perform(async {}, |_| Message::NewActiveTab)
+                Task::perform(async {}, |_| Message::NewActiveTab)
             }
             Message::WizardSubmit(path, view) => {
                 self.dialog_view = DialogView::None;
                 self.info_log("Wizard Submitted");
-                Command::perform(async { Message::OpenTab(Some(path), view) }, |msg| msg)
+                Task::perform(async { Message::OpenTab(Some(path), view) }, |msg| msg)
             }
             Message::ChangeTheme(theme) => {
                 self.theme = theme;
                 self.info_log("Theme Changed");
-                Command::none()
+                Task::none()
             }
             Message::OpenSettingsDialog => {
                 self.dialog_view = DialogView::Settings;
                 self.info_log("Settings Dialog Opened");
-                Command::none()
+                Task::none()
             }
             Message::AbortSettings => {
                 self.theme = self.theme_shadow.clone();
                 self.dialog_view = DialogView::None;
                 self.info_log("Settings Aborted");
-                Command::none()
+                Task::none()
             }
             Message::SaveSettings(theme, timeout) => {
                 self.theme_shadow = theme.clone();
@@ -891,63 +909,78 @@ impl Application for Modav {
                 };
                 self.push_toast(toast);
 
-                Command::none()
+                Task::none()
             }
             Message::AddToast(toast) => {
                 self.push_toast(toast);
-                Command::none()
+                Task::none()
             }
             Message::CloseToast(index) => {
                 self.toasts.remove(index);
-                Command::none()
+                Task::none()
             }
             Message::OpenAboutDialog => {
                 self.dialog_view = DialogView::About;
                 self.info_log("About dialog open");
-                Command::none()
+                Task::none()
             }
             Message::CloseAboutDialog => {
                 self.dialog_view = DialogView::None;
                 self.info_log("About dialog closed");
-                Command::none()
+                Task::none()
             }
             Message::OpenEditor(path) => match path {
                 Some(path) => {
                     let data = EditorTabData::new(Some(path.clone()), String::default());
                     let msg = Message::OpenTab(self.file_path.clone(), View::Editor(data));
 
-                    Command::perform(async { msg }, |msg| msg)
+                    Task::perform(async { msg }, |msg| msg)
                 }
-                None => Command::none(),
+                None => Task::none(),
             },
-            Message::Event(event) => match event {
-                Event::Window(window::Id::MAIN, window::Event::CloseRequested) => {
-                    self.update_tabs(TabsMessage::Exit)
+            Message::CloseWindow(id) => {
+                self.info_log(format!("Closing window with Id: {id}"));
+                window::close(id)
+            }
+            Message::WindowCloseRequested(id) => window::get_oldest().and_then(move |oldest| {
+                if id == oldest {
+                    Task::done(Message::CheckExit)
+                } else {
+                    Task::done(Message::CloseWindow(id))
                 }
-                Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => match key {
-                    Key::Named(key::Named::Save) if modifiers.command() => {
-                        let save_message = self.save_helper(self.tabs.active_path());
-                        Command::perform(async { save_message }, |msg| msg)
+            }),
+            Message::KeyPressed(key, modifiers) => match key {
+                Key::Named(key::Named::Save) if modifiers.command() => {
+                    let save_message = self.save_helper(self.tabs.active_path());
+                    Task::perform(async { save_message }, |msg| msg)
+                }
+                Key::Character(s) if s.as_str() == "s" && modifiers.command() => {
+                    let save_message = self.save_helper(self.tabs.active_path());
+                    Task::perform(async { save_message }, |msg| msg)
+                }
+                Key::Named(key::Named::Tab) => {
+                    if modifiers.shift() {
+                        widget::focus_previous()
+                    } else {
+                        widget::focus_next()
                     }
-                    Key::Character(s) if s.as_str() == "s" && modifiers.command() => {
-                        let save_message = self.save_helper(self.tabs.active_path());
-                        Command::perform(async { save_message }, |msg| msg)
-                    }
-                    Key::Named(key::Named::Tab) => {
-                        if modifiers.shift() {
-                            widget::focus_previous()
-                        } else {
-                            widget::focus_next()
-                        }
-                    }
-                    _ => Command::none(),
-                },
-                _ => Command::none(),
+                }
+                _ => Task::none(),
             },
+            Message::Ready => {
+                self.is_ready = true;
+                Task::none()
+            }
         }
     }
 
-    fn view(&self) -> iced::Element<'_, Self::Message, Self::Theme, iced::Renderer> {
+    fn view(&self) -> iced::Element<'_, Message, Theme, iced::Renderer> {
+        if !self.is_ready {
+            let temp = text("Loading...").size(20.);
+            let content = container(temp).center(Length::Fill);
+            return content.into();
+        }
+
         let status_bar = self.status_bar().height(Length::FillPortion(1));
         let dashboard = self.dashboard();
 
@@ -999,7 +1032,20 @@ impl Application for Modav {
         container(content).height(Length::Fill).into()
     }
 
-    fn subscription(&self) -> Subscription<Self::Message> {
-        event::listen().map(Message::Event)
+    fn subscription(&self) -> Subscription<Message> {
+        let close_window = window::close_requests().map(Message::WindowCloseRequested);
+
+        let key_press = keyboard::on_key_press(|key, modifiers| match key {
+            Key::Named(key::Named::Save) | Key::Named(key::Named::Tab) => {
+                Some(Message::KeyPressed(key, modifiers))
+            }
+            Key::Character(ref s) if s.as_str() == "s" => Some(Message::KeyPressed(key, modifiers)),
+            _ => None,
+        });
+
+        Subscription::batch(vec![close_window, key_press])
+        //event::listen()
+        //    .with(self.main_window_id.clone())
+        //    .map(|id, event| Message::Event(id, event))
     }
 }
