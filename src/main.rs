@@ -1,7 +1,10 @@
 use iced::{
     application, font,
     keyboard::{self, key, Key},
-    widget::{self, column, container, horizontal_space, row, text, vertical_rule, Container, Row},
+    widget::{
+        self, button, column, container, container::bordered_box, horizontal_space, pick_list, row,
+        text, text_input, vertical_rule, Container, Row, Space,
+    },
     window, Alignment, Element, Font, Length, Subscription, Task, Theme,
 };
 
@@ -14,7 +17,7 @@ mod styles;
 use styles::*;
 
 mod utils;
-use utils::{icons, load_file, menus, pick_file, save_file, AppError};
+use utils::{icons, load_file, pick_file, save_file, AppError};
 
 mod views;
 use views::{
@@ -24,13 +27,22 @@ use views::{
 
 pub mod widgets;
 use widgets::{
-    dashmenu::{DashMenu, DashMenuOption},
     modal::Modal,
-    settings::SettingsDialog,
+    sidemenu::{Context, Menu, MenuSection, SideMenu},
     style::dialog_container,
     toast::{self, Status, Toast},
     wizard::{BarChartConfigState, LineConfigState, StackedBarChartConfigState, Wizard},
 };
+
+const THEMES: [Theme; 7] = [
+    Theme::TokyoNight,
+    Theme::TokyoNightLight,
+    Theme::GruvboxDark,
+    Theme::GruvboxLight,
+    Theme::SolarizedDark,
+    Theme::SolarizedLight,
+    Theme::Nightfly,
+];
 
 fn main() -> Result<(), iced::Error> {
     let fallback_log = "./modav.log";
@@ -93,13 +105,13 @@ fn main() -> Result<(), iced::Error> {
         .with_env_filter(filter)
         .init();
 
-    let _flags = Flags::Prod(if fallback_flag {
+    let flags = Flags::Prod(if fallback_flag {
         PathBuf::from(fallback_log)
     } else {
         log
     });
 
-    let flags = Flags::Stacked;
+    //let flags = Flags::Stacked;
 
     application(Modav::title, Modav::update, Modav::view)
         .centered()
@@ -125,6 +137,13 @@ fn main() -> Result<(), iced::Error> {
 
             (app, status)
         })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MenuContext {
+    File,
+    Settings,
+    None,
 }
 
 /// What should be done after a file IO action
@@ -157,26 +176,51 @@ impl FileIOAction {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 enum DialogView {
     Wizard,
-    Settings,
     About,
     #[default]
     None,
 }
 
-pub struct Modav {
+#[derive(Debug, Clone, PartialEq)]
+struct Settings {
     theme: Theme,
-    theme_shadow: Theme,
+    timeout: u64,
+    log_file: PathBuf,
+}
+
+impl Settings {
+    fn new(theme: Theme, timeout: u64, log_file: PathBuf) -> Self {
+        Self {
+            theme,
+            timeout,
+            log_file,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SettingsMessage {
+    ThemeChange(Theme),
+    TimeoutChange(String),
+    ReselectLog,
+    LogReselect(PathBuf),
+    Cancel,
+    Save,
+}
+
+pub struct Modav {
     title: String,
     current_view: ViewType,
     file_path: Option<PathBuf>,
     tabs: Tabs<Theme>,
     toasts: Vec<Toast>,
-    toast_timeout: u64,
     dialog_view: DialogView,
     error: AppError,
-    log_file: PathBuf,
+    settings: Settings,
+    new_settings: Option<Settings>,
     main_window_id: Option<window::Id>,
     is_ready: bool,
+    context: MenuContext,
 }
 
 #[derive(Debug, Clone)]
@@ -189,7 +233,7 @@ pub enum Flags {
 
 impl Flags {
     fn create(self) -> Modav {
-        let theme = Theme::TokyoNight;
+        let theme = Theme::TokyoNightLight;
         let toasts = Vec::default();
         let title = String::from("Modav");
         let error = AppError::None;
@@ -210,22 +254,29 @@ impl Flags {
         let toast_timeout = 2;
         let dialog_view = DialogView::default();
         let default_log_file = PathBuf::from("~/.local/share/modav.log");
+        let context = MenuContext::None;
+
+        let mut settings = Settings::new(theme.clone(), toast_timeout, default_log_file);
+
         match self {
-            Self::Prod(log_file) => Modav {
-                file_path: None,
-                current_view: ViewType::None,
-                is_ready,
-                theme_shadow: theme.clone(),
-                title,
-                theme,
-                toasts,
-                main_window_id,
-                toast_timeout,
-                error,
-                tabs,
-                dialog_view,
-                log_file,
-            },
+            Self::Prod(log_file) => {
+                settings.log_file = log_file;
+
+                Modav {
+                    file_path: None,
+                    current_view: ViewType::None,
+                    new_settings: None,
+                    is_ready,
+                    title,
+                    toasts,
+                    settings,
+                    main_window_id,
+                    error,
+                    tabs,
+                    dialog_view,
+                    context,
+                }
+            }
             Self::Line => {
                 let file_path = PathBuf::from("../../../alter.csv");
                 let current_view = ViewType::LineGraph;
@@ -240,18 +291,17 @@ impl Flags {
 
                 Modav {
                     file_path: Some(file_path),
-                    theme_shadow: theme.clone(),
                     is_ready,
                     current_view,
                     title,
-                    theme,
+                    settings,
+                    new_settings: None,
                     main_window_id,
                     toasts,
-                    toast_timeout,
                     error,
                     tabs,
                     dialog_view,
-                    log_file: default_log_file,
+                    context,
                 }
             }
             Self::Bar => {
@@ -281,18 +331,17 @@ impl Flags {
 
                 Modav {
                     file_path: Some(file_path),
-                    theme_shadow: theme.clone(),
+                    new_settings: None,
                     is_ready,
                     current_view,
                     title,
-                    theme,
                     main_window_id,
+                    settings,
                     toasts,
-                    toast_timeout,
                     error,
                     tabs,
                     dialog_view,
-                    log_file: default_log_file,
+                    context,
                 }
             }
             Self::Stacked => {
@@ -313,25 +362,24 @@ impl Flags {
                     };
                     let data = StackedBarChartTabData::new(file_path.clone(), config)
                         .expect("Stacked Bar Chart dev flag panic")
-                        .theme(theme.clone());
+                        .theme(theme);
                     let view = View::StackedBarChart(data);
                     tabs.update(TabsMessage::AddTab(view));
                 }
 
                 Modav {
                     file_path: Some(file_path),
-                    theme_shadow: theme.clone(),
+                    new_settings: None,
                     is_ready,
                     current_view,
                     title,
-                    theme,
                     toasts,
-                    toast_timeout,
+                    settings,
                     main_window_id,
                     error,
                     tabs,
                     dialog_view,
-                    log_file: default_log_file,
+                    context,
                 }
             }
         }
@@ -341,7 +389,6 @@ impl Flags {
 #[derive(Debug, Clone)]
 pub enum Message {
     IconLoaded(Result<(), font::Error>),
-    ToggleTheme,
     SelectFile,
     Ready,
     FileSelected(Result<PathBuf, AppError>),
@@ -364,18 +411,31 @@ pub enum Message {
     Debugging,
     WizardSubmit(PathBuf, View),
     CloseWizard,
-    OpenSettingsDialog,
-    AbortSettings,
-    SaveSettings(Theme, u64),
+    Settings(SettingsMessage),
     OpenAboutDialog,
     CloseAboutDialog,
     OpenLogFile,
-    ChangeTheme(Theme),
     AddToast(Toast),
     CloseToast(usize),
     Error(AppError, bool),
+    MenuContext(MenuContext),
+    CloseContext,
+    Chain(Box<(Message, Message)>),
     /// Open the editor for the current model
     OpenEditor(Option<PathBuf>),
+}
+
+#[allow(dead_code)]
+impl Message {
+    fn chain(self, message: Self) -> Self {
+        let boxed = Box::new((self, message));
+
+        Self::Chain(boxed)
+    }
+
+    fn close_context(self) -> Self {
+        self.chain(Message::CloseContext)
+    }
 }
 
 impl Modav {
@@ -439,95 +499,202 @@ impl Modav {
         Message::SaveFile((save_path, content, action))
     }
 
-    fn file_menu(&self) -> DashMenu<Message> {
-        let options = vec![
-            DashMenuOption::new(
-                "New File",
-                Some(Message::OpenTab(
-                    None,
-                    View::Editor(EditorTabData::default()),
-                )),
-            ),
-            DashMenuOption::new("Open File", Some(Message::SelectFile)),
-            DashMenuOption::new("Save File", Some(self.save_helper(self.tabs.active_path()))),
-            DashMenuOption::new("Save As", Some(self.save_helper(None))),
-        ];
+    fn handle_context(&self) -> Element<'_, Message> {
+        let header_font = Font {
+            weight: font::Weight::Semibold,
+            ..Default::default()
+        };
+        let size = 18;
 
-        let menu = DashMenu::new(icons::FILE, "File").submenus(options);
+        match self.context {
+            MenuContext::None => Space::with_width(0).into(),
+            MenuContext::File => {
+                let styler = |theme: &Theme, status: iced::widget::button::Status| {
+                    use iced::widget::button::{text, Status, Style};
+                    let default = text(theme, status);
 
-        menus::menu_styler(menu)
+                    let background = theme.extended_palette().background.strong;
+                    let border = iced::Border::default().rounded(8.0);
+
+                    match status {
+                        Status::Hovered => Style {
+                            background: Some(iced::Background::Color(background.color)),
+                            text_color: background.text,
+                            border,
+                            ..default
+                        },
+                        _ => default,
+                    }
+                };
+
+                let header = text("File Menu").font(header_font).size(size);
+
+                let open = button("Open File")
+                    .on_press(Message::SelectFile.close_context())
+                    .width(Length::Fill)
+                    .style(styler);
+
+                let new = button("New File")
+                    .on_press(
+                        Message::OpenTab(None, View::Editor(EditorTabData::default()))
+                            .close_context(),
+                    )
+                    .width(Length::Fill)
+                    .style(styler);
+
+                let save = button("Save File")
+                    .on_press_maybe(
+                        self.tabs
+                            .active_tab_can_save()
+                            .then(|| self.save_helper(self.tabs.active_path()).close_context()),
+                    )
+                    .width(Length::Fill)
+                    .style(styler);
+
+                let save_new = button("Save As")
+                    .on_press_maybe(
+                        self.tabs
+                            .active_tab_can_save()
+                            .then(|| self.save_helper(self.tabs.active_path()).close_context()),
+                    )
+                    .width(Length::Fill)
+                    .style(styler);
+
+                let context =
+                    context!(Space::with_height(0.0), header, Space::with_height(28.0), open, new, save, save_new ; Message::MenuContext(MenuContext::None))
+                    .width(Length::Fill)
+                    .spacing(20.0)
+                .height(Length::Fill);
+
+                container(context).style(bordered_box).into()
+            }
+            MenuContext::Settings => {
+                let header = text("Settings Menu").size(size).font(header_font);
+
+                let theme = {
+                    let label = text("Change Theme:");
+
+                    let pick_list = pick_list(THEMES, Some(self.theme()), |theme| {
+                        Message::Settings(SettingsMessage::ThemeChange(theme))
+                    });
+
+                    row!(label, pick_list)
+                        .spacing(10)
+                        .align_y(Alignment::Center)
+                };
+
+                let timeout = {
+                    let value = self.timeout();
+
+                    let label = text("Toast timeout:");
+
+                    let input = text_input("", &value.to_string())
+                        .on_input(|timeout| {
+                            Message::Settings(SettingsMessage::TimeoutChange(timeout))
+                        })
+                        .padding([0, 5])
+                        .width(44.0);
+
+                    row!(
+                        label,
+                        row!(input, text("seconds"))
+                            .align_y(Alignment::Center)
+                            .spacing(5)
+                    )
+                    .spacing(20.0)
+                };
+
+                let log = button(text("Open Log File").size(15.0))
+                    .on_press(Message::OpenLogFile.close_context());
+
+                let actions = {
+                    let cancel = button(text("Cancel").size(13.0))
+                        .on_press(Message::Settings(SettingsMessage::Cancel).close_context());
+
+                    let submit = button(text("Save").size(13.0))
+                        .on_press(Message::Settings(SettingsMessage::Save).close_context());
+
+                    row!(cancel, horizontal_space(), submit)
+                };
+
+                let msg = Message::Settings(SettingsMessage::Cancel).close_context();
+
+                let context = context!(
+                        Space::with_height(0.0),
+                        header,
+                        Space::with_height(28.0),
+                        theme,
+                        timeout,
+                        log,
+                        Space::with_height(Length::Fill),
+                        actions;
+                        msg)
+                .spacing(20.0)
+                .height(Length::Fill);
+
+                container(context).style(bordered_box).into()
+            }
+        }
     }
 
-    fn dashboard(&self) -> Container<'_, Message> {
+    fn side_menu(&self) -> Element<'_, Message> {
         let font = Font {
             family: font::Family::Cursive,
             weight: font::Weight::Bold,
             ..Default::default()
         };
-        let logo = container(text("modav").font(font).size(24))
-            .padding([0, 8])
-            .width(Length::Fixed(125.0));
 
-        let menus = {
-            column!(
-                self.file_menu(),
-                menus::models_menu(),
-                menus::about_menu(),
-                menus::settings_menu()
-            )
-            .spacing(45)
-        };
+        let size = 18.0;
+        let icon_size = f32::max(size * 0.9, 18.0);
 
-        let content = column!(logo, menus).spacing(80);
+        let header = Menu::new(
+            icons::icon(icons::SETTINGS).size(24),
+            text("modav").font(font).size(24),
+        );
 
-        container(content)
-            .center_x(Length::FillPortion(1))
-            .padding([15, 0])
-            .height(Length::Fill)
-            .style(|theme| {
-                <BorderedContainer as container::Catalog>::style(
-                    &BorderedContainer::default(),
-                    theme,
-                )
-            })
-    }
+        let file = Menu::new(
+            icons::icon(icons::FILE).size(icon_size),
+            text("File").size(size),
+        )
+        .width(Length::Fill)
+        .message(Message::MenuContext(MenuContext::File));
 
-    fn toggle_theme(&mut self) {
-        match self.theme {
-            Theme::Dark => {
-                self.theme = Theme::Light;
-                self.theme_shadow = self.theme.clone();
-            }
-            Theme::Light => {
-                self.theme = Theme::Dark;
-                self.theme_shadow = self.theme.clone();
-            }
-            Theme::SolarizedLight => {
-                self.theme = Theme::SolarizedDark;
-                self.theme_shadow = self.theme.clone();
-            }
-            Theme::SolarizedDark => {
-                self.theme = Theme::SolarizedLight;
-                self.theme_shadow = self.theme.clone();
-            }
-            Theme::GruvboxLight => {
-                self.theme = Theme::GruvboxDark;
-                self.theme_shadow = self.theme.clone();
-            }
-            Theme::GruvboxDark => {
-                self.theme = Theme::GruvboxLight;
-                self.theme_shadow = self.theme.clone();
-            }
-            Theme::TokyoNight => {
-                self.theme = Theme::TokyoNightLight;
-                self.theme_shadow = self.theme.clone();
-            }
-            Theme::TokyoNightLight => {
-                self.theme = Theme::TokyoNight;
-                self.theme_shadow = self.theme.clone();
-            }
-            _ => {}
-        }
+        let models = Menu::new(
+            icons::icon(icons::CHART).size(icon_size),
+            text("Models").size(size),
+        )
+        .width(Length::Fill);
+
+        let about = Menu::new(
+            icons::icon(icons::INFO).size(icon_size),
+            text("Information").size(size),
+        )
+        .width(Length::Fill)
+        .message(Message::OpenAboutDialog);
+
+        let help = Menu::new(
+            icons::icon(icons::HELP).size(icon_size),
+            text("Help").size(size),
+        )
+        .width(Length::Fill);
+
+        let settings = Menu::new(
+            icons::icon(icons::SETTINGS).size(icon_size),
+            text("Settings").size(size),
+        )
+        .message(Message::MenuContext(MenuContext::Settings))
+        .width(Length::Fill);
+
+        let menu = SideMenu::new(
+            header,
+            section!(file, models).width(Length::Fill).spacing(20.0),
+            section!(about, help, settings).width(Length::Fill),
+        )
+        .height(Length::Fill);
+
+        let content = container(menu).style(bordered_box);
+
+        content.into()
     }
 
     fn update_tabs(&mut self, tsg: TabsMessage) -> Task<Message> {
@@ -554,7 +721,7 @@ impl Modav {
                     }
 
                     Ok(data) => {
-                        let data = data.theme(self.theme.clone());
+                        let data = data.theme(self.theme());
                         let idr = View::LineGraph(data);
                         self.update_tabs(TabsMessage::AddTab(idr))
                     }
@@ -569,7 +736,7 @@ impl Modav {
                     }
 
                     Ok(data) => {
-                        let data = data.theme(self.theme.clone());
+                        let data = data.theme(self.theme());
                         let idr = View::BarChart(data);
                         self.update_tabs(TabsMessage::AddTab(idr))
                     }
@@ -584,7 +751,7 @@ impl Modav {
                     }
 
                     Ok(data) => {
-                        let data = data.theme(self.theme.clone());
+                        let data = data.theme(self.theme());
                         let idr = View::StackedBarChart(data);
                         self.update_tabs(TabsMessage::AddTab(idr))
                     }
@@ -681,7 +848,88 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
     }
 
     fn theme(&self) -> Theme {
-        self.theme.clone()
+        self.new_settings
+            .as_ref()
+            .map(|settings| settings.theme.clone())
+            .unwrap_or(self.settings.theme.clone())
+    }
+
+    fn theme_ref(&self) -> &Theme {
+        self.new_settings
+            .as_ref()
+            .map(|settings| &settings.theme)
+            .unwrap_or(&self.settings.theme)
+    }
+
+    fn timeout(&self) -> u64 {
+        self.new_settings
+            .as_ref()
+            .map(|settings| settings.timeout)
+            .unwrap_or(self.settings.timeout)
+    }
+
+    fn log_file(&self) -> &PathBuf {
+        self.new_settings
+            .as_ref()
+            .map(|settings| &settings.log_file)
+            .unwrap_or(&self.settings.log_file)
+    }
+
+    fn handle_settings_message(&mut self, message: SettingsMessage) -> Task<Message> {
+        if let Some(settings) = self.new_settings.as_mut() {
+            match message {
+                SettingsMessage::ThemeChange(theme) => settings.theme = theme,
+
+                SettingsMessage::TimeoutChange(mut timeout) => {
+                    if !timeout.is_empty() {
+                        if let Some(first) = timeout.chars().next() {
+                            if settings.timeout == 0 && first != '0' {
+                                timeout.pop();
+                            }
+                        }
+                        settings.timeout = timeout.parse().unwrap_or(self.settings.timeout);
+
+                        let toast = Toast {
+                            body: format!("Toast with {timeout} second timeout."),
+                            status: Status::Info,
+                        };
+                        self.push_toast(toast);
+                    } else {
+                        settings.timeout = 0;
+                    }
+                }
+
+                SettingsMessage::Cancel => {
+                    self.dialog_view = DialogView::None;
+                    self.new_settings = None;
+                    self.info_log("Settings Aborted");
+                }
+
+                SettingsMessage::Save => {
+                    if let Some(settings) = self.new_settings.take() {
+                        self.settings = settings;
+                    }
+                    self.dialog_view = DialogView::None;
+
+                    let toast = Toast {
+                        body: "Settings Saved".into(),
+                        status: Status::Success,
+                    };
+                    self.push_toast(toast);
+                }
+
+                SettingsMessage::ReselectLog => {
+                    let msg = Message::SelectFile;
+                    return Task::done(msg);
+                }
+
+                SettingsMessage::LogReselect(log) => {
+                    self.error = AppError::None;
+                    settings.log_file = log;
+                }
+            }
+        }
+        Task::none()
     }
 
     fn new(flags: Flags) -> Self {
@@ -710,30 +958,23 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
                 let error = AppError::FontLoading(e);
                 Task::perform(async { error }, |error| Message::Error(error, true))
             }
-            Message::ToggleTheme => {
-                self.info_log("Theme toggled");
-                self.toggle_theme();
-                Task::none()
-            }
             Message::SelectFile => {
                 self.error = AppError::None;
                 Task::perform(pick_file(), Message::FileSelected)
             }
-            Message::FileSelected(Ok(p)) => {
+            Message::FileSelected(Ok(file)) => {
                 self.error = AppError::None;
                 self.info_log(format!(
                     "{} file selected",
-                    p.file_name()
+                    file.file_name()
                         .map(|name| name.to_str().unwrap_or("None"))
                         .unwrap_or("None")
                 ));
-                self.file_path = Some(p);
+                self.file_path = Some(file);
                 self.dialog_view = DialogView::Wizard;
                 Task::none()
             }
-            Message::FileSelected(Err(e)) => {
-                Task::perform(async { e }, |error| Message::Error(error, true))
-            }
+            Message::FileSelected(Err(error)) => Task::done(Message::Error(error, true)),
             Message::LoadFile((path, action)) => {
                 self.error = AppError::None;
                 Task::perform(
@@ -747,10 +988,9 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             }
             Message::OpenLogFile => {
                 self.dialog_view = DialogView::None;
-                self.theme = self.theme_shadow.clone();
                 self.info_log("Opening Log file");
 
-                let path = self.log_file.clone();
+                let path = self.log_file().clone();
                 let data =
                     EditorTabData::new(Some(path.clone()), String::default()).read_only(true);
                 let action = FileIOAction::NewTab((View::Editor(data), path.clone()));
@@ -779,15 +1019,15 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
                         let idr = match tidr {
                             View::Editor(_) => View::None,
                             View::LineGraph(data) => {
-                                let data = data.theme(self.theme.clone());
+                                let data = data.theme(self.theme());
                                 View::LineGraph(data)
                             }
                             View::BarChart(data) => {
-                                let data = data.theme(self.theme.clone());
+                                let data = data.theme(self.theme());
                                 View::BarChart(data)
                             }
                             View::StackedBarChart(data) => {
-                                let data = data.theme(self.theme.clone());
+                                let data = data.theme(self.theme());
                                 View::StackedBarChart(data)
                             }
                             View::None => View::None,
@@ -881,36 +1121,6 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
                 self.info_log("Wizard Submitted");
                 Task::perform(async { Message::OpenTab(Some(path), view) }, |msg| msg)
             }
-            Message::ChangeTheme(theme) => {
-                self.theme = theme;
-                self.info_log("Theme Changed");
-                Task::none()
-            }
-            Message::OpenSettingsDialog => {
-                self.dialog_view = DialogView::Settings;
-                self.info_log("Settings Dialog Opened");
-                Task::none()
-            }
-            Message::AbortSettings => {
-                self.theme = self.theme_shadow.clone();
-                self.dialog_view = DialogView::None;
-                self.info_log("Settings Aborted");
-                Task::none()
-            }
-            Message::SaveSettings(theme, timeout) => {
-                self.theme_shadow = theme.clone();
-                self.theme = theme;
-                self.toast_timeout = timeout;
-                self.dialog_view = DialogView::None;
-
-                let toast = Toast {
-                    body: "Settings Saved".into(),
-                    status: Status::Success,
-                };
-                self.push_toast(toast);
-
-                Task::none()
-            }
             Message::AddToast(toast) => {
                 self.push_toast(toast);
                 Task::none()
@@ -971,6 +1181,27 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
                 self.is_ready = true;
                 Task::none()
             }
+            Message::MenuContext(context) => {
+                self.context = context;
+                if context == MenuContext::Settings {
+                    self.new_settings = Some(self.settings.clone());
+                    self.info_log("Settings Dialog Opened");
+                }
+                Task::none()
+            }
+            Message::CloseContext => {
+                self.context = MenuContext::None;
+                Task::none()
+            }
+            Message::Settings(message) => self.handle_settings_message(message),
+            Message::Chain(messages) => {
+                let (msg1, msg2) = *messages;
+
+                let tsk1 = Task::done(msg1);
+                let tsk2 = Task::done(msg2);
+
+                tsk1.chain(tsk2)
+            }
         }
     }
 
@@ -981,8 +1212,7 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             return content.into();
         }
 
-        let status_bar = self.status_bar().height(Length::FillPortion(1));
-        let dashboard = self.dashboard();
+        let _status_bar = self.status_bar().height(Length::FillPortion(1));
 
         let content = if self.tabs.is_empty() {
             home_view().into()
@@ -990,9 +1220,10 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             self.tabs.view(Message::TabsMessage)
         };
 
-        let cross_axis = row!(dashboard, content).height(Length::FillPortion(30));
+        let cross_axis =
+            row!(self.side_menu(), self.handle_context(), content).height(Length::FillPortion(30));
 
-        let main_axis = column!(cross_axis, status_bar);
+        let main_axis = column!(cross_axis);
 
         let content: Element<'_, Message> = match self.dialog_view {
             DialogView::None => main_axis.into(),
@@ -1011,23 +1242,18 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
                     .on_blur(Message::CloseWizard)
                     .into()
             }
-            DialogView::Settings => {
-                let settings = SettingsDialog::new(self.theme.clone(), self.toast_timeout)
-                    .on_cancel(Message::AbortSettings)
-                    .on_submit(Message::SaveSettings)
-                    .on_log(Message::OpenLogFile)
-                    .on_theme_change(Message::ChangeTheme);
-                Modal::new(main_axis, settings)
-                    .on_blur(Message::AbortSettings)
-                    .into()
-            }
             DialogView::About => Modal::new(main_axis, self.about())
                 .on_blur(Message::CloseAboutDialog)
                 .into(),
         };
 
-        let content = toast::Manager::new(content, &self.toasts, Message::CloseToast, &self.theme)
-            .timeout(self.toast_timeout);
+        let content = toast::Manager::new(
+            content,
+            &self.toasts,
+            Message::CloseToast,
+            &self.theme_ref(),
+        )
+        .timeout(self.timeout());
 
         container(content).height(Length::Fill).into()
     }

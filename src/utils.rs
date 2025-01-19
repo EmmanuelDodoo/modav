@@ -1,4 +1,3 @@
-use super::Message;
 use iced::font;
 use std::fmt::{Debug, Display};
 use std::io;
@@ -354,7 +353,7 @@ pub mod coloring {
     }
 }
 
-#[allow(dead_code, unused_imports)]
+#[allow(dead_code)]
 pub mod icons {
     use iced::{
         alignment,
@@ -369,6 +368,8 @@ pub mod icons {
     pub const NEW_FILE: char = '\u{E801}';
     pub const ANGLE_UP: char = '\u{F106}';
     pub const ANGLE_DOWN: char = '\u{F107}';
+    pub const ANGLE_LEFT: char = '\u{F104}';
+    pub const ANGLE_RIGHT: char = '\u{F105}';
     pub const CHART: char = '\u{E802}';
     pub const BARCHART: char = '\u{E80E}';
     pub const SETTINGS: char = '\u{E800}';
@@ -487,44 +488,6 @@ impl std::error::Error for AppError {}
 impl From<Error> for AppError {
     fn from(value: Error) -> Self {
         Self::CSVError(value)
-    }
-}
-
-pub mod menus {
-
-    use crate::widgets::dashmenu::{DashMenu, DashMenuOption};
-
-    use super::{icons, Message};
-
-    use iced::{Font, Length};
-
-    pub fn menu_styler(menu: DashMenu<Message>) -> DashMenu<Message> {
-        menu.spacing(10.0)
-            .width(Length::Fixed(150.0))
-            .padding([2.0, 8.0])
-            .submenu_padding([2.0, 8.0])
-            .icon_font(Font::with_name(icons::NAME))
-    }
-
-    pub fn models_menu<'a>() -> DashMenu<Message> {
-        let options = vec![DashMenuOption::new("Line Graph", Some(Message::Convert))];
-
-        let menu = DashMenu::new(icons::CHART, "Models").submenus(options);
-
-        menu_styler(menu)
-    }
-
-    pub fn about_menu<'a>() -> DashMenu<Message> {
-        let menu = DashMenu::new(icons::INFO, "About").on_select(Message::OpenAboutDialog);
-
-        menu_styler(menu)
-    }
-
-    pub fn settings_menu<'a>() -> DashMenu<Message> {
-        let menu =
-            DashMenu::new(icons::SETTINGS, "Settings").on_select(Message::OpenSettingsDialog);
-
-        menu_styler(menu)
     }
 }
 
