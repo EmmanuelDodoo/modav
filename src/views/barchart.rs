@@ -58,6 +58,10 @@ impl GraphBar {
         self.color = color;
         self
     }
+
+    fn set_color(&mut self, color: impl Into<Color>) {
+        self.color = color.into();
+    }
 }
 
 impl From<Bar> for GraphBar {
@@ -69,13 +73,13 @@ impl From<Bar> for GraphBar {
 }
 
 impl Graphable for GraphBar {
-    type Data = bool;
+    type Data<'a> = bool;
 
     fn label(&self) -> Option<&String> {
         self.label.as_ref()
     }
 
-    fn draw_legend_filter(&self, _data: &Self::Data) -> bool {
+    fn draw_legend_filter(&self, _data: &Self::Data<'_>) -> bool {
         self.label.is_some()
     }
 
@@ -85,7 +89,7 @@ impl Graphable for GraphBar {
         bounds: iced::Rectangle,
         color: Color,
         idx: usize,
-        _data: &Self::Data,
+        _data: &Self::Data<'_>,
     ) {
         if idx > 4 {
             return;
@@ -121,7 +125,7 @@ impl Graphable for GraphBar {
         frame: &mut canvas::Frame,
         x_output: &DrawnOutput,
         y_output: &DrawnOutput,
-        data: &Self::Data,
+        data: &Self::Data<'_>,
     ) {
         let is_horizontal = *data;
 
@@ -268,6 +272,8 @@ pub struct BarChartTab {
     clean: bool,
     cache: canvas::Cache,
     legend: LegendPosition,
+    theme: Theme,
+    order: bool,
 }
 
 impl BarChartTab {
@@ -475,11 +481,10 @@ impl BarChartTab {
         let (x_axis, y_axis) = self.create_axis();
 
         let content = Canvas::new(
-            Graph::new(x_axis, y_axis, &self.bars, &self.cache)
+            Graph::new(x_axis, y_axis, &self.bars, &self.cache, self.is_horizontal)
                 .caption(self.caption.as_ref())
                 .labels_len(self.bars.iter().filter(|bar| bar.label.is_some()).count())
-                .legend(self.legend)
-                .data(self.is_horizontal),
+                .legend(self.legend),
         )
         .width(Length::FillPortion(24))
         .height(Length::Fill);
@@ -547,6 +552,8 @@ impl Viewable for BarChartTab {
             caption,
             bars,
             is_horizontal,
+            theme,
+            order,
             config_shown: false,
             sequential_x: false,
             sequential_y: false,
@@ -596,6 +603,20 @@ impl Viewable for BarChartTab {
         let new = <Self as Viewable>::new(data);
 
         *self = new;
+    }
+
+    fn theme_changed(&mut self, theme: &Theme) {
+        if &self.theme == theme {
+            return;
+        }
+        self.theme = theme.clone();
+
+        let colors = ColorEngine::new(&self.theme).gradual(self.order);
+
+        self.bars
+            .iter_mut()
+            .zip(colors)
+            .for_each(|(bar, color)| bar.set_color(color));
     }
 
     fn update(&mut self, message: Self::Event) -> Option<Message> {

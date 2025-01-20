@@ -97,16 +97,20 @@ impl GraphLine {
             label,
         }
     }
+
+    pub fn set_color(&mut self, color: Color) {
+        self.color = color;
+    }
 }
 
 impl Graphable for GraphLine {
-    type Data = GraphType;
+    type Data<'a> = GraphType;
 
     fn label(&self) -> Option<&String> {
         self.label.as_ref()
     }
 
-    fn draw_legend_filter(&self, _data: &Self::Data) -> bool {
+    fn draw_legend_filter(&self, _data: &Self::Data<'_>) -> bool {
         self.label().is_some()
     }
 
@@ -116,7 +120,7 @@ impl Graphable for GraphLine {
         bounds: iced::Rectangle,
         color: Color,
         idx: usize,
-        _data: &Self::Data,
+        _data: &Self::Data<'_>,
     ) {
         if idx > 4 {
             return;
@@ -152,7 +156,7 @@ impl Graphable for GraphLine {
         frame: &mut Frame,
         x_output: &DrawnOutput,
         y_output: &DrawnOutput,
-        data: &Self::Data,
+        data: &Self::Data<'_>,
     ) {
         self.points.iter().fold(None, |prev, point| {
             let x = match x_output.get_closest(&point.x, true) {
@@ -330,7 +334,7 @@ impl LineGraphTab {
         let (x_axis, y_axis) = self.create_axis();
 
         let content = Canvas::new(
-            Graph::new(x_axis, y_axis, &self.lines, &self.cache)
+            Graph::new(x_axis, y_axis, &self.lines, &self.cache, self.graph_type)
                 .caption(self.caption.as_ref())
                 .labels_len(
                     self.lines
@@ -338,8 +342,7 @@ impl LineGraphTab {
                         .filter(|line| line.label.is_some())
                         .count(),
                 )
-                .legend(self.legend)
-                .data(self.graph_type),
+                .legend(self.legend),
         )
         .width(Length::FillPortion(24))
         .height(Length::Fill);
@@ -688,6 +691,21 @@ impl Viewable for LineGraphTab {
         self.x_label = Some(x_label);
         self.y_label = Some(y_label);
         self.caption = caption;
+    }
+
+    fn theme_changed(&mut self, theme: &Theme) {
+        if &self.theme == theme {
+            return;
+        }
+
+        self.theme = theme.clone();
+
+        let colors = ColorEngine::new(&self.theme);
+
+        self.lines
+            .iter_mut()
+            .zip(colors)
+            .for_each(|(line, color)| line.set_color(color));
     }
 
     fn update(&mut self, message: Self::Event) -> Option<Message> {

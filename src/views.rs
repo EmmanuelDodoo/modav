@@ -106,6 +106,8 @@ pub trait Viewable {
         String::default()
     }
 
+    fn theme_changed(&mut self, _theme: &Theme) {}
+
     fn view<'a, Message, F>(&'a self, map: F) -> Element<'a, Message, Theme, Renderer>
     where
         F: 'a + Fn(Self::Event) -> Message,

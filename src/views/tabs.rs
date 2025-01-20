@@ -108,6 +108,15 @@ impl Tab {
         }
     }
 
+    fn theme_changed(&mut self, theme: &Theme) {
+        match self {
+            Self::Editor(tab) => tab.theme_changed(theme),
+            Self::BarChart(tab) => tab.theme_changed(theme),
+            Self::LineGraph(tab) => tab.theme_changed(theme),
+            Self::StackedBarChart(tab) => tab.theme_changed(theme),
+        }
+    }
+
     ///Returns the corresponding TabIden of self
     fn kind(&self) -> ViewType {
         match self {
@@ -213,6 +222,7 @@ where
     check_exit: Option<Message>,
     can_exit: Option<Message>,
     on_save: Option<Box<dyn Fn(Option<PathBuf>, String, FileIOAction) -> Message>>,
+    theme: Theme,
     style: <Theme as StyleSheet>::Style,
 }
 
@@ -221,11 +231,20 @@ impl TabsState<Theme>
 where
     Message: Clone + 'static,
 {
-    pub fn new() -> Self {
-        Self::with_tabs(Vec::default().into_iter())
+    pub fn new(theme: Theme) -> Self {
+        Self::with_tabs(Vec::default().into_iter(), theme)
     }
 
-    pub fn with_tabs(tabs: impl Iterator<Item = Tab>) -> Self {
+    pub fn set_theme(&mut self, theme: Theme) {
+        self.theme = theme;
+        if let Some(active_tab) = self.active_tab {
+            if let Some(tab) = self.tabs.get_mut(active_tab) {
+                tab.theme_changed(&self.theme)
+            }
+        }
+    }
+
+    pub fn with_tabs(tabs: impl Iterator<Item = Tab>, theme: Theme) -> Self {
         let mut len = 0;
         let mut labels = Vec::default();
         let mut tabs_list = Vec::default();
@@ -258,6 +277,7 @@ where
             new_tab_modal_shown: false,
             exiting: false,
             style: <Theme as StyleSheet>::Style::default(),
+            theme,
             labels,
         }
     }
@@ -341,7 +361,7 @@ where
         self.labels.insert(new_active, tab.label());
         self.tabs.insert(new_active, tab);
 
-        self.active_tab = Some(new_active);
+        self.tab_selected(new_active);
     }
 
     pub fn push_view(&mut self, view: View) {
@@ -535,7 +555,7 @@ where
             TabBarMessage::Exit => {
                 self.exiting = true;
                 if let Some(unclosed) = self.has_dirty_tab() {
-                    self.active_tab = Some(unclosed);
+                    self.tab_selected(unclosed);
                     self.modal_shown = true;
                     return None;
                 }
@@ -546,6 +566,9 @@ where
     }
 
     fn tab_selected(&mut self, idx: usize) {
+        if let Some(active_tab) = self.tabs.get_mut(idx) {
+            active_tab.theme_changed(&self.theme);
+        }
         self.active_tab = Some(idx);
     }
 
@@ -683,7 +706,7 @@ where
 
         if let Some(tab) = self.tabs.get(idx) {
             if tab.is_dirty() {
-                self.active_tab = Some(idx);
+                self.tab_selected(idx);
                 self.modal_shown = true;
                 return false;
             }
@@ -700,22 +723,22 @@ where
             // Deleteing active tab
             if active_tab == idx {
                 if idx == 0 && self.labels.len() > 1 {
-                    self.active_tab = Some(0);
+                    self.tab_selected(0);
                 } else if idx == 0 {
                     self.active_tab = None;
                 } else if idx == self.labels.len() - 1 {
-                    self.active_tab = Some(idx - 1);
+                    self.tab_selected(idx - 1);
                 } else {
-                    self.active_tab = Some(idx);
+                    self.tab_selected(idx);
                 }
             }
             // Deleting other tab on left
             else if idx < active_tab {
-                self.active_tab = Some(active_tab - 1);
+                self.tab_selected(active_tab - 1);
             }
             // Deleting other tab on right
             else {
-                self.active_tab = Some(active_tab)
+                self.tab_selected(active_tab);
             }
 
             self.labels.remove(idx);
@@ -737,7 +760,7 @@ where
     Message: Clone + 'static,
 {
     fn default() -> Self {
-        Self::new()
+        Self::new(Theme::default())
     }
 }
 

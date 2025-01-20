@@ -42,12 +42,11 @@ use super::{
 struct GraphBar {
     id: usize,
     bar: StackedBar,
-    colors: HashMap<String, Color>,
 }
 
 impl GraphBar {
-    fn new(id: usize, bar: StackedBar, colors: HashMap<String, Color>) -> Self {
-        Self { id, bar, colors }
+    fn new(id: usize, bar: StackedBar) -> Self {
+        Self { id, bar }
     }
 
     fn x(&self) -> &Data {
@@ -60,13 +59,13 @@ impl GraphBar {
 }
 
 impl Graphable for GraphBar {
-    type Data = (usize, bool);
+    type Data<'a> = (usize, bool, &'a HashMap<String, Color>);
 
     fn label(&self) -> Option<&String> {
         None
     }
 
-    fn draw_legend_filter(&self, data: &Self::Data) -> bool {
+    fn draw_legend_filter(&self, data: &Self::Data<'_>) -> bool {
         data.0 == self.id
     }
 
@@ -76,24 +75,26 @@ impl Graphable for GraphBar {
         bounds: iced::Rectangle,
         color: Color,
         _idx: usize,
-        data: &Self::Data,
+        data: &Self::Data<'_>,
     ) {
+        let colors = data.2;
+
         if self.id != data.0 {
             return;
         }
 
-        if self.colors.len() == 0 {
+        if colors.len() == 0 {
             return;
         }
 
-        let y_padding = bounds.height / (self.colors.len() as f32);
+        let y_padding = bounds.height / (colors.len() as f32);
         let spacing = 5.0;
         let text_size = 12.0;
         let color_size = Size::new(12.0, 12.0);
 
         let mut count = 0.0;
 
-        for (label, label_color) in self.colors.iter() {
+        for (label, label_color) in colors.iter() {
             let y = bounds.position().y + (count * y_padding);
             let position = Point::new(bounds.x, y);
 
@@ -124,9 +125,10 @@ impl Graphable for GraphBar {
         frame: &mut canvas::Frame,
         x_output: &DrawnOutput,
         y_output: &DrawnOutput,
-        data: &Self::Data,
+        data: &Self::Data<'_>,
     ) {
         let is_horizontal = data.1;
+        let colors = data.2;
 
         let mut x_output = x_output;
         let mut y_output = y_output;
@@ -178,7 +180,7 @@ impl Graphable for GraphBar {
 
                 let size = Size::new(width, height);
                 let top_left = Point::new(base, x - (0.5 * height));
-                let color = self.colors.get(*label).copied().unwrap_or(Color::BLACK);
+                let color = colors.get(*label).copied().unwrap_or(Color::BLACK);
                 base += width;
 
                 frame.fill_rectangle(top_left, size, color);
@@ -194,7 +196,7 @@ impl Graphable for GraphBar {
 
                 let size = Size::new(width, height);
                 let top_left = Point::new(x - (width * 0.5), base);
-                let color = self.colors.get(*label).copied().unwrap_or(Color::BLACK);
+                let color = colors.get(*label).copied().unwrap_or(Color::BLACK);
 
                 frame.fill_rectangle(top_left, size, color);
             }
@@ -298,6 +300,8 @@ pub struct StackedBarChartTab {
     clean: bool,
     cache: canvas::Cache,
     labels_len: usize,
+    theme: Theme,
+    colors: HashMap<String, Color>,
     caption: Option<String>,
     legend: LegendPosition,
 }
@@ -331,11 +335,16 @@ impl StackedBarChartTab {
         let (x_axis, y_axis) = self.create_axis();
 
         let content = Canvas::new(
-            Graph::new(x_axis, y_axis, &self.bars, &self.cache)
-                .caption(self.caption.as_ref())
-                .labels_len(self.labels_len)
-                .legend(self.legend)
-                .data((0, self.is_horizontal)),
+            Graph::new(
+                x_axis,
+                y_axis,
+                &self.bars,
+                &self.cache,
+                (0, self.is_horizontal, &self.colors),
+            )
+            .caption(self.caption.as_ref())
+            .labels_len(self.labels_len)
+            .legend(self.legend),
         )
         .width(Length::FillPortion(24))
         .height(Length::Fill);
@@ -581,7 +590,7 @@ impl Viewable for StackedBarChartTab {
         let bars = bars
             .into_iter()
             .enumerate()
-            .map(|(id, bar)| GraphBar::new(id, bar, colors.clone()))
+            .map(|(id, bar)| GraphBar::new(id, bar))
             .collect::<Vec<GraphBar>>();
 
         Self {
@@ -596,6 +605,8 @@ impl Viewable for StackedBarChartTab {
             config_shown: false,
             bars,
             order,
+            theme,
+            colors,
             sequential_x: false,
             sequential_y: false,
             caption,
@@ -645,6 +656,23 @@ impl Viewable for StackedBarChartTab {
         let new = <Self as Viewable>::new(data);
 
         *self = new;
+    }
+
+    fn theme_changed(&mut self, theme: &Theme) {
+        if &self.theme == theme {
+            return;
+        }
+
+        self.theme = theme.clone();
+
+        let colors = ColorEngine::new(&self.theme).gradual(self.order);
+
+        self.colors
+            .iter_mut()
+            .zip(colors)
+            .for_each(|((_, old), new)| {
+                *old = new;
+            });
     }
 
     fn update(&mut self, message: Self::Event) -> Option<Message> {

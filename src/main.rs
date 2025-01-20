@@ -105,13 +105,13 @@ fn main() -> Result<(), iced::Error> {
         .with_env_filter(filter)
         .init();
 
-    let flags = Flags::Prod(if fallback_flag {
+    let _flags = Flags::Prod(if fallback_flag {
         PathBuf::from(fallback_log)
     } else {
         log
     });
 
-    //let flags = Flags::Stacked;
+    let flags = Flags::Stacked;
 
     application(Modav::title, Modav::update, Modav::view)
         .centered()
@@ -233,13 +233,13 @@ pub enum Flags {
 
 impl Flags {
     fn create(self) -> Modav {
-        let theme = Theme::TokyoNightLight;
+        let theme = Theme::TokyoNight;
         let toasts = Vec::default();
         let title = String::from("Modav");
         let error = AppError::None;
         let main_window_id = None;
         let is_ready = false;
-        let mut tabs = Tabs::new()
+        let mut tabs = Tabs::new(theme.clone())
             .on_open(Message::SelectFile)
             .on_new_active_tab(Message::NewActiveTab)
             .on_save(|path, content, action| Message::SaveFile((path, content, action)))
@@ -907,6 +907,7 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
 
                 SettingsMessage::Save => {
                     if let Some(settings) = self.new_settings.take() {
+                        self.tabs.set_theme(settings.theme.clone());
                         self.settings = settings;
                     }
                     self.dialog_view = DialogView::None;
@@ -1179,6 +1180,7 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             },
             Message::Ready => {
                 self.is_ready = true;
+                self.tabs.set_theme(self.theme());
                 Task::none()
             }
             Message::MenuContext(context) => {
@@ -1212,16 +1214,18 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             return content.into();
         }
 
-        let _status_bar = self.status_bar().height(Length::FillPortion(1));
+        let status_bar = self.status_bar().height(30.0);
 
-        let content = if self.tabs.is_empty() {
+        let content = container(if self.tabs.is_empty() {
             home_view().into()
         } else {
             self.tabs.view(Message::TabsMessage)
-        };
+        })
+        .height(Length::Fill);
 
-        let cross_axis =
-            row!(self.side_menu(), self.handle_context(), content).height(Length::FillPortion(30));
+        let content = column!(content, status_bar).height(Length::Fill);
+
+        let cross_axis = row!(self.side_menu(), self.handle_context(), content);
 
         let main_axis = column!(cross_axis);
 
