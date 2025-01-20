@@ -5,7 +5,7 @@ use iced::{
         self, button, column, container, container::bordered_box, horizontal_space, pick_list, row,
         text, text_input, vertical_rule, Container, Row, Space,
     },
-    window, Alignment, Element, Font, Length, Subscription, Task, Theme,
+    window, Alignment, Element, Font, Length, Size, Subscription, Task, Theme,
 };
 
 use tracing::{error, info, span, warn, Level};
@@ -116,6 +116,7 @@ fn main() -> Result<(), iced::Error> {
     application(Modav::title, Modav::update, Modav::view)
         .centered()
         .antialiasing(true)
+        .window_size(Size::new(1280.0, 800.0))
         .subscription(Modav::subscription)
         .exit_on_close_request(false)
         .theme(Modav::theme)
