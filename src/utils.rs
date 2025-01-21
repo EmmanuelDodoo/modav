@@ -375,7 +375,6 @@ pub mod icons {
     };
 
     pub const NAME: &'static str = "util-icons";
-    pub const COUNTER: char = '\u{E805}';
     pub const EDITOR: char = '\u{E804}';
     pub const FILE: char = '\u{F0F6}';
     pub const NEW_FILE: char = '\u{E801}';
@@ -394,8 +393,8 @@ pub mod icons {
     pub const ERROR: char = '\u{E809}';
     pub const CLOSE: char = '\u{E806}';
     pub const TOOLS: char = '\u{E80C}';
+    pub const CONFIG: char = '\u{F1DE}';
     pub const SHUFFLE: char = '\u{E80F}';
-    pub const WRENCH: char = '\u{E80D}';
 
     fn icon_maker<'a>(unicode: char, name: &'static str) -> Text<'a> {
         let fnt: Font = Font::with_name(name);
