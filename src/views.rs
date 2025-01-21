@@ -262,5 +262,21 @@ pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
         .center_y(Length::Fill)
 }
 
+pub fn parse_seed(mut input: String, compare: bool) -> Option<f32> {
+    if input.is_empty() {
+        return None;
+    }
+
+    if let Some(first) = input.chars().next() {
+        if compare && first != '0' {
+            input.pop();
+        }
+
+        return input.parse().ok();
+    }
+
+    None
+}
+
 pub type Tabs<Theme> = TabsState<Theme>;
 pub type TabsMessage = TabBarMessage;

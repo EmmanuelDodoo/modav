@@ -482,7 +482,7 @@ where
                         context!(container(scrollable(config))
                             .padding([16, 12])
                             .height(Length::Fill)
-                            .width(300.0)
+                            .width(325.0)
                             .style(bordered_box)
                         ; TabBarMessage::ToggleConfig)
                         .padding(0)

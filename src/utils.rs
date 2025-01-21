@@ -265,9 +265,13 @@ pub mod coloring {
         const RATIO: f32 = 0.60;
         const DEFAULT_COUNT: u32 = 5;
 
-        pub fn new<'a>(seed: &'a Theme) -> Self {
-            let rng: f32 = thread_rng().gen();
-            let is_dark = seed.extended_palette().is_dark;
+        pub fn new_with_seed<'a>(theme: &'a Theme, seed: f32) -> Self {
+            let rng = {
+                let mult = 10000.0;
+
+                (seed * mult).trunc() / mult
+            };
+            let is_dark = theme.extended_palette().is_dark;
             let seed = Theme::default();
             let seed: HSV = seed.extended_palette().secondary.base.color.into();
 
@@ -284,6 +288,11 @@ pub mod coloring {
                 random: rng,
                 mode: ColoringMode::Normal,
             }
+        }
+
+        pub fn new<'a>(theme: &'a Theme) -> Self {
+            let seed: f32 = thread_rng().gen();
+            Self::new_with_seed(theme, seed)
         }
 
         pub fn count(mut self, count: u32) -> Self {
@@ -307,6 +316,10 @@ pub mod coloring {
             }
 
             self
+        }
+
+        pub fn seed(&self) -> f32 {
+            self.random
         }
 
         /// Generates a Color taking into consideration previously generated colors
@@ -380,7 +393,9 @@ pub mod icons {
     pub const WARN: char = '\u{E808}';
     pub const ERROR: char = '\u{E809}';
     pub const CLOSE: char = '\u{E806}';
-    pub const TOOLS: char = '\u{E80D}';
+    pub const TOOLS: char = '\u{E80C}';
+    pub const SHUFFLE: char = '\u{E80F}';
+    pub const WRENCH: char = '\u{E80D}';
 
     fn icon_maker<'a>(unicode: char, name: &'static str) -> Text<'a> {
         let fnt: Font = Font::with_name(name);

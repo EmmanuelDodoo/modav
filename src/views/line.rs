@@ -32,6 +32,7 @@ use crate::{
 };
 
 use super::{
+    parse_seed,
     shared::{
         graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition},
         ContentAreaContainer,
@@ -289,6 +290,9 @@ pub enum ModelMessage {
     SequentialX(bool),
     SequentialY(bool),
     Clean(bool),
+    ChangeSeed(String),
+    ApplySeed,
+    RandomSeed,
 }
 
 #[derive(Debug)]
@@ -305,6 +309,7 @@ pub struct LineGraphTab {
     sequential_x: bool,
     sequential_y: bool,
     clean: bool,
+    color_seed: f32,
     config_shown: bool,
     legend: LegendPosition,
     graph_type: GraphType,
@@ -355,6 +360,8 @@ impl LineGraphTab {
     }
 
     fn tools(&self) -> Element<'_, ModelMessage> {
+        let spacing = 10.0;
+
         let header = {
             let header = text("Model Config").size(17.0);
 
@@ -394,29 +401,74 @@ impl LineGraphTab {
         .on_input(ModelMessage::CaptionChange);
 
         let ranged_x = {
-            let check =
-                checkbox("Ranged X axis", self.sequential_x).on_toggle(ModelMessage::SequentialX);
+            let check = {
+                let check = checkbox("", self.sequential_x).on_toggle(ModelMessage::SequentialX);
+                let label = text("Ranged X axis");
+
+                row!(label, check).spacing(8.0).align_y(Alignment::Center)
+            };
 
             let tip = tooltip("Each point on the axis is produced consecutively");
 
-            row!(check, tip).spacing(10.0)
+            row!(check, tip).spacing(spacing)
         };
 
         let ranged_y = {
-            let check =
-                checkbox("Ranged Y axis", self.sequential_y).on_toggle(ModelMessage::SequentialY);
+            let check = {
+                let check = checkbox("", self.sequential_y).on_toggle(ModelMessage::SequentialY);
+                let label = text("Ranged Y axis");
+
+                row!(label, check).align_y(Alignment::Center).spacing(8.0)
+            };
 
             let tip = tooltip("Each point on the axis is produced consecutively");
 
-            row!(check, tip).spacing(10.0)
+            row!(check, tip).spacing(spacing)
         };
 
         let clean = {
-            let check = checkbox("Clean graph", self.clean).on_toggle(ModelMessage::Clean);
+            let check = {
+                let check = checkbox("", self.clean).on_toggle(ModelMessage::Clean);
+                let label = text("Clean graph");
+
+                row!(label, check).align_y(Alignment::Center).spacing(8.0)
+            };
 
             let tip = tooltip("Only points on the axes have their outline drawn");
 
-            row!(check, tip).spacing(10.0)
+            row!(check, tip).spacing(spacing)
+        };
+
+        let seed = {
+            let value = self.color_seed;
+            let value = format!("{value:.4}");
+
+            let label = text("Coloring Seed");
+
+            let tip = tooltip("Sets the seed used to generate graph colors");
+
+            let btn = button(
+                icons::icon(icons::REDO)
+                    .align_y(alignment::Vertical::Center)
+                    .align_x(alignment::Horizontal::Center),
+            )
+            .padding([4, 8])
+            //.style(button::secondary)
+            .on_press(ModelMessage::ApplySeed);
+
+            let rand = button(icons::icon(icons::SHUFFLE).align_y(alignment::Vertical::Center))
+                .padding([4, 8])
+                .style(button::secondary)
+                .on_press(ModelMessage::RandomSeed);
+
+            let input = text_input("", &value)
+                .on_input(ModelMessage::ChangeSeed)
+                .padding([2, 5])
+                .width(67.0);
+
+            row!(label, input, btn, rand, tip)
+                .spacing(spacing)
+                .align_y(Alignment::Center)
         };
 
         let kind = {
@@ -450,7 +502,7 @@ impl LineGraphTab {
 
             let text = text("Graph Type");
 
-            row!(menu, text).spacing(10.0).align_y(Alignment::Center)
+            row!(text, menu).spacing(spacing).align_y(Alignment::Center)
         };
 
         let legend = {
@@ -464,7 +516,12 @@ impl LineGraphTab {
             )
             .orientation(ToolBarOrientation::Both)
             .padding([4, 4])
-            .menu_padding(Padding::default().top(4.).right(10.).bottom(4.).left(8))
+            .menu_padding(Padding {
+                top: 4.,
+                right: 10.,
+                bottom: 4.,
+                left: 8.,
+            })
             .spacing(5.0);
 
             let tooltip = container(text("Legend Position").size(12.0))
@@ -484,7 +541,7 @@ impl LineGraphTab {
 
             let text = text("Legend Position");
 
-            row!(menu, text).spacing(10.0).align_y(Alignment::Center)
+            row!(text, menu).spacing(spacing).align_y(Alignment::Center)
         };
 
         let editor = {
@@ -520,15 +577,28 @@ impl LineGraphTab {
 
             let text = text("Open in Editor");
 
-            row!(menu, text).spacing(10.0).align_y(Alignment::Center)
+            row!(text, menu).spacing(spacing).align_y(Alignment::Center)
         };
 
         column!(
-            header, title, x_label, y_label, caption, ranged_x, ranged_y, clean, kind, legend,
-            editor
+            header, title, x_label, y_label, caption, ranged_x, ranged_y, clean, kind, seed,
+            legend, editor
         )
         .spacing(25.0)
         .into()
+    }
+
+    fn redraw(&mut self) {
+        self.cache.clear()
+    }
+
+    fn recolor(&mut self, colors: ColorEngine) {
+        self.lines
+            .iter_mut()
+            .zip(colors)
+            .for_each(|(line, color)| line.set_color(color));
+
+        self.redraw()
     }
 }
 
@@ -560,6 +630,7 @@ impl Viewable for LineGraphTab {
         };
 
         let colors = ColorEngine::new(&theme);
+        let seed = colors.seed();
 
         let lines = lines
             .into_iter()
@@ -583,6 +654,7 @@ impl Viewable for LineGraphTab {
             sequential_x: false,
             sequential_y: false,
             clean: false,
+            color_seed: seed,
             config_shown: false,
             cache: canvas::Cache::default(),
             legend: LegendPosition::default(),
@@ -673,11 +745,9 @@ impl Viewable for LineGraphTab {
         self.theme = theme.clone();
 
         let colors = ColorEngine::new(&self.theme);
+        self.color_seed = colors.seed();
 
-        self.lines
-            .iter_mut()
-            .zip(colors)
-            .for_each(|(line, color)| line.set_color(color));
+        self.recolor(colors);
     }
 
     fn has_config(&self) -> bool {
@@ -746,6 +816,27 @@ impl Viewable for LineGraphTab {
             ModelMessage::YLabelChanged(label) => {
                 self.y_label = if label.is_empty() { None } else { Some(label) };
                 self.cache.clear();
+                None
+            }
+            ModelMessage::ApplySeed => {
+                let colors = ColorEngine::new_with_seed(&self.theme, self.color_seed);
+                self.recolor(colors);
+                None
+            }
+            ModelMessage::ChangeSeed(seed) => {
+                if let Some(seed) = parse_seed(seed, self.color_seed == 0.0) {
+                    self.color_seed = seed;
+                }
+
+                None
+            }
+            ModelMessage::RandomSeed => {
+                use rand::{thread_rng, Rng};
+                let seed: f32 = thread_rng().gen();
+                self.color_seed = seed;
+
+                let colors = ColorEngine::new_with_seed(&self.theme, self.color_seed);
+                self.recolor(colors);
                 None
             }
         }

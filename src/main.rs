@@ -111,7 +111,7 @@ fn main() -> Result<(), iced::Error> {
         log
     });
 
-    //let flags = Flags::Bar;
+    //let flags = Flags::Stacked;
 
     application(Modav::title, Modav::update, Modav::view)
         .centered()
