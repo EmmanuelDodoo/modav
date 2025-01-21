@@ -962,7 +962,10 @@ pub mod bar {
 
                         tab_background_active: base_background,
                         tab_background_hovered: Background::Color(palette.primary.strong.color),
-                        tab_border: Border::default().rounded(5.0),
+                        tab_border: Border::default().rounded(5.0).width(1.0).color(Color {
+                            a: 0.5,
+                            ..palette.secondary.weak.color
+                        }),
                         tab_shadow: Shadow::default(),
                         tab_text_color: text_color,
                         tab_icon_color: Some(text_color),
