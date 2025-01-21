@@ -3,8 +3,11 @@
 
 use iced::{
     alignment::{self, Horizontal, Vertical},
-    widget::{button, column, container, row, text},
-    Element, Length, Padding, Renderer, Theme,
+    widget::{
+        button, column, container, container::bordered_box, row, scrollable, text, vertical_space,
+        Space,
+    },
+    Alignment, Element, Length, Padding, Renderer, Theme,
 };
 
 use std::path::PathBuf;
@@ -13,11 +16,14 @@ use super::{
     barchart::{BarChartMessage, BarChartTab, BarChartTabData},
     editor::{EditorMessage, EditorTab, EditorTabData},
     line::{LineGraphTab, LineTabData, ModelMessage},
+    shared::tools_button,
     stacked_barchart::{StackedBarChartMessage, StackedBarChartTab, StackedBarChartTabData},
 };
 use super::{View, ViewType, Viewable};
 
+use crate::context;
 use crate::widgets::style::DialogContainer;
+use crate::Context;
 use crate::Message;
 
 use bar::TabBar;
@@ -90,6 +96,31 @@ impl Tab {
             Tab::StackedBarChart(tab) => {
                 tab.view(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::StackedBarChart(msg)))
             }
+        }
+    }
+
+    fn config(&self, idx: usize) -> Option<Element<'_, TabBarMessage, Theme, Renderer>> {
+        match self {
+            Tab::Editor(tab) => {
+                tab.config(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::Editor(msg)))
+            }
+            Tab::LineGraph(tab) => {
+                tab.config(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::LineGraph(msg)))
+            }
+            Tab::BarChart(tab) => {
+                tab.config(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::BarChart(msg)))
+            }
+            Tab::StackedBarChart(tab) => tab
+                .config(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::StackedBarChart(msg))),
+        }
+    }
+
+    fn has_config(&self) -> bool {
+        match self {
+            Self::Editor(tab) => tab.has_config(),
+            Self::LineGraph(tab) => tab.has_config(),
+            Self::BarChart(tab) => tab.has_config(),
+            Self::StackedBarChart(tab) => tab.has_config(),
         }
     }
 
@@ -195,6 +226,7 @@ pub enum TabBarMessage {
     RefreshTab(usize, Refresh),
     NewTabModal,
     NewTabModalAction(NewTabModalAction),
+    ToggleConfig,
     Exit,
     None,
 }
@@ -215,6 +247,7 @@ where
     active_tab: Option<usize>,
     close_size: f32,
     modal_shown: bool,
+    config_shown: bool,
     new_tab_modal_shown: bool,
     exiting: bool,
     on_open: Option<Message>,
@@ -274,6 +307,7 @@ where
             can_exit: None,
             close_size: 16.0,
             modal_shown: false,
+            config_shown: false,
             new_tab_modal_shown: false,
             exiting: false,
             style: <Theme as StyleSheet>::Style::default(),
@@ -417,10 +451,48 @@ where
 
                 let tab = self
                     .get_active_tab()
-                    .expect("Tab: Has active tab index but no active tab")
-                    .view(idx);
+                    .expect("Tab: Has active tab index but no active tab");
 
-                let content: Element<'a, TabBarMessage, Theme, Renderer> = column!(bar, tab)
+                let view = tab.view(idx);
+
+                let config_btn: Element<'_, TabBarMessage> =
+                    if tab.has_config() && !self.config_shown {
+                        column!(
+                            vertical_space(),
+                            tools_button().on_press(TabBarMessage::ToggleConfig),
+                            vertical_space()
+                        )
+                        .padding(Padding {
+                            top: 0.,
+                            right: 5.,
+                            bottom: 0.,
+                            left: 0.,
+                        })
+                        .align_x(Alignment::Center)
+                        .into()
+                    } else {
+                        Space::with_width(0).into()
+                    };
+
+                let config: Option<Element<'_, TabBarMessage>> =
+                    (tab.has_config() && self.config_shown).then(|| {
+                        let Some(config) = tab.config(idx) else {
+                            return Space::with_width(0.0).into();
+                        };
+                        context!(container(scrollable(config))
+                            .padding([16, 12])
+                            .height(Length::Fill)
+                            .width(300.0)
+                            .style(bordered_box)
+                        ; TabBarMessage::ToggleConfig)
+                        .padding(0)
+                        .height(Length::Fill)
+                        .into()
+                    });
+
+                let content = row!(view, config_btn).push_maybe(config);
+
+                let content: Element<'a, TabBarMessage, Theme, Renderer> = column!(bar, content)
                     .width(self.width)
                     .height(self.height)
                     .into();
@@ -489,6 +561,10 @@ where
                     return self.on_new_active_tab.clone();
                 }
             },
+            TabBarMessage::ToggleConfig => {
+                self.config_shown = !self.config_shown;
+                None
+            }
 
             TabBarMessage::DirtyTabModal(action) => match action {
                 DirtyTabModalAction::Cancel => {

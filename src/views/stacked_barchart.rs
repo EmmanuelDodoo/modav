@@ -4,7 +4,7 @@ use iced::{
     alignment,
     widget::{
         button, canvas, checkbox, column, container, horizontal_space, row, text, text_input,
-        vertical_space, Canvas, Tooltip,
+        Canvas, Tooltip,
     },
     Alignment, Color, Element, Font, Length, Padding, Point, Renderer, Size, Theme,
 };
@@ -21,8 +21,6 @@ use tracing::warn;
 use crate::{
     utils::{coloring::ColorEngine, icons, parse_ints, tooltip, AppError, Selection},
     widgets::{
-        modal::Modal,
-        style::dialog_container,
         toolbar::{ToolBarOrientation, ToolbarMenu},
         wizard::StackedBarChartConfigState,
     },
@@ -32,7 +30,7 @@ use crate::{
 use super::{
     shared::{
         graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition},
-        tools_button, ContentAreaContainer, EditorButtonStyle,
+        ContentAreaContainer, EditorButtonStyle,
     },
     tabs::TabLabel,
     Viewable,
@@ -206,7 +204,6 @@ impl Graphable for GraphBar {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StackedBarChartMessage {
-    ToggleConfig,
     OpenEditor,
     SequentialX(bool),
     SequentialY(bool),
@@ -282,7 +279,6 @@ impl StackedBarChartTabData {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct StackedBarChartTab {
     title: String,
@@ -392,26 +388,22 @@ impl StackedBarChartTab {
         )
         .on_input(StackedBarChartMessage::CaptionChange);
 
-        let sequential = {
-            let x = {
-                let check = checkbox("Ranged X axis", self.sequential_x)
-                    .on_toggle(StackedBarChartMessage::SequentialX);
+        let ranged_x = {
+            let check = checkbox("Ranged X axis", self.sequential_x)
+                .on_toggle(StackedBarChartMessage::SequentialX);
 
-                let tip = tooltip("Each point on the axis is produced consecutively");
+            let tip = tooltip("Each point on the axis is produced consecutively");
 
-                row!(check, tip).spacing(10.0)
-            };
+            row!(check, tip).spacing(10.0)
+        };
 
-            let y = {
-                let check = checkbox("Ranged Y axis", self.sequential_y)
-                    .on_toggle(StackedBarChartMessage::SequentialY);
+        let ranged_y = {
+            let check = checkbox("Ranged Y axis", self.sequential_y)
+                .on_toggle(StackedBarChartMessage::SequentialY);
 
-                let tip = tooltip("Each point on the axis is produced consecutively");
+            let tip = tooltip("Each point on the axis is produced consecutively");
 
-                row!(check, tip).spacing(10.0)
-            };
-
-            row!(x, horizontal_space(), y).align_y(Alignment::Center)
+            row!(check, tip).spacing(10.0)
         };
 
         let clean = {
@@ -431,9 +423,6 @@ impl StackedBarChartTab {
 
             row!(check, tip).spacing(10.0)
         };
-
-        let clean_horizontal =
-            row!(clean, horizontal_space(), horizontal).align_y(Alignment::Center);
 
         let legend = {
             let icons = Font::with_name("legend-icons");
@@ -510,42 +499,11 @@ impl StackedBarChartTab {
             row!(menu, text).spacing(10.0).align_y(Alignment::Center)
         };
 
-        let legend_editor = row!(legend, horizontal_space(), editor).align_y(Alignment::Center);
-
-        let content = column!(
-            header,
-            title,
-            x_label,
-            y_label,
-            caption,
-            sequential,
-            clean_horizontal,
-            legend_editor,
+        column!(
+            header, title, x_label, y_label, caption, ranged_x, ranged_y, clean, horizontal,
+            legend, editor,
         )
-        .spacing(30.0);
-
-        dialog_container(content)
-            .width(450.0)
-            .height(Length::Shrink)
-            .into()
-    }
-
-    fn content(&self) -> Element<'_, StackedBarChartMessage> {
-        let graph = self.graph();
-
-        let toolbar = tools_button().on_press(StackedBarChartMessage::ToggleConfig);
-
-        row!(
-            graph,
-            column!(vertical_space(), toolbar, vertical_space())
-                .padding(Padding {
-                    top: 0.,
-                    right: 5.,
-                    bottom: 0.,
-                    left: 0.
-                })
-                .align_x(Alignment::Center)
-        )
+        .spacing(25.0)
         .into()
     }
 }
@@ -676,15 +634,23 @@ impl Viewable for StackedBarChartTab {
             });
     }
 
+    fn has_config(&self) -> bool {
+        true
+    }
+
+    fn config<'a, Message, F>(&'a self, map: F) -> Option<Element<'a, Message, Theme, Renderer>>
+    where
+        F: 'a + Fn(Self::Event) -> Message,
+        Message: 'a + Clone + Debug,
+    {
+        Some(self.tools().map(map))
+    }
+
     fn update(&mut self, message: Self::Event) -> Option<Message> {
         match message {
             StackedBarChartMessage::None => None,
             StackedBarChartMessage::Debug => {
                 dbg!("Debugging!");
-                None
-            }
-            StackedBarChartMessage::ToggleConfig => {
-                self.config_shown = !self.config_shown;
                 None
             }
             StackedBarChartMessage::OpenEditor => {
@@ -754,7 +720,7 @@ impl Viewable for StackedBarChartTab {
         }
         .height(Length::Shrink);
 
-        let content_area = container(self.content())
+        let content_area = container(self.graph())
             .max_width(1450)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -768,20 +734,12 @@ impl Viewable for StackedBarChartTab {
             .height(Length::Fill)
             .width(Length::Fill);
 
-        let content: Element<Self::Event, Theme, Renderer> = if self.config_shown {
-            Modal::new(content, self.tools())
-                .on_blur(StackedBarChartMessage::ToggleConfig)
-                .into()
-        } else {
-            content.into()
-        };
-
         let content: Element<Self::Event, Theme, Renderer> = container(content)
             .padding(Padding {
                 top: 10.,
-                right: 30.,
-                bottom: 30.,
-                left: 15.,
+                right: 15.,
+                bottom: 15.,
+                left: 30.,
             })
             .width(Length::Fill)
             .height(Length::Fill)

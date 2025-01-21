@@ -81,6 +81,7 @@ impl View {
     }
 }
 
+#[allow(unused_variables)]
 pub trait Viewable {
     type Event: Clone + Debug;
     type Data: Clone + Debug;
@@ -112,6 +113,18 @@ pub trait Viewable {
     where
         F: 'a + Fn(Self::Event) -> Message,
         Message: 'a + Clone + Debug;
+
+    fn config<'a, Message, F>(&'a self, map: F) -> Option<Element<'a, Message, Theme, Renderer>>
+    where
+        F: 'a + Fn(Self::Event) -> Message,
+        Message: 'a + Clone + Debug,
+    {
+        None
+    }
+
+    fn has_config(&self) -> bool {
+        false
+    }
 
     fn path(&self) -> Option<PathBuf> {
         None

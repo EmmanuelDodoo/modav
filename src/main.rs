@@ -105,13 +105,13 @@ fn main() -> Result<(), iced::Error> {
         .with_env_filter(filter)
         .init();
 
-    let _flags = Flags::Prod(if fallback_flag {
+    let flags = Flags::Prod(if fallback_flag {
         PathBuf::from(fallback_log)
     } else {
         log
     });
 
-    let flags = Flags::Stacked;
+    //let flags = Flags::Bar;
 
     application(Modav::title, Modav::update, Modav::view)
         .centered()

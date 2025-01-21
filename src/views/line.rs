@@ -9,8 +9,7 @@ use iced::{
     widget::{
         button,
         canvas::{self, Canvas, Frame, Path, Stroke},
-        checkbox, column, container, horizontal_space, row, text, text_input, vertical_space,
-        Tooltip,
+        checkbox, column, container, horizontal_space, row, text, text_input, Tooltip,
     },
     Alignment, Color, Element, Font, Length, Padding, Point, Renderer, Size, Theme,
 };
@@ -26,8 +25,6 @@ use modav_core::{
 use crate::{
     utils::{coloring::ColorEngine, icons, tooltip, AppError},
     widgets::{
-        modal::Modal,
-        style::dialog_container,
         toolbar::{ToolBarOrientation, ToolbarMenu, ToolbarOption},
         wizard::LineConfigState,
     },
@@ -42,7 +39,7 @@ use super::{
     TabLabel, Viewable,
 };
 
-use super::shared::{tools_button, EditorButtonStyle};
+use super::shared::EditorButtonStyle;
 
 #[derive(Debug, Clone, Default, Copy, PartialEq)]
 pub enum GraphType {
@@ -396,26 +393,22 @@ impl LineGraphTab {
         )
         .on_input(ModelMessage::CaptionChange);
 
-        let sequential = {
-            let x = {
-                let check = checkbox("Ranged X axis", self.sequential_x)
-                    .on_toggle(ModelMessage::SequentialX);
+        let ranged_x = {
+            let check =
+                checkbox("Ranged X axis", self.sequential_x).on_toggle(ModelMessage::SequentialX);
 
-                let tip = tooltip("Each point on the axis is produced consecutively");
+            let tip = tooltip("Each point on the axis is produced consecutively");
 
-                row!(check, tip).spacing(10.0)
-            };
+            row!(check, tip).spacing(10.0)
+        };
 
-            let y = {
-                let check = checkbox("Ranged Y axis", self.sequential_y)
-                    .on_toggle(ModelMessage::SequentialY);
+        let ranged_y = {
+            let check =
+                checkbox("Ranged Y axis", self.sequential_y).on_toggle(ModelMessage::SequentialY);
 
-                let tip = tooltip("Each point on the axis is produced consecutively");
+            let tip = tooltip("Each point on the axis is produced consecutively");
 
-                row!(check, tip).spacing(10.0)
-            };
-
-            row!(x, horizontal_space(), y).align_y(Alignment::Center)
+            row!(check, tip).spacing(10.0)
         };
 
         let clean = {
@@ -459,8 +452,6 @@ impl LineGraphTab {
 
             row!(menu, text).spacing(10.0).align_y(Alignment::Center)
         };
-
-        let clean_kind = row!(clean, horizontal_space(), kind).align_y(Alignment::Center);
 
         let legend = {
             let icons = Font::with_name("legend-icons");
@@ -532,37 +523,11 @@ impl LineGraphTab {
             row!(menu, text).spacing(10.0).align_y(Alignment::Center)
         };
 
-        let legend_editor = row!(legend, horizontal_space(), editor).align_y(Alignment::Center);
-
-        let content = column!(
-            header,
-            title,
-            x_label,
-            y_label,
-            caption,
-            sequential,
-            clean_kind,
-            legend_editor
+        column!(
+            header, title, x_label, y_label, caption, ranged_x, ranged_y, clean, kind, legend,
+            editor
         )
-        .spacing(30.0);
-
-        dialog_container(content)
-            .width(450.0)
-            .height(Length::Shrink)
-            .into()
-    }
-
-    fn content(&self) -> Element<'_, ModelMessage> {
-        let graph = self.graph();
-
-        let toolbar = tools_button().on_press(ModelMessage::ToggleConfig);
-
-        row!(
-            graph,
-            column!(vertical_space(), toolbar, vertical_space())
-                .padding(Padding::ZERO.right(5))
-                .align_x(Alignment::Center)
-        )
+        .spacing(25.0)
         .into()
     }
 }
@@ -715,6 +680,18 @@ impl Viewable for LineGraphTab {
             .for_each(|(line, color)| line.set_color(color));
     }
 
+    fn has_config(&self) -> bool {
+        true
+    }
+
+    fn config<'a, Message, F>(&'a self, map: F) -> Option<Element<'a, Message, Theme, Renderer>>
+    where
+        F: 'a + Fn(Self::Event) -> Message,
+        Message: 'a + Clone + Debug,
+    {
+        Some(self.tools().map(map))
+    }
+
     fn update(&mut self, message: Self::Event) -> Option<Message> {
         match message {
             ModelMessage::OpenEditor => Some(Message::OpenEditor(Some(self.file.clone()))),
@@ -787,7 +764,7 @@ impl Viewable for LineGraphTab {
         }
         .height(Length::Shrink);
 
-        let content_area = container(self.content())
+        let content_area = container(self.graph())
             .max_width(1450)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -800,14 +777,6 @@ impl Viewable for LineGraphTab {
             .spacing(20)
             .height(Length::Fill)
             .width(Length::Fill);
-
-        let content: Element<Self::Event, Theme, Renderer> = if self.config_shown {
-            Modal::new(content, self.tools())
-                .on_blur(ModelMessage::ToggleConfig)
-                .into()
-        } else {
-            content.into()
-        };
 
         let content: Element<Self::Event, Theme, Renderer> = container(content)
             .padding(Padding {

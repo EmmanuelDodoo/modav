@@ -4,7 +4,7 @@ use iced::{
     alignment,
     widget::{
         button, canvas, checkbox, column, container, horizontal_space, row, text, text_input,
-        vertical_space, Canvas, Tooltip,
+        Canvas, Tooltip,
     },
     Alignment, Color, Element, Font, Length, Padding, Point, Renderer, Size, Theme,
 };
@@ -22,7 +22,6 @@ use crate::{
     utils::{coloring::ColorEngine, icons, tooltip, AppError},
     widgets::{
         modal::Modal,
-        style::dialog_container,
         toolbar::{ToolBarOrientation, ToolbarMenu},
         wizard::BarChartConfigState,
     },
@@ -32,7 +31,7 @@ use crate::{
 use super::{
     shared::{
         graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition},
-        tools_button, ContentAreaContainer, EditorButtonStyle,
+        ContentAreaContainer, EditorButtonStyle,
     },
     tabs::TabLabel,
     Viewable,
@@ -316,26 +315,22 @@ impl BarChartTab {
         )
         .on_input(BarChartMessage::CaptionChange);
 
-        let sequential = {
-            let x = {
-                let check = checkbox("Ranged X axis", self.sequential_x)
-                    .on_toggle(BarChartMessage::SequentialX);
+        let ranged_x = {
+            let check = checkbox("Ranged X axis", self.sequential_x)
+                .on_toggle(BarChartMessage::SequentialX);
 
-                let tip = tooltip("Each point on the axis is produced consecutively");
+            let tip = tooltip("Each point on the axis is produced consecutively");
 
-                row!(check, tip).spacing(10.0)
-            };
+            row!(check, tip).spacing(10.0)
+        };
 
-            let y = {
-                let check = checkbox("Ranged Y axis", self.sequential_y)
-                    .on_toggle(BarChartMessage::SequentialY);
+        let ranged_y = {
+            let check = checkbox("Ranged Y axis", self.sequential_y)
+                .on_toggle(BarChartMessage::SequentialY);
 
-                let tip = tooltip("Each point on the axis is produced consecutively");
+            let tip = tooltip("Each point on the axis is produced consecutively");
 
-                row!(check, tip).spacing(10.0)
-            };
-
-            row!(x, horizontal_space(), y).align_y(Alignment::Center)
+            row!(check, tip).spacing(10.0)
         };
 
         let clean = {
@@ -354,9 +349,6 @@ impl BarChartTab {
 
             row!(check, tip).spacing(10.0)
         };
-
-        let clean_horizontal =
-            row!(clean, horizontal_space(), horizontal).align_y(Alignment::Center);
 
         let legend = {
             let icons = Font::with_name("legend-icons");
@@ -433,24 +425,12 @@ impl BarChartTab {
             row!(menu, text).spacing(10.0).align_y(Alignment::Center)
         };
 
-        let legend_editor = row!(legend, horizontal_space(), editor).align_y(Alignment::Center);
-
-        let content = column!(
-            header,
-            title,
-            x_label,
-            y_label,
-            caption,
-            sequential,
-            clean_horizontal,
-            legend_editor,
+        column!(
+            header, title, x_label, y_label, caption, ranged_x, ranged_y, clean, horizontal,
+            legend, editor,
         )
-        .spacing(30.0);
-
-        dialog_container(content)
-            .width(450.0)
-            .height(Length::Shrink)
-            .into()
+        .spacing(25.0)
+        .into()
     }
 
     fn create_axis(&self) -> (Axis, Axis) {
@@ -497,20 +477,6 @@ impl BarChartTab {
         .height(Length::Fill);
 
         content.into()
-    }
-
-    fn content(&self) -> Element<'_, BarChartMessage> {
-        let graph = self.graph();
-
-        let toolbar = tools_button().on_press(BarChartMessage::ToggleConfig);
-
-        row!(
-            graph,
-            column!(vertical_space(), toolbar, vertical_space())
-                .padding(Padding::ZERO.right(5.))
-                .align_x(Alignment::Center)
-        )
-        .into()
     }
 }
 
@@ -626,6 +592,18 @@ impl Viewable for BarChartTab {
             .for_each(|(bar, color)| bar.set_color(color));
     }
 
+    fn has_config(&self) -> bool {
+        true
+    }
+
+    fn config<'a, Message, F>(&'a self, map: F) -> Option<Element<'a, Message, Theme, Renderer>>
+    where
+        F: 'a + Fn(Self::Event) -> Message,
+        Message: 'a + Clone + Debug,
+    {
+        Some(self.tools().map(map))
+    }
+
     fn update(&mut self, message: Self::Event) -> Option<Message> {
         match message {
             BarChartMessage::OpenEditor => Some(Message::OpenEditor(Some(self.file.clone()))),
@@ -696,7 +674,7 @@ impl Viewable for BarChartTab {
         }
         .height(Length::Shrink);
 
-        let content_area = container(self.content())
+        let content_area = container(self.graph())
             .max_width(1450)
             // .padding([5, 10])
             .width(Length::Fill)
