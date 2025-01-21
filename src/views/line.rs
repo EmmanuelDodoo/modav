@@ -334,15 +334,22 @@ impl LineGraphTab {
         let (x_axis, y_axis) = self.create_axis();
 
         let content = Canvas::new(
-            Graph::new(x_axis, y_axis, &self.lines, &self.cache, self.graph_type)
-                .caption(self.caption.as_ref())
-                .labels_len(
-                    self.lines
-                        .iter()
-                        .filter(|line| line.label.is_some())
-                        .count(),
-                )
-                .legend(self.legend),
+            Graph::new(
+                x_axis,
+                y_axis,
+                &self.lines,
+                &self.theme,
+                &self.cache,
+                self.graph_type,
+            )
+            .caption(self.caption.as_ref())
+            .labels_len(
+                self.lines
+                    .iter()
+                    .filter(|line| line.label.is_some())
+                    .count(),
+            )
+            .legend(self.legend),
         )
         .width(Length::FillPortion(24))
         .height(Length::Fill);

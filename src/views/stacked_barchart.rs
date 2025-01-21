@@ -339,6 +339,7 @@ impl StackedBarChartTab {
                 x_axis,
                 y_axis,
                 &self.bars,
+                &self.theme,
                 &self.cache,
                 (0, self.is_horizontal, &self.colors),
             )

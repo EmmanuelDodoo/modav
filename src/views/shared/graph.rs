@@ -1278,6 +1278,7 @@ where
     data: <G as Graphable>::Data<'a>,
     legend_position: LegendPosition,
     labels_len: usize,
+    theme: &'a Theme,
     caption: Option<&'a String>,
 }
 
@@ -1290,6 +1291,7 @@ where
         x_axis: Axis,
         y_axis: Axis,
         graphables: &'a [G],
+        theme: &'a Theme,
         cache: &'a canvas::Cache,
         data: impl Into<<G as Graphable>::Data<'a>>,
     ) -> Self {
@@ -1298,6 +1300,7 @@ where
             y_axis,
             cache,
             graphables,
+            theme,
             data: data.into(),
             legend_position: LegendPosition::default(),
             labels_len: 0,
@@ -1405,12 +1408,17 @@ where
         &self,
         _state: &Self::State,
         renderer: &Renderer,
-        theme: &Theme,
+        _theme: &Theme,
         bounds: Rectangle,
         _cursor: iced::advanced::mouse::Cursor,
     ) -> Vec<Geometry> {
         let content = self.cache.draw(renderer, bounds.size(), |frame| {
-            let data = AxisData::new(frame, theme, self.x_axis.axis_pos, self.y_axis.axis_pos);
+            let data = AxisData::new(
+                frame,
+                self.theme,
+                self.x_axis.axis_pos,
+                self.y_axis.axis_pos,
+            );
 
             let x_output = self.x_axis.draw(frame, data);
             let y_output = self.y_axis.draw(frame, data);
@@ -1482,7 +1490,7 @@ where
             }
         });
 
-        vec![content, self.draw_legend(renderer, bounds, theme)]
+        vec![content, self.draw_legend(renderer, bounds, self.theme)]
     }
 }
 

@@ -481,10 +481,17 @@ impl BarChartTab {
         let (x_axis, y_axis) = self.create_axis();
 
         let content = Canvas::new(
-            Graph::new(x_axis, y_axis, &self.bars, &self.cache, self.is_horizontal)
-                .caption(self.caption.as_ref())
-                .labels_len(self.bars.iter().filter(|bar| bar.label.is_some()).count())
-                .legend(self.legend),
+            Graph::new(
+                x_axis,
+                y_axis,
+                &self.bars,
+                &self.theme,
+                &self.cache,
+                self.is_horizontal,
+            )
+            .caption(self.caption.as_ref())
+            .labels_len(self.bars.iter().filter(|bar| bar.label.is_some()).count())
+            .legend(self.legend),
         )
         .width(Length::FillPortion(24))
         .height(Length::Fill);

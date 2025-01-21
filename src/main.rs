@@ -2,8 +2,8 @@ use iced::{
     application, font,
     keyboard::{self, key, Key},
     widget::{
-        self, button, column, container, container::bordered_box, horizontal_space, pick_list, row,
-        text, text_input, vertical_rule, Container, Row, Space,
+        self, button, checkbox, column, container, container::bordered_box, horizontal_space,
+        pick_list, row, text, text_input, vertical_rule, Container, Row, Space,
     },
     window, Alignment, Element, Font, Length, Size, Subscription, Task, Theme,
 };
@@ -17,7 +17,7 @@ mod styles;
 use styles::*;
 
 mod utils;
-use utils::{icons, load_file, pick_file, save_file, AppError};
+use utils::{icons, load_file, pick_file, save_file, tooltip, AppError};
 
 mod views;
 use views::{
@@ -187,13 +187,15 @@ struct Settings {
     theme: Theme,
     timeout: u64,
     log_file: PathBuf,
+    change_graph_theme: bool,
 }
 
 impl Settings {
-    fn new(theme: Theme, timeout: u64, log_file: PathBuf) -> Self {
+    fn new(theme: Theme, log_file: PathBuf) -> Self {
         Self {
             theme,
-            timeout,
+            timeout: 2,
+            change_graph_theme: true,
             log_file,
         }
     }
@@ -205,6 +207,7 @@ pub enum SettingsMessage {
     TimeoutChange(String),
     ReselectLog,
     LogReselect(PathBuf),
+    ChangeGraphTheme(bool),
     Cancel,
     Save,
 }
@@ -252,12 +255,11 @@ impl Flags {
             .tab_spacing(2.5)
             .tab_bar_padding(3)
             .tab_padding([5, 7]);
-        let toast_timeout = 2;
         let dialog_view = DialogView::default();
         let default_log_file = PathBuf::from("~/.local/share/modav.log");
         let context = MenuContext::None;
 
-        let mut settings = Settings::new(theme.clone(), toast_timeout, default_log_file);
+        let mut settings = Settings::new(theme.clone(), default_log_file);
 
         match self {
             Self::Prod(log_file) => {
@@ -420,7 +422,7 @@ pub enum Message {
     CloseToast(usize),
     Error(AppError, bool),
     MenuContext(MenuContext),
-    CloseContext,
+    CloseContext(MenuContext),
     Chain(Box<(Message, Message)>),
     /// Open the editor for the current model
     OpenEditor(Option<PathBuf>),
@@ -434,8 +436,8 @@ impl Message {
         Self::Chain(boxed)
     }
 
-    fn close_context(self) -> Self {
-        self.chain(Message::CloseContext)
+    fn close_context(self, current: MenuContext) -> Self {
+        self.chain(Message::CloseContext(current))
     }
 }
 
@@ -531,39 +533,37 @@ impl Modav {
                 let header = text("File Menu").font(header_font).size(size);
 
                 let open = button("Open File")
-                    .on_press(Message::SelectFile.close_context())
+                    .on_press(Message::SelectFile.close_context(MenuContext::File))
                     .width(Length::Fill)
                     .style(styler);
 
                 let new = button("New File")
                     .on_press(
                         Message::OpenTab(None, View::Editor(EditorTabData::default()))
-                            .close_context(),
+                            .close_context(MenuContext::File),
                     )
                     .width(Length::Fill)
                     .style(styler);
 
                 let save = button("Save File")
-                    .on_press_maybe(
-                        self.tabs
-                            .active_tab_can_save()
-                            .then(|| self.save_helper(self.tabs.active_path()).close_context()),
-                    )
+                    .on_press_maybe(self.tabs.active_tab_can_save().then(|| {
+                        self.save_helper(self.tabs.active_path())
+                            .close_context(MenuContext::File)
+                    }))
                     .width(Length::Fill)
                     .style(styler);
 
                 let save_new = button("Save As")
-                    .on_press_maybe(
-                        self.tabs
-                            .active_tab_can_save()
-                            .then(|| self.save_helper(self.tabs.active_path()).close_context()),
-                    )
+                    .on_press_maybe(self.tabs.active_tab_can_save().then(|| {
+                        self.save_helper(self.tabs.active_path())
+                            .close_context(MenuContext::File)
+                    }))
                     .width(Length::Fill)
                     .style(styler);
 
                 let context =
-                    context!(Space::with_height(0.0), header, Space::with_height(28.0), open, new, save, save_new ; Message::MenuContext(MenuContext::None))
-                    .width(Length::Fill)
+                    context!(Space::with_height(0.0), header, Space::with_height(28.0), open, new, save, save_new ; Message::CloseContext(MenuContext::File))
+                    .width(130)
                     .spacing(20.0)
                 .height(Length::Fill);
 
@@ -606,19 +606,35 @@ impl Modav {
                 };
 
                 let log = button(text("Open Log File").size(15.0))
-                    .on_press(Message::OpenLogFile.close_context());
+                    .on_press(Message::OpenLogFile.close_context(MenuContext::Settings));
+
+                let change_graph_theme = {
+                    let check = checkbox("Change graph theme", self.change_graph_theme())
+                        .on_toggle(|flag| {
+                            Message::Settings(SettingsMessage::ChangeGraphTheme(flag))
+                        });
+
+                    let tip = tooltip("When enabled, graphs will change their theme based on the overall application theme.");
+
+                    row!(check, tip).spacing(10.0)
+                };
 
                 let actions = {
-                    let cancel = button(text("Cancel").size(13.0))
-                        .on_press(Message::Settings(SettingsMessage::Cancel).close_context());
+                    let cancel = button(text("Cancel").size(13.0)).on_press(
+                        Message::Settings(SettingsMessage::Cancel)
+                            .close_context(MenuContext::Settings),
+                    );
 
-                    let submit = button(text("Save").size(13.0))
-                        .on_press(Message::Settings(SettingsMessage::Save).close_context());
+                    let submit = button(text("Save").size(13.0)).on_press(
+                        Message::Settings(SettingsMessage::Save)
+                            .close_context(MenuContext::Settings),
+                    );
 
                     row!(cancel, horizontal_space(), submit)
                 };
 
-                let msg = Message::Settings(SettingsMessage::Cancel).close_context();
+                let msg =
+                    Message::Settings(SettingsMessage::Cancel).close_context(MenuContext::Settings);
 
                 let context = context!(
                         Space::with_height(0.0),
@@ -627,10 +643,11 @@ impl Modav {
                         theme,
                         timeout,
                         log,
+                        change_graph_theme,
                         Space::with_height(Length::Fill),
                         actions;
                         msg)
-                .spacing(20.0)
+                .spacing(25.0)
                 .height(Length::Fill);
 
                 container(context).style(bordered_box).into()
@@ -670,26 +687,24 @@ impl Modav {
             icons::icon(icons::INFO).size(icon_size),
             text("Information").size(size),
         )
-        .width(Length::Fill)
         .message(Message::OpenAboutDialog);
 
         let help = Menu::new(
             icons::icon(icons::HELP).size(icon_size),
             text("Help").size(size),
-        )
-        .width(Length::Fill);
+        );
 
         let settings = Menu::new(
             icons::icon(icons::SETTINGS).size(icon_size),
             text("Settings").size(size),
         )
-        .message(Message::MenuContext(MenuContext::Settings))
-        .width(Length::Fill);
+        .width(Length::Fill)
+        .message(Message::MenuContext(MenuContext::Settings));
 
         let menu = SideMenu::new(
             header,
             section!(file, models).width(Length::Fill).spacing(20.0),
-            section!(about, help, settings).width(Length::Fill),
+            section!(about, help, settings),
         )
         .height(Length::Fill);
 
@@ -876,10 +891,19 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             .unwrap_or(&self.settings.log_file)
     }
 
+    fn change_graph_theme(&self) -> bool {
+        self.new_settings
+            .as_ref()
+            .map(|settings| settings.change_graph_theme)
+            .unwrap_or(self.settings.change_graph_theme)
+    }
+
     fn handle_settings_message(&mut self, message: SettingsMessage) -> Task<Message> {
         if let Some(settings) = self.new_settings.as_mut() {
             match message {
                 SettingsMessage::ThemeChange(theme) => settings.theme = theme,
+
+                SettingsMessage::ChangeGraphTheme(flag) => settings.change_graph_theme = flag,
 
                 SettingsMessage::TimeoutChange(mut timeout) => {
                     if !timeout.is_empty() {
@@ -908,7 +932,9 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
 
                 SettingsMessage::Save => {
                     if let Some(settings) = self.new_settings.take() {
-                        self.tabs.set_theme(settings.theme.clone());
+                        if settings.change_graph_theme {
+                            self.tabs.set_theme(settings.theme.clone());
+                        }
                         self.settings = settings;
                     }
                     self.dialog_view = DialogView::None;
@@ -1192,8 +1218,10 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
                 }
                 Task::none()
             }
-            Message::CloseContext => {
-                self.context = MenuContext::None;
+            Message::CloseContext(context) => {
+                if self.context == context {
+                    self.context = MenuContext::None;
+                }
                 Task::none()
             }
             Message::Settings(message) => self.handle_settings_message(message),
@@ -1218,13 +1246,11 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
         let status_bar = self.status_bar().height(30.0);
 
         let content = container(if self.tabs.is_empty() {
-            home_view().into()
+            Into::<Element<'_, Message>>::into(home_view())
         } else {
-            self.tabs.view(Message::TabsMessage)
+            column!(self.tabs.view(Message::TabsMessage), status_bar).into()
         })
         .height(Length::Fill);
-
-        let content = column!(content, status_bar).height(Length::Fill);
 
         let cross_axis = row!(self.side_menu(), self.handle_context(), content);
 
