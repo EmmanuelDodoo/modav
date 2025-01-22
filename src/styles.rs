@@ -132,3 +132,31 @@ impl container::Catalog for ToolTipContainerStyle {
         }
     }
 }
+
+pub struct FileBorderContainer;
+
+impl container::Catalog for FileBorderContainer {
+    type Class<'a> = Theme;
+
+    fn default<'a>() -> Self::Class<'a> {
+        <Theme as std::default::Default>::default()
+    }
+
+    fn style(&self, class: &Self::Class<'_>) -> container::Style {
+        let border_color = class.extended_palette().primary.weak.color;
+
+        let border = Border {
+            color: border_color,
+            width: 1.0,
+            ..Default::default()
+        };
+
+        let background = class.extended_palette().background.weak.color;
+
+        container::Style {
+            background: Some(background.into()),
+            border,
+            ..Default::default()
+        }
+    }
+}

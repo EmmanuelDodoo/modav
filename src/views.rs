@@ -81,6 +81,7 @@ impl View {
     }
 }
 
+#[allow(unused_variables)]
 pub trait Viewable {
     type Event: Clone + Debug;
     type Data: Clone + Debug;
@@ -106,10 +107,24 @@ pub trait Viewable {
         String::default()
     }
 
+    fn theme_changed(&mut self, _theme: &Theme) {}
+
     fn view<'a, Message, F>(&'a self, map: F) -> Element<'a, Message, Theme, Renderer>
     where
         F: 'a + Fn(Self::Event) -> Message,
         Message: 'a + Clone + Debug;
+
+    fn config<'a, Message, F>(&'a self, map: F) -> Option<Element<'a, Message, Theme, Renderer>>
+    where
+        F: 'a + Fn(Self::Event) -> Message,
+        Message: 'a + Clone + Debug,
+    {
+        None
+    }
+
+    fn has_config(&self) -> bool {
+        false
+    }
 
     fn path(&self) -> Option<PathBuf> {
         None
@@ -245,6 +260,22 @@ pub fn home_view<'a>() -> Container<'a, Message, Theme, Renderer> {
     container(content)
         .width(Length::FillPortion(5))
         .center_y(Length::Fill)
+}
+
+pub fn parse_seed(mut input: String, compare: bool) -> Option<f32> {
+    if input.is_empty() {
+        return None;
+    }
+
+    if let Some(first) = input.chars().next() {
+        if compare && first != '0' {
+            input.pop();
+        }
+
+        return input.parse().ok();
+    }
+
+    None
 }
 
 pub type Tabs<Theme> = TabsState<Theme>;

@@ -109,27 +109,26 @@ impl button::Catalog for ToolsButton {
     }
 
     fn style(&self, class: &Self::Class<'_>, status: button::Status) -> button::Style {
+        let default = button::primary(class, button::Status::Active);
+
+        let border = Border {
+            radius: 5.0.into(),
+            width: default.border.width * 0.5,
+            ..default.border
+        };
+
+        let shadow = Shadow {
+            color: color!(0, 0, 0, 0.5),
+            offset: Vector::new(2.0, 2.0),
+            blur_radius: 4.0,
+        };
+
         match status {
-            button::Status::Active => {
-                let default = button::primary(class, button::Status::Active);
-                let border = Border {
-                    radius: 5.0.into(),
-                    width: default.border.width * 0.5,
-                    ..default.border
-                };
-
-                let shadow = Shadow {
-                    color: color!(0, 0, 0, 0.5),
-                    offset: Vector::new(2.0, 2.0),
-                    blur_radius: 4.0,
-                };
-
-                button::Style {
-                    border,
-                    shadow,
-                    ..default
-                }
-            }
+            button::Status::Active => button::Style {
+                border,
+                shadow,
+                ..default
+            },
             button::Status::Hovered => {
                 let default = button::primary(class, button::Status::Hovered);
                 let border = Border {
@@ -150,7 +149,11 @@ impl button::Catalog for ToolsButton {
                     ..default
                 }
             }
-            status => button::primary(class, status),
+            status => button::Style {
+                border,
+                shadow,
+                ..button::primary(class, status)
+            },
         }
     }
 }

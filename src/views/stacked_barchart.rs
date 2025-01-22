@@ -4,7 +4,7 @@ use iced::{
     alignment,
     widget::{
         button, canvas, checkbox, column, container, horizontal_space, row, text, text_input,
-        vertical_space, Canvas, Tooltip,
+        Canvas, Tooltip,
     },
     Alignment, Color, Element, Font, Length, Padding, Point, Renderer, Size, Theme,
 };
@@ -21,8 +21,6 @@ use tracing::warn;
 use crate::{
     utils::{coloring::ColorEngine, icons, parse_ints, tooltip, AppError, Selection},
     widgets::{
-        modal::Modal,
-        style::dialog_container,
         toolbar::{ToolBarOrientation, ToolbarMenu},
         wizard::StackedBarChartConfigState,
     },
@@ -30,9 +28,10 @@ use crate::{
 };
 
 use super::{
+    parse_seed,
     shared::{
         graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition},
-        tools_button, ContentAreaContainer, EditorButtonStyle,
+        ContentAreaContainer, EditorButtonStyle,
     },
     tabs::TabLabel,
     Viewable,
@@ -42,12 +41,11 @@ use super::{
 struct GraphBar {
     id: usize,
     bar: StackedBar,
-    colors: HashMap<String, Color>,
 }
 
 impl GraphBar {
-    fn new(id: usize, bar: StackedBar, colors: HashMap<String, Color>) -> Self {
-        Self { id, bar, colors }
+    fn new(id: usize, bar: StackedBar) -> Self {
+        Self { id, bar }
     }
 
     fn x(&self) -> &Data {
@@ -60,13 +58,13 @@ impl GraphBar {
 }
 
 impl Graphable for GraphBar {
-    type Data = (usize, bool);
+    type Data<'a> = (usize, bool, &'a HashMap<String, Color>);
 
     fn label(&self) -> Option<&String> {
         None
     }
 
-    fn draw_legend_filter(&self, data: &Self::Data) -> bool {
+    fn draw_legend_filter(&self, data: &Self::Data<'_>) -> bool {
         data.0 == self.id
     }
 
@@ -76,24 +74,26 @@ impl Graphable for GraphBar {
         bounds: iced::Rectangle,
         color: Color,
         _idx: usize,
-        data: &Self::Data,
+        data: &Self::Data<'_>,
     ) {
+        let colors = data.2;
+
         if self.id != data.0 {
             return;
         }
 
-        if self.colors.len() == 0 {
+        if colors.len() == 0 {
             return;
         }
 
-        let y_padding = bounds.height / (self.colors.len() as f32);
+        let y_padding = bounds.height / (colors.len() as f32);
         let spacing = 5.0;
         let text_size = 12.0;
         let color_size = Size::new(12.0, 12.0);
 
         let mut count = 0.0;
 
-        for (label, label_color) in self.colors.iter() {
+        for (label, label_color) in colors.iter() {
             let y = bounds.position().y + (count * y_padding);
             let position = Point::new(bounds.x, y);
 
@@ -124,9 +124,10 @@ impl Graphable for GraphBar {
         frame: &mut canvas::Frame,
         x_output: &DrawnOutput,
         y_output: &DrawnOutput,
-        data: &Self::Data,
+        data: &Self::Data<'_>,
     ) {
         let is_horizontal = data.1;
+        let colors = data.2;
 
         let mut x_output = x_output;
         let mut y_output = y_output;
@@ -178,7 +179,7 @@ impl Graphable for GraphBar {
 
                 let size = Size::new(width, height);
                 let top_left = Point::new(base, x - (0.5 * height));
-                let color = self.colors.get(*label).copied().unwrap_or(Color::BLACK);
+                let color = colors.get(*label).copied().unwrap_or(Color::BLACK);
                 base += width;
 
                 frame.fill_rectangle(top_left, size, color);
@@ -194,7 +195,7 @@ impl Graphable for GraphBar {
 
                 let size = Size::new(width, height);
                 let top_left = Point::new(x - (width * 0.5), base);
-                let color = self.colors.get(*label).copied().unwrap_or(Color::BLACK);
+                let color = colors.get(*label).copied().unwrap_or(Color::BLACK);
 
                 frame.fill_rectangle(top_left, size, color);
             }
@@ -204,7 +205,6 @@ impl Graphable for GraphBar {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StackedBarChartMessage {
-    ToggleConfig,
     OpenEditor,
     SequentialX(bool),
     SequentialY(bool),
@@ -215,6 +215,9 @@ pub enum StackedBarChartMessage {
     YLabelChanged(String),
     TitleChanged(String),
     Legend(LegendPosition),
+    ChangeSeed(String),
+    ApplySeed,
+    RandomSeed,
     Debug,
     None,
 }
@@ -280,7 +283,6 @@ impl StackedBarChartTabData {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct StackedBarChartTab {
     title: String,
@@ -298,6 +300,9 @@ pub struct StackedBarChartTab {
     clean: bool,
     cache: canvas::Cache,
     labels_len: usize,
+    theme: Theme,
+    colors: HashMap<String, Color>,
+    color_seed: f32,
     caption: Option<String>,
     legend: LegendPosition,
 }
@@ -331,11 +336,17 @@ impl StackedBarChartTab {
         let (x_axis, y_axis) = self.create_axis();
 
         let content = Canvas::new(
-            Graph::new(x_axis, y_axis, &self.bars, &self.cache)
-                .caption(self.caption.as_ref())
-                .labels_len(self.labels_len)
-                .legend(self.legend)
-                .data((0, self.is_horizontal)),
+            Graph::new(
+                x_axis,
+                y_axis,
+                &self.bars,
+                &self.theme,
+                &self.cache,
+                (0, self.is_horizontal, &self.colors),
+            )
+            .caption(self.caption.as_ref())
+            .labels_len(self.labels_len)
+            .legend(self.legend),
         )
         .width(Length::FillPortion(24))
         .height(Length::Fill);
@@ -343,7 +354,13 @@ impl StackedBarChartTab {
         content.into()
     }
 
+    fn redraw(&mut self) {
+        self.cache.clear()
+    }
+
     fn tools(&self) -> Element<'_, StackedBarChartMessage> {
+        let spacing = 10.0;
+
         let header = {
             let header = text("Model Config").size(17.0);
 
@@ -382,48 +399,91 @@ impl StackedBarChartTab {
         )
         .on_input(StackedBarChartMessage::CaptionChange);
 
-        let sequential = {
-            let x = {
-                let check = checkbox("Ranged X axis", self.sequential_x)
-                    .on_toggle(StackedBarChartMessage::SequentialX);
+        let ranged_x = {
+            let check = {
+                let check =
+                    checkbox("", self.sequential_x).on_toggle(StackedBarChartMessage::SequentialX);
+                let label = text("Ranged X axis");
 
-                let tip = tooltip("Each point on the axis is produced consecutively");
-
-                row!(check, tip).spacing(10.0)
+                row!(label, check).spacing(8.0).align_y(Alignment::Center)
             };
 
-            let y = {
-                let check = checkbox("Ranged Y axis", self.sequential_y)
-                    .on_toggle(StackedBarChartMessage::SequentialY);
+            let tip = tooltip("Each point on the axis is produced consecutively");
 
-                let tip = tooltip("Each point on the axis is produced consecutively");
+            row!(check, tip).spacing(spacing)
+        };
 
-                row!(check, tip).spacing(10.0)
+        let ranged_y = {
+            let check = {
+                let check =
+                    checkbox("", self.sequential_y).on_toggle(StackedBarChartMessage::SequentialY);
+                let label = text("Ranged Y axis");
+
+                row!(label, check).align_y(Alignment::Center).spacing(8.0)
             };
 
-            row!(x, horizontal_space(), y).align_y(Alignment::Center)
+            let tip = tooltip("Each point on the axis is produced consecutively");
+
+            row!(check, tip).spacing(spacing)
         };
 
         let clean = {
-            let check =
-                checkbox("Clean graph", self.clean).on_toggle(StackedBarChartMessage::Clean);
+            let check = {
+                let check = checkbox("", self.clean).on_toggle(StackedBarChartMessage::Clean);
+                let label = text("Clean graph");
+
+                row!(label, check).align_y(Alignment::Center).spacing(8.0)
+            };
 
             let tip = tooltip("Only points on the axes have their outline drawn");
 
-            row!(check, tip).spacing(10.0)
+            row!(check, tip).spacing(spacing)
+        };
+
+        let seed = {
+            let value = self.color_seed;
+            let value = format!("{value:.4}");
+
+            let label = text("Coloring Seed");
+
+            let tip = tooltip("Sets the seed used to generate graph colors");
+
+            let btn = button(
+                icons::icon(icons::REDO)
+                    .align_y(alignment::Vertical::Center)
+                    .align_x(alignment::Horizontal::Center),
+            )
+            .padding([4, 8])
+            //.style(button::secondary)
+            .on_press(StackedBarChartMessage::ApplySeed);
+
+            let rand = button(icons::icon(icons::SHUFFLE).align_y(alignment::Vertical::Center))
+                .padding([4, 8])
+                .style(button::secondary)
+                .on_press(StackedBarChartMessage::RandomSeed);
+
+            let input = text_input("", &value)
+                .on_input(StackedBarChartMessage::ChangeSeed)
+                .padding([2, 5])
+                .width(67.0);
+
+            row!(label, input, btn, rand, tip)
+                .spacing(spacing)
+                .align_y(Alignment::Center)
         };
 
         let horizontal = {
-            let check = checkbox("Horizontal bars", self.is_horizontal)
-                .on_toggle(StackedBarChartMessage::Horizontal);
+            let check = {
+                let check =
+                    checkbox("", self.is_horizontal).on_toggle(StackedBarChartMessage::Horizontal);
+                let label = text("Horizontal bars");
+                row!(label, check).align_y(Alignment::Center).spacing(8.0)
+            };
 
             let tip = tooltip("The bars are drawn horizontally");
 
-            row!(check, tip).spacing(10.0)
+            row!(check, tip).spacing(spacing)
         };
-
-        let clean_horizontal =
-            row!(clean, horizontal_space(), horizontal).align_y(Alignment::Center);
 
         let legend = {
             let icons = Font::with_name("legend-icons");
@@ -461,7 +521,7 @@ impl StackedBarChartTab {
 
             let text = text("Legend Position");
 
-            row!(menu, text).spacing(10.0).align_y(Alignment::Center)
+            row!(text, menu).spacing(spacing).align_y(Alignment::Center)
         };
 
         let editor = {
@@ -497,46 +557,26 @@ impl StackedBarChartTab {
 
             let text = text("Open in Editor");
 
-            row!(menu, text).spacing(10.0).align_y(Alignment::Center)
+            row!(text, menu).spacing(spacing).align_y(Alignment::Center)
         };
 
-        let legend_editor = row!(legend, horizontal_space(), editor).align_y(Alignment::Center);
-
-        let content = column!(
-            header,
-            title,
-            x_label,
-            y_label,
-            caption,
-            sequential,
-            clean_horizontal,
-            legend_editor,
+        column!(
+            header, title, x_label, y_label, caption, ranged_x, ranged_y, clean, horizontal, seed,
+            legend, editor,
         )
-        .spacing(30.0);
-
-        dialog_container(content)
-            .width(450.0)
-            .height(Length::Shrink)
-            .into()
+        .spacing(25.0)
+        .into()
     }
 
-    fn content(&self) -> Element<'_, StackedBarChartMessage> {
-        let graph = self.graph();
+    fn recolor(&mut self, colors: ColorEngine) {
+        self.colors
+            .iter_mut()
+            .zip(colors)
+            .for_each(|((_, old), new)| {
+                *old = new;
+            });
 
-        let toolbar = tools_button().on_press(StackedBarChartMessage::ToggleConfig);
-
-        row!(
-            graph,
-            column!(vertical_space(), toolbar, vertical_space())
-                .padding(Padding {
-                    top: 0.,
-                    right: 5.,
-                    bottom: 0.,
-                    left: 0.
-                })
-                .align_x(Alignment::Center)
-        )
-        .into()
+        self.redraw()
     }
 }
 
@@ -572,6 +612,7 @@ impl Viewable for StackedBarChartTab {
         }
 
         let engine = ColorEngine::new(&theme).gradual(order);
+        let seed = engine.seed();
 
         let colors = labels
             .into_iter()
@@ -581,7 +622,7 @@ impl Viewable for StackedBarChartTab {
         let bars = bars
             .into_iter()
             .enumerate()
-            .map(|(id, bar)| GraphBar::new(id, bar, colors.clone()))
+            .map(|(id, bar)| GraphBar::new(id, bar))
             .collect::<Vec<GraphBar>>();
 
         Self {
@@ -596,10 +637,13 @@ impl Viewable for StackedBarChartTab {
             config_shown: false,
             bars,
             order,
+            theme,
+            colors,
             sequential_x: false,
             sequential_y: false,
             caption,
             clean: false,
+            color_seed: seed,
             cache: canvas::Cache::default(),
             legend: LegendPosition::default(),
         }
@@ -647,6 +691,31 @@ impl Viewable for StackedBarChartTab {
         *self = new;
     }
 
+    fn theme_changed(&mut self, theme: &Theme) {
+        if &self.theme == theme {
+            return;
+        }
+
+        self.theme = theme.clone();
+
+        let colors = ColorEngine::new(&self.theme).gradual(self.order);
+        self.color_seed = colors.seed();
+
+        self.recolor(colors);
+    }
+
+    fn has_config(&self) -> bool {
+        true
+    }
+
+    fn config<'a, Message, F>(&'a self, map: F) -> Option<Element<'a, Message, Theme, Renderer>>
+    where
+        F: 'a + Fn(Self::Event) -> Message,
+        Message: 'a + Clone + Debug,
+    {
+        Some(self.tools().map(map))
+    }
+
     fn update(&mut self, message: Self::Event) -> Option<Message> {
         match message {
             StackedBarChartMessage::None => None,
@@ -654,8 +723,25 @@ impl Viewable for StackedBarChartTab {
                 dbg!("Debugging!");
                 None
             }
-            StackedBarChartMessage::ToggleConfig => {
-                self.config_shown = !self.config_shown;
+            StackedBarChartMessage::ChangeSeed(seed) => {
+                if let Some(seed) = parse_seed(seed, self.color_seed == 0.0) {
+                    self.color_seed = seed;
+                }
+
+                None
+            }
+            StackedBarChartMessage::ApplySeed => {
+                let colors = ColorEngine::new_with_seed(&self.theme, self.color_seed);
+                self.recolor(colors);
+                None
+            }
+            StackedBarChartMessage::RandomSeed => {
+                use rand::{thread_rng, Rng};
+                let seed: f32 = thread_rng().gen();
+                self.color_seed = seed;
+
+                let colors = ColorEngine::new_with_seed(&self.theme, self.color_seed);
+                self.recolor(colors);
                 None
             }
             StackedBarChartMessage::OpenEditor => {
@@ -725,7 +811,7 @@ impl Viewable for StackedBarChartTab {
         }
         .height(Length::Shrink);
 
-        let content_area = container(self.content())
+        let content_area = container(self.graph())
             .max_width(1450)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -739,20 +825,12 @@ impl Viewable for StackedBarChartTab {
             .height(Length::Fill)
             .width(Length::Fill);
 
-        let content: Element<Self::Event, Theme, Renderer> = if self.config_shown {
-            Modal::new(content, self.tools())
-                .on_blur(StackedBarChartMessage::ToggleConfig)
-                .into()
-        } else {
-            content.into()
-        };
-
         let content: Element<Self::Event, Theme, Renderer> = container(content)
             .padding(Padding {
                 top: 10.,
-                right: 30.,
-                bottom: 30.,
-                left: 15.,
+                right: 15.,
+                bottom: 15.,
+                left: 30.,
             })
             .width(Length::Fill)
             .height(Length::Fill)

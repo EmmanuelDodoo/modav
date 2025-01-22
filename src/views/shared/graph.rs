@@ -188,7 +188,9 @@ impl ToolbarOption for LegendPosition {
 }
 
 pub trait Graphable {
-    type Data: Default + Debug;
+    type Data<'a>: Debug
+    where
+        Self: 'a;
 
     fn label(&self) -> Option<&String>;
 
@@ -198,11 +200,11 @@ pub trait Graphable {
         bounds: Rectangle,
         color: Color,
         idx: usize,
-        data: &Self::Data,
+        data: &Self::Data<'_>,
     );
 
     /// Returns true if `Self` should not be skipped when drawing legend
-    fn draw_legend_filter(&self, _data: &Self::Data) -> bool {
+    fn draw_legend_filter(&self, _data: &Self::Data<'_>) -> bool {
         true
     }
 
@@ -211,7 +213,7 @@ pub trait Graphable {
         frame: &mut Frame,
         x_output: &DrawnOutput,
         y_output: &DrawnOutput,
-        data: &Self::Data,
+        data: &Self::Data<'_>,
     );
 }
 
@@ -1273,30 +1275,40 @@ where
     y_axis: Axis,
     cache: &'a canvas::Cache,
     graphables: &'a [G],
-    data: <G as Graphable>::Data,
+    data: <G as Graphable>::Data<'a>,
     legend_position: LegendPosition,
     labels_len: usize,
+    theme: &'a Theme,
     caption: Option<&'a String>,
 }
 
+#[allow(dead_code)]
 impl<'a, G> Graph<'a, G>
 where
     G: Graphable,
 {
-    pub fn new(x_axis: Axis, y_axis: Axis, graphables: &'a [G], cache: &'a canvas::Cache) -> Self {
+    pub fn new(
+        x_axis: Axis,
+        y_axis: Axis,
+        graphables: &'a [G],
+        theme: &'a Theme,
+        cache: &'a canvas::Cache,
+        data: impl Into<<G as Graphable>::Data<'a>>,
+    ) -> Self {
         Self {
             x_axis,
             y_axis,
             cache,
             graphables,
-            data: <G as Graphable>::Data::default(),
+            theme,
+            data: data.into(),
             legend_position: LegendPosition::default(),
             labels_len: 0,
             caption: None,
         }
     }
 
-    pub fn data(mut self, data: impl Into<<G as Graphable>::Data>) -> Self {
+    pub fn data(mut self, data: impl Into<<G as Graphable>::Data<'a>>) -> Self {
         self.data = data.into();
         self
     }
@@ -1396,12 +1408,17 @@ where
         &self,
         _state: &Self::State,
         renderer: &Renderer,
-        theme: &Theme,
+        _theme: &Theme,
         bounds: Rectangle,
         _cursor: iced::advanced::mouse::Cursor,
     ) -> Vec<Geometry> {
         let content = self.cache.draw(renderer, bounds.size(), |frame| {
-            let data = AxisData::new(frame, theme, self.x_axis.axis_pos, self.y_axis.axis_pos);
+            let data = AxisData::new(
+                frame,
+                self.theme,
+                self.x_axis.axis_pos,
+                self.y_axis.axis_pos,
+            );
 
             let x_output = self.x_axis.draw(frame, data);
             let y_output = self.y_axis.draw(frame, data);
@@ -1473,7 +1490,7 @@ where
             }
         });
 
-        vec![content, self.draw_legend(renderer, bounds, theme)]
+        vec![content, self.draw_legend(renderer, bounds, self.theme)]
     }
 }
 

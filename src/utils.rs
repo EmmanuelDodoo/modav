@@ -1,4 +1,3 @@
-use super::Message;
 use iced::font;
 use std::fmt::{Debug, Display};
 use std::io;
@@ -266,9 +265,13 @@ pub mod coloring {
         const RATIO: f32 = 0.60;
         const DEFAULT_COUNT: u32 = 5;
 
-        pub fn new<'a>(seed: &'a Theme) -> Self {
-            let rng: f32 = thread_rng().gen();
-            let is_dark = seed.extended_palette().is_dark;
+        pub fn new_with_seed<'a>(theme: &'a Theme, seed: f32) -> Self {
+            let rng = {
+                let mult = 10000.0;
+
+                (seed * mult).trunc() / mult
+            };
+            let is_dark = theme.extended_palette().is_dark;
             let seed = Theme::default();
             let seed: HSV = seed.extended_palette().secondary.base.color.into();
 
@@ -285,6 +288,11 @@ pub mod coloring {
                 random: rng,
                 mode: ColoringMode::Normal,
             }
+        }
+
+        pub fn new<'a>(theme: &'a Theme) -> Self {
+            let seed: f32 = thread_rng().gen();
+            Self::new_with_seed(theme, seed)
         }
 
         pub fn count(mut self, count: u32) -> Self {
@@ -308,6 +316,10 @@ pub mod coloring {
             }
 
             self
+        }
+
+        pub fn seed(&self) -> f32 {
+            self.random
         }
 
         /// Generates a Color taking into consideration previously generated colors
@@ -354,7 +366,7 @@ pub mod coloring {
     }
 }
 
-#[allow(dead_code, unused_imports)]
+#[allow(dead_code)]
 pub mod icons {
     use iced::{
         alignment,
@@ -363,12 +375,13 @@ pub mod icons {
     };
 
     pub const NAME: &'static str = "util-icons";
-    pub const COUNTER: char = '\u{E805}';
     pub const EDITOR: char = '\u{E804}';
     pub const FILE: char = '\u{F0F6}';
     pub const NEW_FILE: char = '\u{E801}';
     pub const ANGLE_UP: char = '\u{F106}';
     pub const ANGLE_DOWN: char = '\u{F107}';
+    pub const ANGLE_LEFT: char = '\u{F104}';
+    pub const ANGLE_RIGHT: char = '\u{F105}';
     pub const CHART: char = '\u{E802}';
     pub const BARCHART: char = '\u{E80E}';
     pub const SETTINGS: char = '\u{E800}';
@@ -379,7 +392,9 @@ pub mod icons {
     pub const WARN: char = '\u{E808}';
     pub const ERROR: char = '\u{E809}';
     pub const CLOSE: char = '\u{E806}';
-    pub const TOOLS: char = '\u{E80D}';
+    pub const TOOLS: char = '\u{E80C}';
+    pub const CONFIG: char = '\u{F1DE}';
+    pub const SHUFFLE: char = '\u{E80F}';
 
     fn icon_maker<'a>(unicode: char, name: &'static str) -> Text<'a> {
         let fnt: Font = Font::with_name(name);
@@ -487,44 +502,6 @@ impl std::error::Error for AppError {}
 impl From<Error> for AppError {
     fn from(value: Error) -> Self {
         Self::CSVError(value)
-    }
-}
-
-pub mod menus {
-
-    use crate::widgets::dashmenu::{DashMenu, DashMenuOption};
-
-    use super::{icons, Message};
-
-    use iced::{Font, Length};
-
-    pub fn menu_styler(menu: DashMenu<Message>) -> DashMenu<Message> {
-        menu.spacing(10.0)
-            .width(Length::Fixed(150.0))
-            .padding([2.0, 8.0])
-            .submenu_padding([2.0, 8.0])
-            .icon_font(Font::with_name(icons::NAME))
-    }
-
-    pub fn models_menu<'a>() -> DashMenu<Message> {
-        let options = vec![DashMenuOption::new("Line Graph", Some(Message::Convert))];
-
-        let menu = DashMenu::new(icons::CHART, "Models").submenus(options);
-
-        menu_styler(menu)
-    }
-
-    pub fn about_menu<'a>() -> DashMenu<Message> {
-        let menu = DashMenu::new(icons::INFO, "About").on_select(Message::OpenAboutDialog);
-
-        menu_styler(menu)
-    }
-
-    pub fn settings_menu<'a>() -> DashMenu<Message> {
-        let menu =
-            DashMenu::new(icons::SETTINGS, "Settings").on_select(Message::OpenSettingsDialog);
-
-        menu_styler(menu)
     }
 }
 
