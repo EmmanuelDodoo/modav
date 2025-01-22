@@ -3,8 +3,11 @@
 
 use iced::{
     alignment::{self, Horizontal, Vertical},
-    widget::{button, column, container, row, text},
-    Element, Length, Padding, Renderer, Theme,
+    widget::{
+        button, column, container, container::bordered_box, row, scrollable, text, vertical_space,
+        Space,
+    },
+    Alignment, Element, Length, Padding, Renderer, Theme,
 };
 
 use std::path::PathBuf;
@@ -13,11 +16,14 @@ use super::{
     barchart::{BarChartMessage, BarChartTab, BarChartTabData},
     editor::{EditorMessage, EditorTab, EditorTabData},
     line::{LineGraphTab, LineTabData, ModelMessage},
+    shared::tools_button,
     stacked_barchart::{StackedBarChartMessage, StackedBarChartTab, StackedBarChartTabData},
 };
 use super::{View, ViewType, Viewable};
 
+use crate::context;
 use crate::widgets::style::DialogContainer;
+use crate::Context;
 use crate::Message;
 
 use bar::TabBar;
@@ -93,6 +99,31 @@ impl Tab {
         }
     }
 
+    fn config(&self, idx: usize) -> Option<Element<'_, TabBarMessage, Theme, Renderer>> {
+        match self {
+            Tab::Editor(tab) => {
+                tab.config(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::Editor(msg)))
+            }
+            Tab::LineGraph(tab) => {
+                tab.config(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::LineGraph(msg)))
+            }
+            Tab::BarChart(tab) => {
+                tab.config(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::BarChart(msg)))
+            }
+            Tab::StackedBarChart(tab) => tab
+                .config(move |msg| TabBarMessage::UpdateTab(idx, TabMessage::StackedBarChart(msg))),
+        }
+    }
+
+    fn has_config(&self) -> bool {
+        match self {
+            Self::Editor(tab) => tab.has_config(),
+            Self::LineGraph(tab) => tab.has_config(),
+            Self::BarChart(tab) => tab.has_config(),
+            Self::StackedBarChart(tab) => tab.has_config(),
+        }
+    }
+
     /// Refresh self with a Refresh
     /// Assumes the self.id matches Refresh's id
     fn refresh(&mut self, rsh: Refresh) {
@@ -105,6 +136,15 @@ impl Tab {
             (Tab::BarChart(_), _) => {}
             (Tab::StackedBarChart(tab), Refresh::StackedBarChart(data)) => tab.refresh(data),
             (Tab::StackedBarChart(_), _) => {}
+        }
+    }
+
+    fn theme_changed(&mut self, theme: &Theme) {
+        match self {
+            Self::Editor(tab) => tab.theme_changed(theme),
+            Self::BarChart(tab) => tab.theme_changed(theme),
+            Self::LineGraph(tab) => tab.theme_changed(theme),
+            Self::StackedBarChart(tab) => tab.theme_changed(theme),
         }
     }
 
@@ -186,6 +226,7 @@ pub enum TabBarMessage {
     RefreshTab(usize, Refresh),
     NewTabModal,
     NewTabModalAction(NewTabModalAction),
+    ToggleConfig,
     Exit,
     None,
 }
@@ -206,6 +247,7 @@ where
     active_tab: Option<usize>,
     close_size: f32,
     modal_shown: bool,
+    config_shown: bool,
     new_tab_modal_shown: bool,
     exiting: bool,
     on_open: Option<Message>,
@@ -213,6 +255,7 @@ where
     check_exit: Option<Message>,
     can_exit: Option<Message>,
     on_save: Option<Box<dyn Fn(Option<PathBuf>, String, FileIOAction) -> Message>>,
+    theme: Theme,
     style: <Theme as StyleSheet>::Style,
 }
 
@@ -221,11 +264,20 @@ impl TabsState<Theme>
 where
     Message: Clone + 'static,
 {
-    pub fn new() -> Self {
-        Self::with_tabs(Vec::default().into_iter())
+    pub fn new(theme: Theme) -> Self {
+        Self::with_tabs(Vec::default().into_iter(), theme)
     }
 
-    pub fn with_tabs(tabs: impl Iterator<Item = Tab>) -> Self {
+    pub fn set_theme(&mut self, theme: Theme) {
+        self.theme = theme;
+        if let Some(active_tab) = self.active_tab {
+            if let Some(tab) = self.tabs.get_mut(active_tab) {
+                tab.theme_changed(&self.theme)
+            }
+        }
+    }
+
+    pub fn with_tabs(tabs: impl Iterator<Item = Tab>, theme: Theme) -> Self {
         let mut len = 0;
         let mut labels = Vec::default();
         let mut tabs_list = Vec::default();
@@ -255,9 +307,11 @@ where
             can_exit: None,
             close_size: 16.0,
             modal_shown: false,
+            config_shown: false,
             new_tab_modal_shown: false,
             exiting: false,
             style: <Theme as StyleSheet>::Style::default(),
+            theme,
             labels,
         }
     }
@@ -341,7 +395,7 @@ where
         self.labels.insert(new_active, tab.label());
         self.tabs.insert(new_active, tab);
 
-        self.active_tab = Some(new_active);
+        self.tab_selected(new_active);
     }
 
     pub fn push_view(&mut self, view: View) {
@@ -397,10 +451,48 @@ where
 
                 let tab = self
                     .get_active_tab()
-                    .expect("Tab: Has active tab index but no active tab")
-                    .view(idx);
+                    .expect("Tab: Has active tab index but no active tab");
 
-                let content: Element<'a, TabBarMessage, Theme, Renderer> = column!(bar, tab)
+                let view = tab.view(idx);
+
+                let config_btn: Element<'_, TabBarMessage> =
+                    if tab.has_config() && !self.config_shown {
+                        column!(
+                            vertical_space(),
+                            tools_button().on_press(TabBarMessage::ToggleConfig),
+                            vertical_space()
+                        )
+                        .padding(Padding {
+                            top: 0.,
+                            right: 5.,
+                            bottom: 0.,
+                            left: 0.,
+                        })
+                        .align_x(Alignment::Center)
+                        .into()
+                    } else {
+                        Space::with_width(0).into()
+                    };
+
+                let config: Option<Element<'_, TabBarMessage>> =
+                    (tab.has_config() && self.config_shown).then(|| {
+                        let Some(config) = tab.config(idx) else {
+                            return Space::with_width(0.0).into();
+                        };
+                        context!(container(scrollable(config))
+                            .padding([16, 12])
+                            .height(Length::Fill)
+                            .width(325.0)
+                            .style(bordered_box)
+                        ; TabBarMessage::ToggleConfig)
+                        .padding(0)
+                        .height(Length::Fill)
+                        .into()
+                    });
+
+                let content = row!(view, config_btn).push_maybe(config);
+
+                let content: Element<'a, TabBarMessage, Theme, Renderer> = column!(bar, content)
                     .width(self.width)
                     .height(self.height)
                     .into();
@@ -469,6 +561,10 @@ where
                     return self.on_new_active_tab.clone();
                 }
             },
+            TabBarMessage::ToggleConfig => {
+                self.config_shown = !self.config_shown;
+                None
+            }
 
             TabBarMessage::DirtyTabModal(action) => match action {
                 DirtyTabModalAction::Cancel => {
@@ -535,7 +631,7 @@ where
             TabBarMessage::Exit => {
                 self.exiting = true;
                 if let Some(unclosed) = self.has_dirty_tab() {
-                    self.active_tab = Some(unclosed);
+                    self.tab_selected(unclosed);
                     self.modal_shown = true;
                     return None;
                 }
@@ -546,6 +642,9 @@ where
     }
 
     fn tab_selected(&mut self, idx: usize) {
+        if let Some(active_tab) = self.tabs.get_mut(idx) {
+            active_tab.theme_changed(&self.theme);
+        }
         self.active_tab = Some(idx);
     }
 
@@ -683,7 +782,7 @@ where
 
         if let Some(tab) = self.tabs.get(idx) {
             if tab.is_dirty() {
-                self.active_tab = Some(idx);
+                self.tab_selected(idx);
                 self.modal_shown = true;
                 return false;
             }
@@ -700,22 +799,22 @@ where
             // Deleteing active tab
             if active_tab == idx {
                 if idx == 0 && self.labels.len() > 1 {
-                    self.active_tab = Some(0);
+                    self.tab_selected(0);
                 } else if idx == 0 {
                     self.active_tab = None;
                 } else if idx == self.labels.len() - 1 {
-                    self.active_tab = Some(idx - 1);
+                    self.tab_selected(idx - 1);
                 } else {
-                    self.active_tab = Some(idx);
+                    self.tab_selected(idx);
                 }
             }
             // Deleting other tab on left
             else if idx < active_tab {
-                self.active_tab = Some(active_tab - 1);
+                self.tab_selected(active_tab - 1);
             }
             // Deleting other tab on right
             else {
-                self.active_tab = Some(active_tab)
+                self.tab_selected(active_tab);
             }
 
             self.labels.remove(idx);
@@ -737,7 +836,7 @@ where
     Message: Clone + 'static,
 {
     fn default() -> Self {
-        Self::new()
+        Self::new(Theme::default())
     }
 }
 
@@ -863,7 +962,10 @@ pub mod bar {
 
                         tab_background_active: base_background,
                         tab_background_hovered: Background::Color(palette.primary.strong.color),
-                        tab_border: Border::default().rounded(5.0),
+                        tab_border: Border::default().rounded(5.0).width(1.0).color(Color {
+                            a: 0.5,
+                            ..palette.secondary.weak.color
+                        }),
                         tab_shadow: Shadow::default(),
                         tab_text_color: text_color,
                         tab_icon_color: Some(text_color),

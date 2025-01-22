@@ -1,6 +1,5 @@
-pub mod dashmenu;
 pub mod modal;
-pub mod settings;
+pub mod sidemenu;
 pub mod style;
 pub mod toast;
 pub mod toolbar;

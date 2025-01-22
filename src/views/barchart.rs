@@ -4,7 +4,7 @@ use iced::{
     alignment,
     widget::{
         button, canvas, checkbox, column, container, horizontal_space, row, text, text_input,
-        vertical_space, Canvas, Tooltip,
+        Canvas, Tooltip,
     },
     Alignment, Color, Element, Font, Length, Padding, Point, Renderer, Size, Theme,
 };
@@ -22,7 +22,6 @@ use crate::{
     utils::{coloring::ColorEngine, icons, tooltip, AppError},
     widgets::{
         modal::Modal,
-        style::dialog_container,
         toolbar::{ToolBarOrientation, ToolbarMenu},
         wizard::BarChartConfigState,
     },
@@ -30,9 +29,10 @@ use crate::{
 };
 
 use super::{
+    parse_seed,
     shared::{
         graph::{create_axis, Axis, DrawnOutput, Graph, Graphable, LegendPosition},
-        tools_button, ContentAreaContainer, EditorButtonStyle,
+        ContentAreaContainer, EditorButtonStyle,
     },
     tabs::TabLabel,
     Viewable,
@@ -58,6 +58,10 @@ impl GraphBar {
         self.color = color;
         self
     }
+
+    fn set_color(&mut self, color: impl Into<Color>) {
+        self.color = color.into();
+    }
 }
 
 impl From<Bar> for GraphBar {
@@ -69,13 +73,13 @@ impl From<Bar> for GraphBar {
 }
 
 impl Graphable for GraphBar {
-    type Data = bool;
+    type Data<'a> = bool;
 
     fn label(&self) -> Option<&String> {
         self.label.as_ref()
     }
 
-    fn draw_legend_filter(&self, _data: &Self::Data) -> bool {
+    fn draw_legend_filter(&self, _data: &Self::Data<'_>) -> bool {
         self.label.is_some()
     }
 
@@ -85,7 +89,7 @@ impl Graphable for GraphBar {
         bounds: iced::Rectangle,
         color: Color,
         idx: usize,
-        _data: &Self::Data,
+        _data: &Self::Data<'_>,
     ) {
         if idx > 4 {
             return;
@@ -121,7 +125,7 @@ impl Graphable for GraphBar {
         frame: &mut canvas::Frame,
         x_output: &DrawnOutput,
         y_output: &DrawnOutput,
-        data: &Self::Data,
+        data: &Self::Data<'_>,
     ) {
         let is_horizontal = *data;
 
@@ -249,6 +253,9 @@ pub enum BarChartMessage {
     XLabelChanged(String),
     YLabelChanged(String),
     Legend(LegendPosition),
+    ChangeSeed(String),
+    ApplySeed,
+    RandomSeed,
 }
 
 #[derive(Debug)]
@@ -266,12 +273,17 @@ pub struct BarChartTab {
     sequential_x: bool,
     sequential_y: bool,
     clean: bool,
+    color_seed: f32,
     cache: canvas::Cache,
     legend: LegendPosition,
+    theme: Theme,
+    order: bool,
 }
 
 impl BarChartTab {
     fn tools(&self) -> Element<'_, BarChartMessage> {
+        let spacing = 10.0;
+
         let header = {
             let header = text("Model Config").size(17.0);
 
@@ -310,47 +322,88 @@ impl BarChartTab {
         )
         .on_input(BarChartMessage::CaptionChange);
 
-        let sequential = {
-            let x = {
-                let check = checkbox("Ranged X axis", self.sequential_x)
-                    .on_toggle(BarChartMessage::SequentialX);
+        let ranged_x = {
+            let check = {
+                let check = checkbox("", self.sequential_x).on_toggle(BarChartMessage::SequentialX);
+                let label = text("Ranged X axis");
 
-                let tip = tooltip("Each point on the axis is produced consecutively");
-
-                row!(check, tip).spacing(10.0)
+                row!(label, check).spacing(8.0).align_y(Alignment::Center)
             };
 
-            let y = {
-                let check = checkbox("Ranged Y axis", self.sequential_y)
-                    .on_toggle(BarChartMessage::SequentialY);
+            let tip = tooltip("Each point on the axis is produced consecutively");
 
-                let tip = tooltip("Each point on the axis is produced consecutively");
+            row!(check, tip).spacing(spacing)
+        };
 
-                row!(check, tip).spacing(10.0)
+        let ranged_y = {
+            let check = {
+                let check = checkbox("", self.sequential_y).on_toggle(BarChartMessage::SequentialY);
+                let label = text("Ranged Y axis");
+
+                row!(label, check).align_y(Alignment::Center).spacing(8.0)
             };
 
-            row!(x, horizontal_space(), y).align_y(Alignment::Center)
+            let tip = tooltip("Each point on the axis is produced consecutively");
+
+            row!(check, tip).spacing(spacing)
         };
 
         let clean = {
-            let check = checkbox("Clean graph", self.clean).on_toggle(BarChartMessage::Clean);
+            let check = {
+                let check = checkbox("", self.clean).on_toggle(BarChartMessage::Clean);
+                let label = text("Clean graph");
+
+                row!(label, check).align_y(Alignment::Center).spacing(8.0)
+            };
 
             let tip = tooltip("Only points on the axes have their outline drawn");
 
-            row!(check, tip).spacing(10.0)
+            row!(check, tip).spacing(spacing)
+        };
+
+        let seed = {
+            let value = self.color_seed;
+            let value = format!("{value:.4}");
+
+            let label = text("Coloring Seed");
+
+            let tip = tooltip("Sets the seed used to generate graph colors");
+
+            let btn = button(
+                icons::icon(icons::REDO)
+                    .align_y(alignment::Vertical::Center)
+                    .align_x(alignment::Horizontal::Center),
+            )
+            .padding([4, 8])
+            //.style(button::secondary)
+            .on_press(BarChartMessage::ApplySeed);
+
+            let rand = button(icons::icon(icons::SHUFFLE).align_y(alignment::Vertical::Center))
+                .padding([4, 8])
+                .style(button::secondary)
+                .on_press(BarChartMessage::RandomSeed);
+
+            let input = text_input("", &value)
+                .on_input(BarChartMessage::ChangeSeed)
+                .padding([2, 5])
+                .width(67.0);
+
+            row!(label, input, btn, rand, tip)
+                .spacing(spacing)
+                .align_y(Alignment::Center)
         };
 
         let horizontal = {
-            let check = checkbox("Horizontal bars", self.is_horizontal)
-                .on_toggle(BarChartMessage::Horizontal);
+            let check = {
+                let check = checkbox("", self.is_horizontal).on_toggle(BarChartMessage::Horizontal);
+                let label = text("Horizontal bars");
+                row!(label, check).align_y(Alignment::Center).spacing(8.0)
+            };
 
             let tip = tooltip("The bars are drawn horizontally");
 
-            row!(check, tip).spacing(10.0)
+            row!(check, tip).spacing(spacing)
         };
-
-        let clean_horizontal =
-            row!(clean, horizontal_space(), horizontal).align_y(Alignment::Center);
 
         let legend = {
             let icons = Font::with_name("legend-icons");
@@ -388,7 +441,7 @@ impl BarChartTab {
 
             let text = text("Legend Position");
 
-            row!(menu, text).spacing(10.0).align_y(Alignment::Center)
+            row!(text, menu).spacing(spacing).align_y(Alignment::Center)
         };
 
         let editor = {
@@ -424,27 +477,15 @@ impl BarChartTab {
 
             let text = text("Open in Editor");
 
-            row!(menu, text).spacing(10.0).align_y(Alignment::Center)
+            row!(text, menu).spacing(spacing).align_y(Alignment::Center)
         };
 
-        let legend_editor = row!(legend, horizontal_space(), editor).align_y(Alignment::Center);
-
-        let content = column!(
-            header,
-            title,
-            x_label,
-            y_label,
-            caption,
-            sequential,
-            clean_horizontal,
-            legend_editor,
+        column!(
+            header, title, x_label, y_label, caption, ranged_x, ranged_y, clean, horizontal, seed,
+            legend, editor,
         )
-        .spacing(30.0);
-
-        dialog_container(content)
-            .width(450.0)
-            .height(Length::Shrink)
-            .into()
+        .spacing(25.0)
+        .into()
     }
 
     fn create_axis(&self) -> (Axis, Axis) {
@@ -475,11 +516,17 @@ impl BarChartTab {
         let (x_axis, y_axis) = self.create_axis();
 
         let content = Canvas::new(
-            Graph::new(x_axis, y_axis, &self.bars, &self.cache)
-                .caption(self.caption.as_ref())
-                .labels_len(self.bars.iter().filter(|bar| bar.label.is_some()).count())
-                .legend(self.legend)
-                .data(self.is_horizontal),
+            Graph::new(
+                x_axis,
+                y_axis,
+                &self.bars,
+                &self.theme,
+                &self.cache,
+                self.is_horizontal,
+            )
+            .caption(self.caption.as_ref())
+            .labels_len(self.bars.iter().filter(|bar| bar.label.is_some()).count())
+            .legend(self.legend),
         )
         .width(Length::FillPortion(24))
         .height(Length::Fill);
@@ -487,18 +534,16 @@ impl BarChartTab {
         content.into()
     }
 
-    fn content(&self) -> Element<'_, BarChartMessage> {
-        let graph = self.graph();
+    fn redraw(&mut self) {
+        self.cache.clear()
+    }
 
-        let toolbar = tools_button().on_press(BarChartMessage::ToggleConfig);
+    fn recolor(&mut self, colors: ColorEngine) {
+        self.bars.iter_mut().zip(colors).for_each(|(bar, color)| {
+            bar.set_color(color);
+        });
 
-        row!(
-            graph,
-            column!(vertical_space(), toolbar, vertical_space())
-                .padding(Padding::ZERO.right(5.))
-                .align_x(Alignment::Center)
-        )
-        .into()
+        self.redraw()
     }
 }
 
@@ -530,6 +575,7 @@ impl Viewable for BarChartTab {
         };
 
         let colors = ColorEngine::new(&theme).gradual(order);
+        let seed = colors.seed();
 
         let bars = bars
             .into_iter()
@@ -547,6 +593,9 @@ impl Viewable for BarChartTab {
             caption,
             bars,
             is_horizontal,
+            theme,
+            order,
+            color_seed: seed,
             config_shown: false,
             sequential_x: false,
             sequential_y: false,
@@ -596,6 +645,30 @@ impl Viewable for BarChartTab {
         let new = <Self as Viewable>::new(data);
 
         *self = new;
+    }
+
+    fn theme_changed(&mut self, theme: &Theme) {
+        if &self.theme == theme {
+            return;
+        }
+        self.theme = theme.clone();
+
+        let colors = ColorEngine::new(&self.theme).gradual(self.order);
+        self.color_seed = colors.seed();
+
+        self.recolor(colors);
+    }
+
+    fn has_config(&self) -> bool {
+        true
+    }
+
+    fn config<'a, Message, F>(&'a self, map: F) -> Option<Element<'a, Message, Theme, Renderer>>
+    where
+        F: 'a + Fn(Self::Event) -> Message,
+        Message: 'a + Clone + Debug,
+    {
+        Some(self.tools().map(map))
     }
 
     fn update(&mut self, message: Self::Event) -> Option<Message> {
@@ -652,6 +725,27 @@ impl Viewable for BarChartTab {
                 self.legend = legend;
                 None
             }
+            BarChartMessage::ChangeSeed(seed) => {
+                if let Some(seed) = parse_seed(seed, self.color_seed == 0.0) {
+                    self.color_seed = seed;
+                }
+
+                None
+            }
+            BarChartMessage::ApplySeed => {
+                let colors = ColorEngine::new_with_seed(&self.theme, self.color_seed);
+                self.recolor(colors);
+                None
+            }
+            BarChartMessage::RandomSeed => {
+                use rand::{thread_rng, Rng};
+                let seed: f32 = thread_rng().gen();
+                self.color_seed = seed;
+
+                let colors = ColorEngine::new_with_seed(&self.theme, self.color_seed);
+                self.recolor(colors);
+                None
+            }
         }
     }
 
@@ -668,7 +762,7 @@ impl Viewable for BarChartTab {
         }
         .height(Length::Shrink);
 
-        let content_area = container(self.content())
+        let content_area = container(self.graph())
             .max_width(1450)
             // .padding([5, 10])
             .width(Length::Fill)

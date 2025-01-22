@@ -8,13 +8,14 @@ use iced::{
         self, button, column, component, container, horizontal_space, pick_list, row, text,
         vertical_space, Component, Space,
     },
-    Border, Element, Length, Theme,
+    Element, Length, Theme,
 };
 
 use crate::views::{
     BarChartTabData, EditorTabData, FileType, LineTabData, StackedBarChartTabData, View,
 };
 
+use crate::styles::FileBorderContainer;
 use crate::utils::{icons, AppError};
 use crate::ViewType;
 
@@ -476,33 +477,5 @@ where
 {
     fn from(value: Wizard<'a, Message>) -> Self {
         component(value)
-    }
-}
-
-pub struct FileBorderContainer;
-
-impl widget::container::Catalog for FileBorderContainer {
-    type Class<'a> = Theme;
-
-    fn default<'a>() -> Self::Class<'a> {
-        <Theme as std::default::Default>::default()
-    }
-
-    fn style(&self, class: &Self::Class<'_>) -> container::Style {
-        let border_color = class.extended_palette().primary.weak.color;
-
-        let border = Border {
-            color: border_color,
-            width: 1.0,
-            ..Default::default()
-        };
-
-        let background = class.extended_palette().background.weak.color;
-
-        container::Style {
-            background: Some(background.into()),
-            border,
-            ..Default::default()
-        }
     }
 }
