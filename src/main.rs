@@ -775,7 +775,7 @@ impl Modav {
             }
             FileIOAction::NewTab((View::None, _)) => self.update_tabs(TabsMessage::None),
             FileIOAction::RefreshTab((ViewType::Editor, tidx, path)) => {
-                let data = EditorTabData::new(Some(path), content);
+                let data = EditorTabData::new(Some(path), content).theme(self.theme());
                 let rsh = Refresh::Editor(data);
                 self.update_tabs(TabsMessage::RefreshTab(tidx, rsh))
             }
@@ -1019,8 +1019,9 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
                 self.info_log("Opening Log file");
 
                 let path = self.log_file().clone();
-                let data =
-                    EditorTabData::new(Some(path.clone()), String::default()).read_only(true);
+                let data = EditorTabData::new(Some(path.clone()), String::default())
+                    .theme(self.theme())
+                    .read_only(true);
                 let action = FileIOAction::NewTab((View::Editor(data), path.clone()));
 
                 Task::perform(
@@ -1169,7 +1170,8 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             }
             Message::OpenEditor(path) => match path {
                 Some(path) => {
-                    let data = EditorTabData::new(Some(path.clone()), String::default());
+                    let data = EditorTabData::new(Some(path.clone()), String::default())
+                        .theme(self.theme());
                     let msg = Message::OpenTab(self.file_path.clone(), View::Editor(data));
 
                     Task::perform(async { msg }, |msg| msg)

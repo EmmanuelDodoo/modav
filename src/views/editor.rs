@@ -6,12 +6,13 @@ use iced::{
 use std::path::PathBuf;
 
 use super::{TabLabel, Viewable};
-use crate::{utils::icons, Message};
+use crate::{utils::icons, widgets::csv_highlighter::CSVHighlighter, Message};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct EditorTabData {
     path: Option<PathBuf>,
     data: String,
+    theme: Theme,
     read_only: bool,
 }
 
@@ -21,6 +22,7 @@ impl EditorTabData {
             path,
             data,
             read_only: false,
+            theme: Theme::default(),
         }
     }
 
@@ -31,6 +33,11 @@ impl EditorTabData {
 
     pub fn data(mut self, data: String) -> Self {
         self.data = data;
+        self
+    }
+
+    pub fn theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
         self
     }
 
@@ -46,6 +53,7 @@ pub struct EditorTab {
     file_path: Option<PathBuf>,
     content: text_editor::Content,
     is_empty: bool,
+    theme: Theme,
     read_only: bool,
 }
 
@@ -64,6 +72,7 @@ impl Viewable for EditorTab {
             path,
             data,
             read_only,
+            theme,
         } = data;
         let is_empty = data.is_empty();
         let content = text_editor::Content::with_text(data.as_str());
@@ -72,6 +81,7 @@ impl Viewable for EditorTab {
             is_empty,
             read_only,
             is_dirty: false,
+            theme,
             file_path: path,
         }
     }
@@ -159,17 +169,29 @@ impl Viewable for EditorTab {
             .and_then(|path| path.extension()?.to_str())
             .unwrap_or("txt")
             .to_string();
-        let highlighter_settings = highlighter::Settings {
-            token: extension,
-            theme: highlighter::Theme::SolarizedDark,
-        };
 
-        let content: Element<EditorMessage, Theme, Renderer> = text_editor(&self.content)
-            .on_action(EditorMessage::Action)
-            .height(Length::Fill)
-            .padding([4, 8])
-            .highlight_with::<Highlighter>(highlighter_settings, |hl, _theme| hl.to_format())
-            .into();
+        let content: Element<EditorMessage, Theme, Renderer> = if extension == "csv" {
+            text_editor(&self.content)
+                .on_action(EditorMessage::Action)
+                .height(Length::Fill)
+                .highlight_with::<CSVHighlighter>(self.theme.clone(), |highlight, _theme| {
+                    highlight.into_format()
+                })
+                .padding([4, 8])
+                .into()
+        } else {
+            let highlighter_settings = highlighter::Settings {
+                token: extension,
+                theme: highlighter::Theme::SolarizedDark,
+            };
+
+            text_editor(&self.content)
+                .on_action(EditorMessage::Action)
+                .height(Length::Fill)
+                .padding([4, 8])
+                .highlight_with::<Highlighter>(highlighter_settings, |hl, _theme| hl.to_format())
+                .into()
+        };
 
         content.map(map)
     }
@@ -183,9 +205,23 @@ impl Viewable for EditorTab {
     }
 
     fn refresh(&mut self, data: Self::Data) {
-        self.is_empty = data.data.is_empty();
-        self.file_path = data.path;
+        let EditorTabData {
+            path,
+            data,
+            theme,
+            read_only,
+        } = data;
+        self.is_empty = data.is_empty();
+        self.file_path = path;
         self.is_dirty = false;
+        self.read_only = read_only;
+        self.theme = theme;
+    }
+
+    fn theme_changed(&mut self, theme: &Theme) {
+        if self.theme != *theme {
+            self.theme = theme.clone();
+        }
     }
 
     fn path(&self) -> Option<PathBuf> {

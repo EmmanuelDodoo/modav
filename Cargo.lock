@@ -2122,6 +2122,7 @@ dependencies = [
  "modav_core",
  "rand",
  "rfd",
+ "syntect",
  "tokio",
  "tracing",
  "tracing-appender",
