@@ -75,7 +75,11 @@ impl Viewable for EditorTab {
             theme,
         } = data;
         let is_empty = data.is_empty();
-        let content = text_editor::Content::with_text(data.as_str());
+        let mut content = text_editor::Content::with_text(&data);
+
+        content.perform(text_editor::Action::Edit(text_editor::Edit::Insert(' ')));
+        content.perform(text_editor::Action::Edit(text_editor::Edit::Backspace));
+
         Self {
             content,
             is_empty,

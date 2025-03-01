@@ -32,6 +32,8 @@ static SYNTAXES: LazyLock<parsing::SyntaxSet> =
 
 static CSV_SYNTAX: LazyLock<parsing::SyntaxSet> = LazyLock::new(csv_syntax);
 
+static RNG: LazyLock<f32> = LazyLock::new(rand_f32);
+
 const LINES: usize = 50;
 
 const QUOTED: &str = "quoted.field.csv";
@@ -288,7 +290,7 @@ impl Engine {
     }
 
     pub fn generate(&mut self) -> Color {
-        let hue = ((rand_f32() * 10.) + Self::RATIO + self.hue) % 1.0;
+        let hue = ((*RNG * 10.) + Self::RATIO + self.hue) % 1.0;
 
         self.hue = hue;
 
