@@ -20,7 +20,6 @@ iced = { version = "0.13.1", features = [
 ] }
 rfd = "0.12.1"
 tokio = { version = "1.39.0", features = ["fs"] }
-rand = { version = "0.8.5", features = ["std"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tracing = "0.1.40"
 tracing-appender = "0.2.3"

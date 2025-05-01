@@ -1,9 +1,9 @@
 use std::ops::Range;
 use std::sync::LazyLock;
-use std::time::Instant;
 
 use syntect::parsing;
 
+use crate::utils::rand_f32;
 use iced::{advanced::text, color, font::Style, Color, Font, Theme};
 
 const SYNTAX: &str = r#"
@@ -255,12 +255,6 @@ impl Iterator for ScopeRangeIterator {
         self.index += 1;
         Some((range, op))
     }
-}
-
-fn rand_f32() -> f32 {
-    let nanos = Instant::now().elapsed().as_nanos() as u64;
-    let x = (nanos ^ (nanos >> 33)).wrapping_mul(0x62A9D9ED799705F5);
-    ((x >> 32) as f32) / (u32::MAX as f32)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
