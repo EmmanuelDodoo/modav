@@ -105,13 +105,13 @@ fn main() -> Result<(), iced::Error> {
         .with_env_filter(filter)
         .init();
 
-    let flags = Flags::Prod(if fallback_flag {
+    let _flags = Flags::Prod(if fallback_flag {
         PathBuf::from(fallback_log)
     } else {
         log
     });
 
-    //let flags = Flags::Stacked;
+    let flags = Flags::Stacked;
 
     application(Modav::title, Modav::update, Modav::view)
         .centered()
@@ -715,7 +715,7 @@ impl Modav {
 
     fn update_tabs(&mut self, tsg: TabsMessage) -> Task<Message> {
         if let Some(response) = self.tabs.update(tsg) {
-            Task::perform(async { response }, |response| response)
+            Task::done(response)
         } else {
             Task::none()
         }
@@ -733,7 +733,7 @@ impl Modav {
                 match data {
                     Err(err) => {
                         let msg = Message::Error(err, true);
-                        Task::perform(async { msg }, |msg| msg)
+                        Task::done(msg)
                     }
 
                     Ok(data) => {
@@ -748,7 +748,7 @@ impl Modav {
                 match data {
                     Err(err) => {
                         let msg = Message::Error(err, true);
-                        Task::perform(async { msg }, |msg| msg)
+                        Task::done(msg)
                     }
 
                     Ok(data) => {
@@ -763,7 +763,7 @@ impl Modav {
                 match data {
                     Err(err) => {
                         let msg = Message::Error(err, true);
-                        Task::perform(async { msg }, |msg| msg)
+                        Task::done(msg)
                     }
 
                     Ok(data) => {
@@ -775,7 +775,7 @@ impl Modav {
             }
             FileIOAction::NewTab((View::None, _)) => self.update_tabs(TabsMessage::None),
             FileIOAction::RefreshTab((ViewType::Editor, tidx, path)) => {
-                let data = EditorTabData::new(Some(path), content);
+                let data = EditorTabData::new(Some(path), content).theme(self.theme());
                 let rsh = Refresh::Editor(data);
                 self.update_tabs(TabsMessage::RefreshTab(tidx, rsh))
             }
@@ -784,7 +784,7 @@ impl Modav {
                 match data {
                     Err(err) => {
                         let msg = Message::Error(err, true);
-                        Task::perform(async { msg }, |msg| msg)
+                        Task::done(msg)
                     }
                     Ok(data) => {
                         let rsh = Refresh::LineGraph(data);
@@ -797,7 +797,7 @@ impl Modav {
                 match data {
                     Err(err) => {
                         let msg = Message::Error(err, true);
-                        Task::perform(async { msg }, |msg| msg)
+                        Task::done(msg)
                     }
                     Ok(data) => {
                         let rsh = Refresh::BarChart(data);
@@ -810,7 +810,7 @@ impl Modav {
                 match data {
                     Err(err) => {
                         let msg = Message::Error(err, true);
-                        Task::perform(async { msg }, |msg| msg)
+                        Task::done(msg)
                     }
                     Ok(data) => {
                         let rsh = Refresh::StackedBarChart(data);
@@ -984,7 +984,7 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             }
             Message::IconLoaded(Err(e)) => {
                 let error = AppError::FontLoading(e);
-                Task::perform(async { error }, |error| Message::Error(error, true))
+                Task::done(Message::Error(error, true))
             }
             Message::SelectFile => {
                 self.error = AppError::None;
@@ -1019,8 +1019,9 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
                 self.info_log("Opening Log file");
 
                 let path = self.log_file().clone();
-                let data =
-                    EditorTabData::new(Some(path.clone()), String::default()).read_only(true);
+                let data = EditorTabData::new(Some(path.clone()), String::default())
+                    .theme(self.theme())
+                    .read_only(true);
                 let action = FileIOAction::NewTab((View::Editor(data), path.clone()));
 
                 Task::perform(
@@ -1029,9 +1030,7 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
                 )
             }
 
-            Message::FileLoaded((Err(err), _)) => {
-                Task::perform(async { err }, |error| Message::Error(error, true))
-            }
+            Message::FileLoaded((Err(err), _)) => Task::done(Message::Error(err, true)),
             Message::OpenTab(path, tidr) => {
                 self.info_log("Tab opened");
                 let path = path.filter(|path| path.is_file());
@@ -1078,7 +1077,7 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             }
             Message::TabsMessage(tsg) => {
                 if let Some(response) = self.tabs.update(tsg) {
-                    Task::perform(async { response }, |response| response)
+                    Task::done(response)
                 } else {
                     Task::none()
                 }
@@ -1103,7 +1102,7 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             }
             Message::SaveKeyPressed => {
                 let save_message = self.save_helper(self.tabs.active_path());
-                Task::perform(async { save_message }, |msg| msg)
+                Task::done(save_message)
             }
             Message::FileSaved((Ok((_path, content)), action)) => {
                 let toast = Toast {
@@ -1113,9 +1112,7 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
                 self.push_toast(toast);
                 self.file_io_action_handler(action, content)
             }
-            Message::FileSaved((Err(e), _)) => {
-                Task::perform(async { e }, |error| Message::Error(error, true))
-            }
+            Message::FileSaved((Err(e), _)) => Task::done(Message::Error(e, true)),
             Message::CheckExit => self.update_tabs(TabsMessage::Exit),
             Message::SetMainWindowID(id) => {
                 self.main_window_id = Some(id);
@@ -1142,12 +1139,13 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             }
             Message::CloseWizard => {
                 self.dialog_view = DialogView::None;
-                Task::perform(async {}, |_| Message::NewActiveTab)
+                Task::done(Message::NewActiveTab)
             }
             Message::WizardSubmit(path, view) => {
                 self.dialog_view = DialogView::None;
                 self.info_log("Wizard Submitted");
-                Task::perform(async { Message::OpenTab(Some(path), view) }, |msg| msg)
+                let msg = Message::OpenTab(Some(path), view);
+                Task::done(msg)
             }
             Message::AddToast(toast) => {
                 self.push_toast(toast);
@@ -1169,10 +1167,11 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             }
             Message::OpenEditor(path) => match path {
                 Some(path) => {
-                    let data = EditorTabData::new(Some(path.clone()), String::default());
+                    let data = EditorTabData::new(Some(path.clone()), String::default())
+                        .theme(self.theme());
                     let msg = Message::OpenTab(self.file_path.clone(), View::Editor(data));
 
-                    Task::perform(async { msg }, |msg| msg)
+                    Task::done(msg)
                 }
                 None => Task::none(),
             },
@@ -1190,11 +1189,11 @@ This app is meant to be a MOdern Data Visualisation (MODAV) tool split into 2 pa
             Message::KeyPressed(key, modifiers) => match key {
                 Key::Named(key::Named::Save) if modifiers.command() => {
                     let save_message = self.save_helper(self.tabs.active_path());
-                    Task::perform(async { save_message }, |msg| msg)
+                    Task::done(save_message)
                 }
                 Key::Character(s) if s.as_str() == "s" && modifiers.command() => {
                     let save_message = self.save_helper(self.tabs.active_path());
-                    Task::perform(async { save_message }, |msg| msg)
+                    Task::done(save_message)
                 }
                 Key::Named(key::Named::Tab) => {
                     if modifiers.shift() {

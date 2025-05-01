@@ -2,6 +2,7 @@ use iced::font;
 use std::fmt::{Debug, Display};
 use std::io;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use modav_core::repr::sheet::error::Error;
 
@@ -9,7 +10,7 @@ pub use tooltip::tooltip;
 
 #[allow(dead_code)]
 pub mod coloring {
-    use rand::{thread_rng, Rng};
+    use super::rand_f32;
     use std::fmt::Display;
 
     use iced::{color, Color, Theme};
@@ -291,7 +292,7 @@ pub mod coloring {
         }
 
         pub fn new<'a>(theme: &'a Theme) -> Self {
-            let seed: f32 = thread_rng().gen();
+            let seed: f32 = rand_f32();
             Self::new_with_seed(theme, seed)
         }
 
@@ -542,6 +543,12 @@ pub async fn save_file(
         .map_err(|err| AppError::FileSaving(err.kind()))?;
 
     Ok((path, content))
+}
+
+pub fn rand_f32() -> f32 {
+    let nanos = Instant::now().elapsed().as_nanos() as u64;
+    let x = (nanos ^ (nanos >> 33)).wrapping_mul(0x62A9D9ED799705F5);
+    ((x >> 32) as f32) / (u32::MAX as f32)
 }
 
 /// Represents singular/multiple selection of Rows/Columns

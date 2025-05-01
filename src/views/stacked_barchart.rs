@@ -19,7 +19,7 @@ use modav_core::{
 use tracing::warn;
 
 use crate::{
-    utils::{coloring::ColorEngine, icons, parse_ints, tooltip, AppError, Selection},
+    utils::{coloring::ColorEngine, icons, parse_ints, rand_f32, tooltip, AppError, Selection},
     widgets::{
         toolbar::{ToolBarOrientation, ToolbarMenu},
         wizard::StackedBarChartConfigState,
@@ -736,8 +736,7 @@ impl Viewable for StackedBarChartTab {
                 None
             }
             StackedBarChartMessage::RandomSeed => {
-                use rand::{thread_rng, Rng};
-                let seed: f32 = thread_rng().gen();
+                let seed: f32 = rand_f32();
                 self.color_seed = seed;
 
                 let colors = ColorEngine::new_with_seed(&self.theme, self.color_seed);

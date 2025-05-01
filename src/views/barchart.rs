@@ -19,7 +19,7 @@ use modav_core::{
 use tracing::warn;
 
 use crate::{
-    utils::{coloring::ColorEngine, icons, tooltip, AppError},
+    utils::{coloring::ColorEngine, icons, rand_f32, tooltip, AppError},
     widgets::{
         modal::Modal,
         toolbar::{ToolBarOrientation, ToolbarMenu},
@@ -738,8 +738,7 @@ impl Viewable for BarChartTab {
                 None
             }
             BarChartMessage::RandomSeed => {
-                use rand::{thread_rng, Rng};
-                let seed: f32 = thread_rng().gen();
+                let seed: f32 = rand_f32();
                 self.color_seed = seed;
 
                 let colors = ColorEngine::new_with_seed(&self.theme, self.color_seed);
